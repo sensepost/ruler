@@ -122,7 +122,7 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, error) {
 	} else {
 		req.SetBasicAuth(SessionConfig.User, SessionConfig.Pass)
 	}
-	//req.Header.Add("Authorization", "NTLM TlRMTVNTUAABAAAABoIIAAAAAAAAAAAAAAAAAAAAAAA=")
+
 	//request the autodiscover url
 	resp, err := client.Do(req)
 

