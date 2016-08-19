@@ -14,6 +14,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/ThomsonReutersEikon/go-ntlm/ntlm"
 )
@@ -35,8 +36,9 @@ func (t NtlmTransport) RoundTrip(req *http.Request) (res *http.Response, err err
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: t.Insecure},
 	}
-	client := http.Client{Transport: tr}
+	client := http.Client{Transport: tr, Timeout: time.Minute}
 	resp, err := client.Do(r)
+
 	if err != nil {
 		return nil, err
 	}
