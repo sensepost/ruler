@@ -80,7 +80,6 @@ func addMapiHeaders(req *http.Request, mapiType string) {
 	req.Header.Add("X-RequestId", fmt.Sprintf("{C715155F-2BE8-44E0-BD34-2960065754C8}:%d", AuthSession.ReqCounter))
 	req.Header.Add("X-ClientInfo", "{2F94A2BF-A2E6-4CCC-BF98-B5F22C542226}")
 	req.Header.Add("X-ClientApplication", "Outlook/15.0.4815.1002")
-
 }
 
 //mapiAuthRequest connects and authenticates using NTLM or basic auth.
@@ -224,6 +223,25 @@ func AuthenticateFetchMailbox(essdn []byte) (*RopLogonResponse, error) {
 		}
 	}
 	return nil, fmt.Errorf("[x]Unspecified error occurred\n")
+}
+
+//Disconnect function to be nice and disconnect us from the server
+//This is strictly necessary but hey... lets follow protocol
+func Disconnect() (int, error) {
+	fmt.Println("[*] And disconnecting from server")
+	execRequest := ExecuteRequest{}
+	execRequest.Init()
+	disconnectBody := DisconnectRequest{}
+	disconnectBody.AuxilliaryBufSize = 0
+
+	if AuthSession.Transport == HTTP {
+		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Disconnect", BodyToBytes(disconnectBody))
+		_, err := readResponse(resp.Header, rbody)
+		if err != nil {
+			return -1, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
+		}
+	}
+	return 0, nil
 }
 
 //ExecuteFetchMailRules fetches the current mailrules

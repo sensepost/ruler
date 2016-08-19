@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"flag"
 	"fmt"
+	"os"
 
 	"github.com/sensepost/ruler/autodiscover"
 	"github.com/sensepost/ruler/mapi"
@@ -14,12 +15,23 @@ import (
 var config utils.Config
 
 //doRequest to a target domain
-func doRequest() {
-
+func exit(err error) {
+	//we had an error and we don't have a MAPI session
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(-1)
+	}
+	//let's disconnect from the MAPI session
+	exitcode, err := mapi.Disconnect()
+	if err != nil {
+		fmt.Println(err)
+	}
+	os.Exit(exitcode)
 }
 
 func main() {
 	domainPtr := flag.String("domain", "", "The target domain (usually the email address domain)")
+	checkOnly := flag.Bool("check", false, "Checks to see if we can login and MAPI/HTTP is available")
 	userPtr := flag.String("user", "", "A valid username")
 	passPtr := flag.String("pass", "", "A valid password")
 	ruleName := flag.String("rule", "", "A name for our rule")
@@ -43,7 +55,7 @@ func main() {
 	flag.Parse()
 
 	if *domainPtr == "" {
-		fmt.Println("[x] Domain required")
+		exit(fmt.Errorf("[x] Domain required"))
 	}
 
 	if *brutePtr == true {
@@ -64,14 +76,17 @@ func main() {
 	var err error
 
 	if *autodiscoverOnly == true {
-		fmt.Println("[*] Doing Autodiscover for domain")
 		if *autoURLPtr == "" {
 			resp, err = autodiscover.Autodiscover(config.Domain)
 		} else {
 			resp, err = autodiscover.Autodiscover(*autoURLPtr)
 		}
-
-		return
+		if err != nil {
+			exit(err)
+		} else {
+			fmt.Printf("[*] Autodiscover enabled and we could Authenticate.\nAutodiscover returned: %s", resp.Response.User)
+			os.Exit(0)
+		}
 	}
 
 	fmt.Println("[*] Retrieving MAPI info")
@@ -82,28 +97,25 @@ func main() {
 	}
 
 	if resp == nil {
-		fmt.Println("[x] The autodiscover service request did not complete.")
-		if err != nil {
-			fmt.Println(err)
-		}
-		return
+		exit(fmt.Errorf("[x] The autodiscover service request did not complete"))
+	}
+	if err != nil {
+		exit(fmt.Errorf("[x] The autodiscover service request did not complete. %s", err))
 	}
 	//check if the autodiscover service responded with an error
 	if resp.Response.Error != (utils.AutoError{}) {
-		fmt.Println("[x] The autodiscover service responded with an error.")
-		fmt.Println(resp.Response)
-		fmt.Println(resp.Response.Error.Message)
-		return
+		exit(fmt.Errorf("[x] The autodiscover service responded with an error. %s", resp.Response.Error.Message))
 	}
 	if *tcpPtr == false {
-
 		mapiURL := mapi.ExtractMapiURL(resp)
 		if mapiURL == "" {
-			fmt.Println("[x] No MAPI URL found. Exiting...")
-			return
+			exit(fmt.Errorf("[x] No MAPI URL found. Exiting"))
 		}
 		fmt.Println("[+] MAPI URL found: ", mapiURL)
-		//strip null byte
+		if *checkOnly == true {
+			fmt.Println("[+] Authentication succeeded and MAPI/HTTP is available")
+			os.Exit(0)
+		}
 		mapi.Init(config, resp.Response.User.LegacyDN, mapiURL, mapi.HTTP)
 	} else {
 		mapi.Init(config, resp.Response.User.LegacyDN, "", mapi.TCP)
@@ -111,8 +123,7 @@ func main() {
 
 	logon, err := mapi.Authenticate()
 	if err != nil {
-		fmt.Println(err)
-		return
+		exit(err)
 	} else if logon.MailboxGUID != nil {
 		fmt.Println("[*] And we are authenticated")
 		fmt.Println("[+] Mailbox GUID: ", logon.MailboxGUID)
@@ -122,19 +133,18 @@ func main() {
 			fmt.Println("[+] Retrieving Rules")
 			rules, err := mapi.DisplayRules()
 			if err != nil {
-				fmt.Println(err)
-				return
+				exit(err)
 			}
 			fmt.Printf("[+] Found %d rules\n", len(rules))
 			for _, v := range rules {
 				fmt.Printf("Rule: %s RuleID: %x\n", string(v.RuleName), v.RuleID)
 			}
+			exit(nil)
 		}
 		if *delRule != "" {
 			ruleid, err1 := hex.DecodeString(*delRule)
 			if err1 != nil {
-				fmt.Println("[x] Incorrect ruleid format. ")
-				return
+				exit(fmt.Errorf("[x] Incorrect ruleid format. "))
 			}
 
 			err = mapi.ExecuteMailRuleDelete(ruleid)
@@ -142,16 +152,15 @@ func main() {
 				fmt.Println("[*] Rule deleted. Fetching list of remaining rules...")
 				rules, err := mapi.DisplayRules()
 				if err != nil {
-					fmt.Println(err)
-					return
+					exit(err)
 				}
 				fmt.Printf("[+] Found %d rules\n", len(rules))
 				for _, v := range rules {
 					fmt.Printf("Rule: %s RuleID: %x\n", string(v.RuleName), v.RuleID)
 				}
-
+				exit(nil)
 			} else {
-				fmt.Println(err)
+				exit(err)
 			}
 
 		}
@@ -161,33 +170,24 @@ func main() {
 			//delete message on delivery
 			res, err := mapi.ExecuteMailRuleAdd(*ruleName, *triggerWord, *triggerLocation, true)
 			if res.StatusCode != 0 {
-				fmt.Println("[x] Failed to create rule")
-				return
+				exit(fmt.Errorf("[x] Failed to create rule. %s", err))
 			}
 			if err != nil {
-				fmt.Println(err)
-				return
+				exit(err)
 			}
 			fmt.Println("[*] Rule Added. Fetching list of rules...")
 			rules, err := mapi.DisplayRules()
 			if err != nil {
-				fmt.Println(err)
-				return
+				exit(err)
 			}
 			fmt.Printf("[+] Found %d rules\n", len(rules))
 			for _, v := range rules {
 				fmt.Printf("Rule: %s RuleID: %x\n", string(v.RuleName), v.RuleID)
 			}
+			exit(nil)
 		}
 	} else {
-		fmt.Println("[x] An error occurred during authentication")
+		exit(fmt.Errorf("[x] An error occurred during authentication"))
 	}
-	//contentId := mapi.GetContentsTable()
-	//if contentId == nil {
-	//	return
-	//}
-	//mapi.ExecuteFetchMailRules([]byte{0x01, 0x00, 0x00, 0x00, 0x00, 0x1f, 0x21, 0x1d})
-	//mapi.ExecuteFetchMailRules(contentId)
 
-	//mapi.Ping()
 }

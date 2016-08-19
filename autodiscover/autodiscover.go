@@ -131,10 +131,12 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, error) {
 		if m, _ := regexp.Match("illegal base64", []byte(err.Error())); m == true {
 			client = http.Client{}
 			resp, err = client.Do(req)
+			if err != nil {
+				return nil, err
+			}
 		} else {
 			return nil, err
 		}
-
 	}
 
 	defer resp.Body.Close()
@@ -163,8 +165,10 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, error) {
 		}
 		return &autodiscoverResp, nil
 	}
-
-	return nil, fmt.Errorf("[x] Got an unexpected result: StatusCode [%d]\n", resp.StatusCode)
+	if resp.StatusCode == 401 || resp.StatusCode == 403 {
+		return nil, fmt.Errorf("[x] Permission Denied: StatusCode [%d]\n", resp.StatusCode)
+	}
+	return nil, fmt.Errorf("[x] Got an unexpected result: StatusCode [%d] %s\n", resp.StatusCode, body)
 }
 
 func redirectAutodiscover(redirdom string) string {

@@ -37,6 +37,12 @@ type ConnectRequest struct {
 	AuxilliaryBuf     []byte
 }
 
+//DisconnectRequest
+type DisconnectRequest struct {
+	AuxilliaryBufSize uint32
+	AuxilliaryBuf     []byte
+}
+
 //ExecuteRequest struct
 type ExecuteRequest struct {
 	Flags             []byte //lets stick to ropFlagsNoXorMagic
@@ -107,6 +113,13 @@ type RopLogonRequest struct {
 	StoreState        []byte //0x00000000
 	EssdnSize         uint16
 	Essdn             []byte
+}
+
+//RopDisconnectRequest struct
+type RopDisconnectRequest struct {
+	RopID            byte //0x01
+	LogonID          byte //logonID to use
+	InputHandleIndex byte
 }
 
 //RopLogonResponse struct
