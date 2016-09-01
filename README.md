@@ -6,6 +6,8 @@ Silentbreak did a great job with this attack and it has served us well. The only
 
 The full low-down on how Ruler was implemented and some background regarding MAPI can be found in our blog post: [SensePost blog]
 
+For a demo of it in action: [Ruler on YouTube]
+
 ## What does it do?
 
 Ruler has multiple functions and more are planned. These include
@@ -133,7 +135,7 @@ To create the new rule user Ruler and:
 ```
 
 The various parts:
-* `-loc` _this is the location of your remote shell *note the double slashes* (or c:/Windows/system32/calc.exe)_ 
+* `-loc` _this is the location of your remote shell *note the double slashes* (or c:/Windows/system32/calc.exe)_
 * `-trigger` _the string within the subject you want to trigger the rule_
 * `-rule` _a name for your rule_
 
@@ -159,4 +161,5 @@ You should now be able to send an email to your target with the trigger string i
 Enjoy your shell and don't forget to clean-up after yourself by deleting the rule (or leave it for persistence).
 
 [Silentbreak blog]: <https://silentbreaksecurity.com/malicious-outlook-rules/>
-[SensePost blog]: <https://sensepost.com/blog/>
+[SensePost blog]: <https://sensepost.com/blog/2016/mapi-over-http-and-mailrule-pwnage/>
+[Ruler on YouTube]:<https://www.youtube.com/watch?v=Epk28fEw2Vk>
