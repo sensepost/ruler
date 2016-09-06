@@ -115,7 +115,7 @@ func main() {
 	}
 	//check if the autodiscover service responded with an error
 	if resp.Response.Error != (utils.AutoError{}) {
-		exit(fmt.Errorf("[x] The autodiscover service responded with an error.\n%s", resp.Response.Error.Message))
+		exit(fmt.Errorf("[x] The autodiscover service responded with an error.\n	%s", resp.Response.Error.Message))
 	}
 	if *tcpPtr == false {
 		mapiURL := mapi.ExtractMapiURL(resp)
