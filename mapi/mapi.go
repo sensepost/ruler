@@ -2,6 +2,7 @@ package mapi
 
 import (
 	"bytes"
+	"crypto/tls"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -16,8 +17,8 @@ import (
 //HTTP transport type for MAPI over HTTP types
 const HTTP int = 1
 
-//TCP transport type for traditional MAPI
-const TCP int = 2
+//RCP over HTTP transport type for traditional MAPI
+const RPC int = 2
 
 //AuthSession a
 var AuthSession Session
@@ -46,6 +47,16 @@ type Session struct {
 func ExtractMapiURL(resp *utils.AutodiscoverResp) string {
 	for _, v := range resp.Response.Account.Protocol {
 		if v.TypeAttr == "mapiHttp" {
+			return v.MailStore.ExternalUrl
+		}
+	}
+	return ""
+}
+
+//ExtractRPCURL extract the External RPC url from the autodiscover response
+func ExtractRPCURL(resp *utils.AutodiscoverResp) string {
+	for _, v := range resp.Response.Account.Protocol {
+		if v.TypeAttr == "rpcHttp" {
 			return v.MailStore.ExternalUrl
 		}
 	}
@@ -82,10 +93,19 @@ func addMapiHeaders(req *http.Request, mapiType string) {
 	req.Header.Add("X-ClientApplication", "Outlook/15.0.4815.1002")
 }
 
+func addRPCHeaders(req *http.Request) {
+	AuthSession.ReqCounter++
+	req.Header.Set("User-Agent", "MSRPC")
+	req.Header.Add("Cache-Control", "no-cache")
+	req.Header.Add("Accept", "application/rpc")
+	req.Header.Add("Content-length", "0")
+
+}
+
 //mapiAuthRequest connects and authenticates using NTLM or basic auth.
 //After the authentication is complete, we can simply use the mapiRequest
 //and the session cookies.
-func mapiRequestHTTP(URL string, mapiType string, body []byte) (*http.Response, []byte) {
+func mapiRequestHTTP(URL, mapiType string, body []byte) (*http.Response, []byte) {
 	if AuthSession.ClientSet == false {
 		AuthSession.Client = http.Client{
 			Transport: &httpntlm.NtlmTransport{
@@ -123,10 +143,47 @@ func mapiRequestHTTP(URL string, mapiType string, body []byte) (*http.Response, 
 	return resp, rbody
 }
 
-//mapiRequest to our target. Takes the mapiType (Connect, Execute) to determine the
+//mapiRequestRPC to our target. Takes the mapiType (Connect, Execute) to determine the
 //action performed on the server side
-func mapiRequestTCP(mapiType string, body []byte) []byte {
-	return nil
+func mapiRequestRPC(URL string, body []byte) (*http.Response, []byte) {
+	URL = "https://127.0.0.1:8001/rpc/rpcproxy.dll?7bb476d4-8e1f-4a57-bbd8-beac7912fb77@evilcorp.ninja:6001"
+	if AuthSession.ClientSet == false {
+		AuthSession.Client = http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			},
+			Jar: AuthSession.CookieJar,
+		}
+		AuthSession.ClientSet = true
+	}
+	req, err := http.NewRequest("RPC_IN_DATA", URL, bytes.NewReader(body))
+	addRPCHeaders(req)
+	req.SetBasicAuth(AuthSession.Email, AuthSession.Pass)
+	//request the auth url
+
+	resp, err := AuthSession.Client.Do(req)
+
+	if err != nil {
+		//check if this error was because of ntml auth when basic auth was expected.
+		if m, _ := regexp.Match("illegal base64", []byte(err.Error())); m == true {
+			AuthSession.Client = http.Client{Jar: AuthSession.CookieJar}
+			resp, err = AuthSession.Client.Do(req)
+		} else {
+			fmt.Println(err)
+
+			return nil, nil
+		}
+	}
+	rbody, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Println(err)
+		return nil, nil
+	}
+	fmt.Println(req.Header)
+	fmt.Println(resp)
+
+	fmt.Println(rbody)
+	return resp, rbody
 }
 
 //isAuthenticated checks if we have a session
@@ -141,6 +198,7 @@ func isAuthenticated() {
 func readResponse(headers http.Header, body []byte) ([]byte, error) {
 	//check to see that the response code was 0, which indicates protocol success
 	if headers.Get("X-ResponseCode") != "0" {
+		//fmt.Println(string(body))
 		return nil, fmt.Errorf("Got a protocol error response: %s", headers.Get("X-ResponseCode"))
 	}
 	//We need to parse out the body to get rid of the meta-tags and additional headers (if any)
@@ -180,6 +238,9 @@ func Authenticate() (*RopLogonResponse, error) {
 			return AuthenticateFetchMailbox(connRequest.UserDN)
 		}
 		return nil, fmt.Errorf("[x]Authentication failed with non-zero status code")
+	} else {
+		mapiRequestRPC("", BodyToBytes(connRequest))
+
 	}
 	return nil, fmt.Errorf("[x] An Unspecified error occurred")
 }
