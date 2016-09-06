@@ -178,7 +178,7 @@ func redirectAutodiscover(redirdom string) string {
 	var DefaultTransport http.RoundTripper = &http.Transport{}
 	resp, _ := DefaultTransport.RoundTrip(req)
 	defer resp.Body.Close()
-
+	fmt.Printf("[*] Authenticating through: %s\n", string(resp.Header.Get("Location")))
 	//return the new autodiscover server location
 	return resp.Header.Get("Location")
 

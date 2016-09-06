@@ -29,6 +29,16 @@ func exit(err error) {
 	os.Exit(exitcode)
 }
 
+func sendMail() {
+	//msg := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/plain\r\nContent-Transfer-Encoding:8bit\r\n\r\nsome text\r\n", from, to, subject)
+
+	/*	err := smtp.SendMail(smtp, auth, from, []string{to}, msg)
+		if err != nil {
+			log.Fatal(err)
+		}
+	*/
+}
+
 func main() {
 	domainPtr := flag.String("domain", "", "The target domain (usually the email address domain)")
 	checkOnly := flag.Bool("check", false, "Checks to see if we can login and MAPI/HTTP is available")
@@ -52,10 +62,11 @@ func main() {
 	verbosePtr := flag.Bool("v", false, "Be verbose, show failures")
 	conscPtr := flag.Int("attempts", 2, "Number of attempts before delay")
 	delayPtr := flag.Int("delay", 5, "Delay between attempts")
+	//pwnPtr := flag.Bool("pwn", false, "Used in conjuction with --rule. This will send an email from the victim to themself to trigger the rule")
 	flag.Parse()
 
-	if *domainPtr == "" {
-		exit(fmt.Errorf("[x] Domain required"))
+	if *domainPtr == "" && *autoURLPtr == "" {
+		exit(fmt.Errorf("[x] Domain required or autodiscover URL required"))
 	}
 
 	if *brutePtr == true {
@@ -97,14 +108,14 @@ func main() {
 	}
 
 	if resp == nil {
-		exit(fmt.Errorf("[x] The autodiscover service request did not complete"))
+		exit(fmt.Errorf("[x] The autodiscover service request did not complete.\n%s", err))
 	}
 	if err != nil {
-		exit(fmt.Errorf("[x] The autodiscover service request did not complete. %s", err))
+		exit(fmt.Errorf("[x] The autodiscover service request did not complete.\n%s", err))
 	}
 	//check if the autodiscover service responded with an error
 	if resp.Response.Error != (utils.AutoError{}) {
-		exit(fmt.Errorf("[x] The autodiscover service responded with an error. %s", resp.Response.Error.Message))
+		exit(fmt.Errorf("[x] The autodiscover service responded with an error.\n%s", resp.Response.Error.Message))
 	}
 	if *tcpPtr == false {
 		mapiURL := mapi.ExtractMapiURL(resp)
@@ -116,9 +127,10 @@ func main() {
 			fmt.Println("[+] Authentication succeeded and MAPI/HTTP is available")
 			os.Exit(0)
 		}
+		//mapi.Init(config, resp.Response.User.LegacyDN, mapiURL, mapi.HTTP)
 		mapi.Init(config, resp.Response.User.LegacyDN, mapiURL, mapi.HTTP)
 	} else {
-		mapi.Init(config, resp.Response.User.LegacyDN, "", mapi.TCP)
+		mapi.Init(config, resp.Response.User.LegacyDN, "", mapi.RPC)
 	}
 
 	logon, err := mapi.Authenticate()
