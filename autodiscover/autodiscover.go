@@ -99,7 +99,8 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, error) {
 
 	var autodiscoverURL string
 	//check if this is just a domain or a redirect (starts with http[s]://)
-	if m, _ := regexp.Match("http[s]://", []byte(domain)); m == true {
+
+	if m, _ := regexp.Match("http[s]?://", []byte(domain)); m == true {
 		autodiscoverURL = domain
 	} else {
 		//create the autodiscover url
@@ -111,6 +112,7 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, error) {
 
 	req, err := http.NewRequest("POST", autodiscoverURL, strings.NewReader(r))
 	req.Header.Add("Content-Type", "text/xml")
+
 	if mapi == true {
 		req.Header.Add("X-MapiHttpCapability", "1")            //we want MAPI info
 		req.Header.Add("X-AnchorMailbox", SessionConfig.Email) //we want MAPI info
