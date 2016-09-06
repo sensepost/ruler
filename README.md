@@ -29,7 +29,7 @@ git clone https://github.com/sensepost/ruler.git
 ```
 Or you can get it through Go:
 ```
-go get https://github.com/sensepost/ruler
+go get github.com/sensepost/ruler
 ```
 
 You can now run the app through ```go run``` if you wish:
@@ -91,6 +91,19 @@ These are:
 * -attempts _//how many attempts before we delay (attempts per user)_
 * -insecure _//if the Exchange server has a bad SSL cerificate_
 * -v      _//be verbose and show failed attempts_
+
+## The autodiscover service
+While Ruler makes a best effort to "autodiscover" the necessary settings, you may still run into instances of it failing. The common causes are:
+* autodiscover deployed over http and not https (we default to https as this is more common)
+* No autodiscover DNS record
+* Authentication failing
+
+If you encounter an Exchange server where the Autodiscover service is failing, you can manually specify the Autodiscover URL:
+
+``` ./ruler -url http://autodiscover.somedomain.com/autodiscover/autodiscover.xml ```
+
+If you run into issues with Authentication (and you know the creds are correct), you can try and force the use of basic authentication with ```-basic```
+
 
 ## Display existing rules / verify account
 
