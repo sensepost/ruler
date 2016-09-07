@@ -2,7 +2,6 @@ package mapi
 
 import (
 	"bytes"
-	"crypto/tls"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -11,6 +10,7 @@ import (
 	"regexp"
 
 	"github.com/sensepost/ruler/http-ntlm"
+	"github.com/sensepost/ruler/rpc-http"
 	"github.com/sensepost/ruler/utils"
 )
 
@@ -22,26 +22,6 @@ const RPC int = 2
 
 //AuthSession a
 var AuthSession Session
-
-//Session stores authentication cookies ect
-type Session struct {
-	User          string
-	Pass          string
-	Email         string
-	LID           string
-	URL           *url.URL
-	Host          string //used for TCP
-	ReqCounter    int
-	Transport     int
-	CookieJar     *cookiejar.Jar
-	Client        http.Client
-	ClientSet     bool
-	LogonID       byte
-	Authenticated bool
-	Folderids     []byte
-	RulesHandle   []byte
-	Insecure      bool
-}
 
 //ExtractMapiURL extract the External mapi url from the autodiscover response
 func ExtractMapiURL(resp *utils.AutodiscoverResp) string {
@@ -146,44 +126,48 @@ func mapiRequestHTTP(URL, mapiType string, body []byte) (*http.Response, []byte)
 //mapiRequestRPC to our target. Takes the mapiType (Connect, Execute) to determine the
 //action performed on the server side
 func mapiRequestRPC(URL string, body []byte) (*http.Response, []byte) {
-	URL = "https://127.0.0.1:8001/rpc/rpcproxy.dll?7bb476d4-8e1f-4a57-bbd8-beac7912fb77@evilcorp.ninja:6001"
-	if AuthSession.ClientSet == false {
-		AuthSession.Client = http.Client{
-			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-			},
-			Jar: AuthSession.CookieJar,
+	URL = "http://127.0.0.1:8081/rpc/rpcproxy.dll?7bb476d4-8e1f-4a57-bbd8-beac7912fb77@evilcorp.ninja:6001"
+	rpchttp.AuthSession = session
+	rpchttp.RPCInDataOpen(URL)
+	/*
+		if AuthSession.ClientSet == false {
+			AuthSession.Client = http.Client{
+				Transport: &http.Transport{
+					TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+				},
+				Jar: AuthSession.CookieJar,
+			}
+			AuthSession.ClientSet = true
 		}
-		AuthSession.ClientSet = true
-	}
-	req, err := http.NewRequest("RPC_IN_DATA", URL, bytes.NewReader(body))
-	addRPCHeaders(req)
-	req.SetBasicAuth(AuthSession.Email, AuthSession.Pass)
-	//request the auth url
+		req, err := http.NewRequest("RPC_IN_DATA", URL, bytes.NewReader(body))
+		addRPCHeaders(req)
+		req.SetBasicAuth(AuthSession.Email, AuthSession.Pass)
+		//request the auth url
 
-	resp, err := AuthSession.Client.Do(req)
+		resp, err := AuthSession.Client.Do(req)
 
-	if err != nil {
-		//check if this error was because of ntml auth when basic auth was expected.
-		if m, _ := regexp.Match("illegal base64", []byte(err.Error())); m == true {
-			AuthSession.Client = http.Client{Jar: AuthSession.CookieJar}
-			resp, err = AuthSession.Client.Do(req)
-		} else {
+		if err != nil {
+			//check if this error was because of ntml auth when basic auth was expected.
+			if m, _ := regexp.Match("illegal base64", []byte(err.Error())); m == true {
+				AuthSession.Client = http.Client{Jar: AuthSession.CookieJar}
+				resp, err = AuthSession.Client.Do(req)
+			} else {
+				fmt.Println(err)
+				return nil, nil
+			}
+		}
+		rbody, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
 			fmt.Println(err)
-
 			return nil, nil
 		}
-	}
-	rbody, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		fmt.Println(err)
-		return nil, nil
-	}
-	fmt.Println(req.Header)
-	fmt.Println(resp)
+		fmt.Println(req.Header)
+		fmt.Println(resp)
 
-	fmt.Println(rbody)
-	return resp, rbody
+		fmt.Println(rbody)
+		return resp, rbody
+	*/
+	return nil, nil
 }
 
 //isAuthenticated checks if we have a session

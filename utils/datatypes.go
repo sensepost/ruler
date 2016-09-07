@@ -1,6 +1,11 @@
 package utils
 
-import "encoding/xml"
+import (
+	"encoding/xml"
+	"net/http"
+	"net/http/cookiejar"
+	"net/url"
+)
 
 //Config containing the session variables
 type Config struct {
@@ -10,6 +15,27 @@ type Config struct {
 	Email    string
 	Basic    bool
 	Insecure bool
+	Verbose  bool
+}
+
+//Session stores authentication cookies ect
+type Session struct {
+	User          string
+	Pass          string
+	Email         string
+	LID           string
+	URL           *url.URL
+	Host          string //used for TCP
+	ReqCounter    int
+	Transport     int
+	CookieJar     *cookiejar.Jar
+	Client        http.Client
+	ClientSet     bool
+	LogonID       byte
+	Authenticated bool
+	Folderids     []byte
+	RulesHandle   []byte
+	Insecure      bool
 }
 
 //AutodiscoverResp structure for unmarshal

@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/ThomsonReutersEikon/go-ntlm/ntlm"
+	"github.com/sensepost/ruler/utils"
 )
 
 // NtlmTransport is implementation of http.RoundTripper interface
@@ -31,7 +32,7 @@ type NtlmTransport struct {
 func (t NtlmTransport) RoundTrip(req *http.Request) (res *http.Response, err error) {
 	// first send NTLM Negotiate header
 	r, _ := http.NewRequest("GET", req.URL.String(), strings.NewReader(""))
-	r.Header.Add("Authorization", "NTLM "+encBase64(negotiateSP()))
+	r.Header.Add("Authorization", "NTLM "+utils.EncBase64(utils.NegotiateSP()))
 
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: t.Insecure},
@@ -64,7 +65,7 @@ func (t NtlmTransport) RoundTrip(req *http.Request) (res *http.Response, err err
 		}
 
 		ntlmChallengeString := strings.Replace(ntlmChallengeHeader, "NTLM ", "", -1)
-		challengeBytes, err := decBase64(ntlmChallengeString)
+		challengeBytes, err := utils.DecBase64(ntlmChallengeString)
 		if err != nil {
 			return nil, err
 		}
@@ -96,7 +97,7 @@ func (t NtlmTransport) RoundTrip(req *http.Request) (res *http.Response, err err
 		}
 
 		// set NTLM Authorization header
-		req.Header.Set("Authorization", "NTLM "+encBase64(authenticate.Bytes()))
+		req.Header.Set("Authorization", "NTLM "+utils.EncBase64(authenticate.Bytes()))
 		resp, err = client.Do(req)
 
 	}

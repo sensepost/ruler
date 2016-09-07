@@ -19,23 +19,70 @@ type Result struct {
 	Error    error
 }
 
-//BruteForce function takes a domain/URL, file path to users and filepath to passwords whether to use BASIC auth and to trust insecure SSL
-//And whether to stop on success
-func BruteForce(domain, usersFile, passwordsFile string, basic, insecure, stopSuccess, verbose bool, consc, delay int) {
+//var autodiscoverStep int = 0
+
+func autodiscoverDomain(domain string) string {
 	var autodiscoverURL string
 
 	//check if this is just a domain or a redirect (starts with http[s]://)
-	if m, _ := regexp.Match("http[s]://", []byte(domain)); m == true {
+	if m, _ := regexp.Match("http[s]?://", []byte(domain)); m == true {
 		autodiscoverURL = domain
 	} else {
 		//create the autodiscover url
-		autodiscoverURL = createAutodiscover(domain)
-		if autodiscoverURL == "" {
-			fmt.Println("[x] Invalid domain or no autodiscover DNS record found")
-			return
+		if autodiscoverStep == 0 {
+			autodiscoverURL = createAutodiscover(domain, true)
+			if autodiscoverURL == "" {
+				autodiscoverStep++
+			}
+		}
+		if autodiscoverStep == 1 {
+			autodiscoverURL = createAutodiscover(fmt.Sprintf("autodiscover.%s", domain), true)
+			if autodiscoverURL == "" {
+				autodiscoverStep++
+			}
+		}
+		if autodiscoverStep == 2 {
+			autodiscoverURL = createAutodiscover(fmt.Sprintf("autodiscover.%s", domain), false)
+			if autodiscoverURL == "" {
+				return ""
+			}
 		}
 	}
 
+	fmt.Printf("[*] Autodiscover step %d - URL: %s\n", autodiscoverStep, autodiscoverURL)
+
+	req, err := http.NewRequest("GET", autodiscoverURL, nil)
+	req.Header.Add("Content-Type", "text/xml")
+
+	client := http.Client{}
+	resp, err := client.Do(req)
+
+	if err != nil {
+		if autodiscoverStep < 2 {
+			autodiscoverStep++
+			return autodiscoverDomain(domain)
+		}
+		return ""
+	}
+	if resp.StatusCode == 401 || resp.StatusCode == 403 {
+		return autodiscoverURL
+	}
+	if autodiscoverStep < 2 {
+		autodiscoverStep++
+		return autodiscoverDomain(domain)
+	}
+	return ""
+}
+
+//BruteForce function takes a domain/URL, file path to users and filepath to passwords whether to use BASIC auth and to trust insecure SSL
+//And whether to stop on success
+func BruteForce(domain, usersFile, passwordsFile string, basic, insecure, stopSuccess, verbose bool, consc, delay int) {
+	fmt.Println("[*] Trying to Autodiscover domain")
+	autodiscoverURL := autodiscoverDomain(domain)
+
+	if autodiscoverURL == "" {
+		return
+	}
 	usernames := readFile(usersFile)
 	if usernames == nil {
 		return

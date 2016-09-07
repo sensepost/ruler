@@ -1,4 +1,4 @@
-package httpntlm
+package utils
 
 //Forked from https://github.com/vadimi/go-http-ntlm
 //All credits go to them
@@ -25,12 +25,12 @@ const (
 var (
 	put32     = binary.LittleEndian.PutUint32
 	put16     = binary.LittleEndian.PutUint16
-	encBase64 = base64.StdEncoding.EncodeToString
-	decBase64 = base64.StdEncoding.DecodeString
+	EncBase64 = base64.StdEncoding.EncodeToString
+	DecBase64 = base64.StdEncoding.DecodeString
 )
 
 //modified function that works with an edge-case server
-func negotiateSP() []byte {
+func NegotiateSP() []byte {
 	ret := make([]byte, 32)
 	flags := negotiateAlwaysSign | negotiateNTLM | requestTarget | negotiateOEM
 
