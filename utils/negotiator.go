@@ -29,7 +29,7 @@ var (
 	DecBase64 = base64.StdEncoding.DecodeString
 )
 
-//modified function that works with an edge-case server
+//NegotiateSP modified function that works with an edge-case server
 func NegotiateSP() []byte {
 	ret := make([]byte, 32)
 	flags := negotiateAlwaysSign | negotiateNTLM | requestTarget | negotiateOEM

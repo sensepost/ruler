@@ -7,29 +7,91 @@ import (
 	"reflect"
 )
 
-var uFlagsUser = []byte{0x00, 0x00, 0x00, 0x00}
-var uFlagsAdmin = []byte{0x00, 0x00, 0x00, 0x01}
-var uFlagsNotSpecified = []byte{0x00, 0x00, 0x80, 0x00}
+const (
+	uFlagsUser         = 0x00000000
+	uFlagsAdmin        = 0x00000001
+	uFlagsNotSpecified = 0x00008000
+)
 
-var ropFlagsCompression = []byte{0x01, 0x00} //LittleEndian 0x000001
-var ropFlagsXorMagic = []byte{0x02, 0x00}    //LittleEndian 0x000002
-var ropFlagsChain = []byte{0x04, 0x00}       //LittleEndian 0x000004
+const (
+	ropFlagsCompression = 0x0001 //[]byte{0x01, 0x00} //LittleEndian 0x0001
+	ropFlagsXorMagic    = 0x0002 //[]byte{0x02, 0x00}    //LittleEndian 0x0002
+	ropFlagsChain       = 0x0004 //[]byte{0x04, 0x00}       //LittleEndian 0x0004
+)
 
-//ruletags
-var PidTagRuleId = []byte{0x14, 0x00, 0x74, 0x66}
-var PidTagRuleName = []byte{0x1F, 0x00, 0x82, 0x66}
-var PidTagRuleSequence = []byte{0x03, 0x00, 0x76, 0x66}
-var PidTagRuleState = []byte{0x03, 0x00, 0x77, 0x66}
-var PidTagRuleCondition = []byte{0xFD, 0x00, 0x79, 0x66}
-var PidTagRuleActions = []byte{0xFE, 0x00, 0x80, 0x66}
-var PidTagRuleProvider = []byte{0x1F, 0x00, 0x81, 0x66}
-var PidTagRuleProviderData = []byte{0x02, 0x01, 0x84, 0x66}
-var PidTagRuleLevel = []byte{0x03, 0x00, 0x83, 0x66}
+//PidTagRuleID the TaggedPropertyValue for rule id
+var PidTagRuleID = PropertyTag{PtypInteger64, 0x6674}
+
+//PidTagRuleName the TaggedPropertyValue for rule id
+var PidTagRuleName = PropertyTag{PtypString, 0x6682}
+
+//PidTagRuleSequence the TaggedPropertyValue for rule id
+var PidTagRuleSequence = PropertyTag{PtypInteger32, 0x6676}
+
+//PidTagRuleState the TaggedPropertyValue for rule id
+var PidTagRuleState = PropertyTag{PtypInteger32, 0x6677}
+
+//PidTagRuleCondition the TaggedPropertyValue for rule id
+var PidTagRuleCondition = PropertyTag{PtypRestriction, 0x6679}
+
+//PidTagRuleActions the TaggedPropertyValue for rule id
+var PidTagRuleActions = PropertyTag{PtypRuleAction, 0x6680}
+
+//PidTagRuleProvider the TaggedPropertyValue for rule id
+var PidTagRuleProvider = PropertyTag{PtypString, 0x6681}
+
+//PidTagRuleProviderData the TaggedPropertyValue for rule id
+var PidTagRuleProviderData = PropertyTag{PtypBinary, 0x6684}
+
+//PidTagRuleLevel the TaggedPropertyValue for rule level
+var PidTagRuleLevel = PropertyTag{PtypInteger32, 0x6683}
+
+//OpenFlags
+const (
+	UseAdminPrivilege       = 0x00000001
+	Public                  = 0x00000002
+	HomeLogon               = 0x00000004
+	TakeOwnership           = 0x00000008
+	AlternateServer         = 0x00000100
+	IgnoreHomeMDB           = 0x00000200
+	NoMail                  = 0x00000400
+	UserPerMdbReplidMapping = 0x01000000
+	SupportProgress         = 0x20000000
+)
+
+//Property Data types
+const (
+	PtypInteger16      = 0x0002
+	PtypInteger32      = 0x0003
+	PtypInteger64      = 0x0014
+	PtypFloating32     = 0x0004
+	PtypFloating64     = 0x0005
+	PtypBoolean        = 0x000B
+	PtypString         = 0x001F
+	PtypString8        = 0x001E
+	PtypGUID           = 0x0048
+	PtypRuleAction     = 0x00FE
+	PtypRestriction    = 0x00FD
+	PtypBinary         = 0x0102
+	PtypMultipleBinary = 0x1102
+)
+
+//Folder id/locations -- https://msdn.microsoft.com/en-us/library/office/cc815825.aspx
+const (
+	OUTBOX   = 0 //Contains outgoing IPM messages.
+	DELETED  = 1 //Contains IPM messages that are marked for deletion.
+	SENT     = 2 //Contains IPM messages that have been sent.
+	IPM      = 3 //IPM root folder Contains folders for managing IPM messages.
+	INBOX    = 4 //Receive folder Contains incoming messages for a particular message class.
+	SEARCH   = 5 //Search-results root folder Contains folders for managing search results.
+	COMMON   = 6 //Common-views root folder Contains folders for managing views for the message store.
+	PERSONAL = 7 //Personal-views root folder
+)
 
 //ConnectRequest struct
 type ConnectRequest struct {
 	UserDN            []byte
-	Flags             []byte
+	Flags             uint32
 	DefaultCodePage   uint32
 	LcidSort          uint32
 	LcidString        uint32
@@ -37,7 +99,7 @@ type ConnectRequest struct {
 	AuxilliaryBuf     []byte
 }
 
-//DisconnectRequest
+//DisconnectRequest structure
 type DisconnectRequest struct {
 	AuxilliaryBufSize uint32
 	AuxilliaryBuf     []byte
@@ -45,7 +107,7 @@ type DisconnectRequest struct {
 
 //ExecuteRequest struct
 type ExecuteRequest struct {
-	Flags             []byte //lets stick to ropFlagsNoXorMagic
+	Flags             uint32 //[]byte //lets stick to ropFlagsNoXorMagic
 	RopBufferSize     uint32
 	RopBuffer         ROPBuffer
 	MaxRopOut         uint32
@@ -84,8 +146,8 @@ type RgbAuxIn struct {
 
 //RPCHeader struct
 type RPCHeader struct {
-	Version    []byte //always 0x0000
-	Flags      []byte //0x0001 Compressed, 0x0002 XorMagic, 0x0004 Last
+	Version    uint16 //always 0x0000
+	Flags      uint16 //0x0001 Compressed, 0x0002 XorMagic, 0x0004 Last
 	Size       uint16
 	SizeActual uint16 //Compressed size (if 0x0001 set)
 }
@@ -105,30 +167,30 @@ type ROP struct {
 
 //RopLogonRequest struct
 type RopLogonRequest struct {
-	RopID             byte //0xfe
-	LogonID           byte //logonID to use
-	OutputHandleIndex byte
+	RopID             uint8 //0xfe
+	LogonID           uint8 //logonID to use
+	OutputHandleIndex uint8
 	LogonFlags        byte
-	OpenFlags         []byte
-	StoreState        []byte //0x00000000
+	OpenFlags         uint32 //[]byte
+	StoreState        uint32 //0x00000000
 	EssdnSize         uint16
 	Essdn             []byte
 }
 
 //RopDisconnectRequest struct
 type RopDisconnectRequest struct {
-	RopID            byte //0x01
-	LogonID          byte //logonID to use
-	InputHandleIndex byte
+	RopID            uint8 //0x01
+	LogonID          uint8 //logonID to use
+	InputHandleIndex uint8
 }
 
 //RopLogonResponse struct
 type RopLogonResponse struct {
-	RopID             byte //0xfe
-	OutputHandleIndex byte
+	RopID             uint8
+	OutputHandleIndex uint8
 	ReturnValue       uint32
 	LogonFlags        byte
-	FolderIds         []byte //0x00000000
+	FolderIds         []byte
 	ResponseFlags     byte
 	MailboxGUID       []byte
 	RepID             []byte
@@ -140,18 +202,18 @@ type RopLogonResponse struct {
 
 //RopGetRulesRequestData struct
 type RopGetRulesRequestData struct {
-	RopID             byte //0x3f
-	LogonID           byte
-	InputHandleIndex  byte
-	OutputHandleIndex byte
+	RopID             uint8 //0x3f
+	LogonID           uint8
+	InputHandleIndex  uint8
+	OutputHandleIndex uint8
 	TableFlags        byte
 }
 
 //RopModifyRulesRequestBuffer struct
 type RopModifyRulesRequestBuffer struct {
-	RopID            byte //0x02
-	LogonID          byte
-	InputHandleIndex byte
+	RopID            uint8 //0x02
+	LogonID          uint8
+	InputHandleIndex uint8
 	ModifyRulesFlag  byte
 	RulesCount       uint16
 	RulesData        []byte
@@ -159,18 +221,91 @@ type RopModifyRulesRequestBuffer struct {
 
 //RopGetContentsTableResponse struct
 type RopGetContentsTableResponse struct {
-	RopID        byte //0x05
-	OutputHandle byte
+	RopID        uint8 //0x05
+	OutputHandle uint8
 	ReturnValue  uint32
 	RowCount     uint32
 	Rows         []byte
 }
 
+//RopGetPropertiesSpecific struct to get propertiesfor a folder
+type RopGetPropertiesSpecific struct {
+	RopID             uint8 //0x07
+	LogonID           uint8
+	InputHandle       uint8
+	PropertySizeLimit uint16
+	WantUnicode       []byte //apparently bool
+	PropertyTagCount  uint16
+	PropertyTags      []byte
+}
+
+//RopOpenFolder struct used to open a folder
+type RopOpenFolder struct {
+	RopID         uint8 //0x02
+	LogonID       uint8
+	InputHandle   uint8
+	OutputHandle  uint8
+	FolderID      []byte
+	OpenModeFlags uint8
+}
+
+//RopOpenFolderResponse struct used to open a folder
+type RopOpenFolderResponse struct {
+	RopID            uint8
+	OutputHandle     uint8
+	ReturnValue      uint32
+	HasRules         byte   //bool
+	IsGhosted        byte   //bool
+	ServerCount      uint16 //only if IsGhosted == true
+	CheapServerCount uint16 //only if IsGhosted == true
+	Servers          []byte //only if IsGhosted == true
+}
+
+//RopCreateMessage struct used to open handle to new email message
+type RopCreateMessage struct {
+	RopID          uint8
+	LogonID        uint8
+	InputHandle    uint8
+	OutputHandle   uint8
+	CodePageID     uint16
+	FolderID       []byte
+	AssociatedFlag byte //bool
+}
+
+//RopSetColumnsRequest struct used to select the columns to use
+type RopSetColumnsRequest struct {
+	RopID            uint8 //0x12
+	LogonID          uint8
+	InputHandle      uint8
+	SetColumnFlags   uint8
+	PropertyTagCount uint16
+	PropertyTags     []PropertyTag
+}
+
+//RopQueryRowsRequest struct used to select the columns to use
+type RopQueryRowsRequest struct {
+	RopID          uint8 //0x15
+	LogonID        uint8
+	InputHandle    uint8
+	QueryRowsFlags uint8
+	ForwardRead    byte
+	RowCount       uint16
+}
+
+//RopCreateMessageResponse struct used to open handle to new email message
+type RopCreateMessageResponse struct {
+	RopID        uint8
+	OutputHandle uint8
+	ReturnValue  uint32
+	HasMessageID byte   //bool
+	MessageID    []byte //bool
+}
+
 //ModRuleData struct
 type ModRuleData struct {
-	RopID            byte //0x41
-	LoginID          byte
-	InputHandleIndex byte
+	RopID            uint8 //0x41
+	LoginID          uint8
+	InputHandleIndex uint8
 	ModifyRulesFlag  byte
 	RulesCount       uint16
 	RuleData         RuleData
@@ -202,7 +337,7 @@ type Rule struct {
 
 //RuleCondition struct
 type RuleCondition struct {
-	Type        byte   //0x03 RES_CONTENT
+	Type        uint8  //0x03 RES_CONTENT
 	FuzzyLevel  []byte //0x00010001 //FL_SUBSTRING | IgnoreCase
 	PropertyTag []byte //where to look -- subject: 0x0037001F
 	Value       []byte //
@@ -234,14 +369,14 @@ type ActionData struct {
 
 //TaggedPropertyValue struct
 type TaggedPropertyValue struct {
-	PropertyTag   []byte //PropertyTag
+	PropertyTag   PropertyTag
 	PropertyValue []byte
 }
 
 //PropertyTag struct
 type PropertyTag struct {
 	PropertyType uint16
-	PropertyID   uint16
+	PropertyID   uint16 //[]byte //uint16
 }
 
 //AUXBuffer struct
@@ -399,13 +534,63 @@ func DecodeAuxBuffer(buff []byte) AUXBuffer {
 	pos := 0
 	auxBuf := AUXBuffer{}
 	auxBuf.RPCHeader = RPCHeader{}
-	auxBuf.RPCHeader.Version, pos = readBytes(pos, 2, buff)
-	auxBuf.RPCHeader.Flags, pos = readBytes(pos, 2, buff)
+	auxBuf.RPCHeader.Version, pos = readUint16(pos, buff)
+	auxBuf.RPCHeader.Flags, pos = readUint16(pos, buff)
 	auxBuf.RPCHeader.Size, pos = readUint16(pos, buff)
 	auxBuf.RPCHeader.SizeActual, _ = readUint16(pos, buff)
 	auxBuf.Header = AUXHeader{}
 	auxBuf.Header.Size = uint16(1)
 	return auxBuf
+}
+
+//Marshal turn ExecuteRequest into Bytes
+func (execRequest ExecuteRequest) Marshal() []byte {
+	return BodyToBytes(execRequest)
+}
+
+//Marshal turn ConnectRequest into Bytes
+func (connRequest ConnectRequest) Marshal() []byte {
+	return BodyToBytes(connRequest)
+}
+
+//Marshal turn DisconnectRequest into Bytes
+func (disconnectRequest DisconnectRequest) Marshal() []byte {
+	return BodyToBytes(disconnectRequest)
+}
+
+//Marshal turn RopLogonRequest into Bytes
+func (logonRequest RopLogonRequest) Marshal() []byte {
+	return BodyToBytes(logonRequest)
+}
+
+//Marshal turn the RopQueryRowsRequest into bytes
+func (queryRows RopQueryRowsRequest) Marshal() []byte {
+	return BodyToBytes(queryRows)
+}
+
+//Marshal to turn the RopSetColumnsRequest into bytes
+func (setColumns RopSetColumnsRequest) Marshal() []byte {
+	return BodyToBytes(setColumns)
+}
+
+//Marshal turn RopOpenFolder into Bytes
+func (openFolder RopOpenFolder) Marshal() []byte {
+	return BodyToBytes(openFolder)
+}
+
+//Marshal turn RopGetPropertiesSpecific into Bytes
+func (getProps RopGetPropertiesSpecific) Marshal() []byte {
+	return BodyToBytes(getProps)
+}
+
+//Marshal turn ExecuteRequest into Bytes
+func (createMessage RopCreateMessage) Marshal() []byte {
+	return BodyToBytes(createMessage)
+}
+
+//Marshal turn RuleAction into Bytes
+func (ruleAction RuleAction) Marshal() []byte {
+	return BodyToBytes(ruleAction)
 }
 
 //Unmarshal function to convert response into ConnectResponse struct
@@ -478,6 +663,21 @@ func (ropContents *RopGetContentsTableResponse) Unmarshal(resp []byte) error {
 	return nil
 }
 
+//Unmarshal function to produce RopLogonResponse struct
+func (createMessageResponse *RopCreateMessageResponse) Unmarshal(resp []byte) error {
+	pos := 10
+	createMessageResponse.RopID, pos = readByte(pos, resp)
+	createMessageResponse.OutputHandle, pos = readByte(pos, resp)
+	createMessageResponse.ReturnValue, pos = readUint32(pos, resp)
+	if createMessageResponse.ReturnValue == 0 {
+		createMessageResponse.HasMessageID, pos = readByte(pos, resp)
+		if createMessageResponse.HasMessageID == 255 {
+			createMessageResponse.MessageID, _ = readBytes(pos, 4, resp)
+		}
+	}
+	return nil
+}
+
 //CalcSizes func to calculate the different size fields in the ROP buffer
 func (execRequest *ExecuteRequest) CalcSizes() error {
 	execRequest.RopBuffer.ROP.RopSize = uint16(len(execRequest.RopBuffer.ROP.RopsList) + 2)
@@ -487,11 +687,11 @@ func (execRequest *ExecuteRequest) CalcSizes() error {
 	return nil
 }
 
+//Init function to create a base ExecuteRequest object
 func (execRequest *ExecuteRequest) Init() {
-	execRequest.Flags = []byte{0x02, 0x00, 0x00, 0x00}
-
-	execRequest.RopBuffer.Header.Version = []byte{0x00, 0x00}
-	execRequest.RopBuffer.Header.Flags = []byte{0x04, 0x00} //ropFlagsChain
+	execRequest.Flags = 0x00000002
+	execRequest.RopBuffer.Header.Version = 0x0000
+	execRequest.RopBuffer.Header.Flags = ropFlagsChain //[]byte{0x04, 0x00}
 	execRequest.MaxRopOut = 32775
 }
 
@@ -505,7 +705,7 @@ func DecodeRulesResponse(resp []byte) ([]Rule, []byte) {
 	_, pos = readByte(pos, resp)     //RopGetRulesTable InputHandleIndex
 	ret, pos = readUint32(pos, resp) //check that no error
 	if ret != 0 {
-		fmt.Println("Bad GetRUles")
+		fmt.Println("Bad GetRules")
 		return nil, nil
 	}
 	_, pos = readByte(pos, resp)     //RopSetColumns should be 0x12

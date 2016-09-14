@@ -16,6 +16,7 @@ type Config struct {
 	Basic    bool
 	Insecure bool
 	Verbose  bool
+	Admin    bool
 }
 
 //Session stores authentication cookies ect
@@ -33,9 +34,14 @@ type Session struct {
 	ClientSet     bool
 	LogonID       byte
 	Authenticated bool
-	Folderids     []byte
+	Folderids     [][]byte
 	RulesHandle   []byte
 	Insecure      bool
+	NTLMAuth      string
+	Admin         bool
+	RPCIn         http.Client
+	RPCOut        http.Client
+	RPCSet        bool
 }
 
 //AutodiscoverResp structure for unmarshal
@@ -71,7 +77,7 @@ type Account struct {
 	Action          string
 	RedirectAddr    string
 	MicrosoftOnline bool
-	Protocol        []Protocol
+	Protocol        []*Protocol
 }
 
 //Protocol structure for unmarshal
@@ -88,10 +94,10 @@ type Protocol struct {
 	DirectoryPort           string
 	ReferralPort            string
 	ASUrl                   string
-	EwsUrl                  string
-	EmwsUrl                 string
+	EWSUrl                  string
+	EMWSUrl                 string
 	SharingUrl              string
-	EcpUrl                  string
+	ECPUrl                  string
 	OOFUrl                  string
 	UMUrl                   string
 	OABUrl                  string
@@ -107,11 +113,11 @@ type Protocol struct {
 	UsePOPAuth              string
 	SMTPLast                string
 	NetworkRequirements     string
-	MailStore               MailStore
-	AddressBook             AddressBook
-	Internal                ProtoInternal
-	External                ProtoInternal
-	PublicFolderInformation PublicFolderInformation
+	MailStore               *MailStore
+	AddressBook             *AddressBook
+	Internal                *ProtoInternal
+	External                *ProtoInternal
+	PublicFolderInformation *PublicFolderInformation
 }
 
 //ProtoInternal strucuture for unmarshal
@@ -137,7 +143,7 @@ type PublicFolderInformation struct {
 	SMTPAddress string
 }
 
-//UnMarshalResponse returns the XML response as golang structs
+//Unmarshal returns the XML response as golang structs
 func (autodiscresp *AutodiscoverResp) Unmarshal(resp []byte) error {
 	//var autodiscresp *AutodiscoverResp
 	err := xml.Unmarshal(resp, autodiscresp)

@@ -155,7 +155,7 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, error) {
 
 	//check if we got a 200 response
 	if resp.StatusCode == 200 {
-		//fmt.Println(string(body))
+
 		err := autodiscoverResp.Unmarshal(body)
 		if err != nil {
 			if autodiscoverStep < 2 {
@@ -164,7 +164,7 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, error) {
 			}
 			return nil, fmt.Errorf("[x] Error in autodiscover response, %s", err)
 		}
-
+		//fmt.Println(string(body))
 		//check if we got a RedirectAddr ,
 		//if yes, get the new autodiscover url
 		if autodiscoverResp.Response.Account.Action == "redirectAddr" {

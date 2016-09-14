@@ -17,11 +17,11 @@ import (
 //HTTP transport type for MAPI over HTTP types
 const HTTP int = 1
 
-//RCP over HTTP transport type for traditional MAPI
+//RPC over HTTP transport type for traditional MAPI
 const RPC int = 2
 
 //AuthSession a
-var AuthSession Session
+var AuthSession utils.Session
 
 //ExtractMapiURL extract the External mapi url from the autodiscover response
 func ExtractMapiURL(resp *utils.AutodiscoverResp) string {
@@ -61,6 +61,7 @@ func Init(config utils.Config, lid, URL string, transport int) {
 	AuthSession.ReqCounter = 1
 	AuthSession.LogonID = 0x04
 	AuthSession.Authenticated = false
+	AuthSession.Admin = config.Admin
 }
 
 func addMapiHeaders(req *http.Request, mapiType string) {
@@ -125,48 +126,20 @@ func mapiRequestHTTP(URL, mapiType string, body []byte) (*http.Response, []byte)
 
 //mapiRequestRPC to our target. Takes the mapiType (Connect, Execute) to determine the
 //action performed on the server side
-func mapiRequestRPC(URL string, body []byte) (*http.Response, []byte) {
-	URL = "http://127.0.0.1:8081/rpc/rpcproxy.dll?7bb476d4-8e1f-4a57-bbd8-beac7912fb77@evilcorp.ninja:6001"
-	rpchttp.AuthSession = session
-	rpchttp.RPCInDataOpen(URL)
-	/*
-		if AuthSession.ClientSet == false {
-			AuthSession.Client = http.Client{
-				Transport: &http.Transport{
-					TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-				},
-				Jar: AuthSession.CookieJar,
-			}
-			AuthSession.ClientSet = true
-		}
-		req, err := http.NewRequest("RPC_IN_DATA", URL, bytes.NewReader(body))
-		addRPCHeaders(req)
-		req.SetBasicAuth(AuthSession.Email, AuthSession.Pass)
-		//request the auth url
-
-		resp, err := AuthSession.Client.Do(req)
-
-		if err != nil {
-			//check if this error was because of ntml auth when basic auth was expected.
-			if m, _ := regexp.Match("illegal base64", []byte(err.Error())); m == true {
-				AuthSession.Client = http.Client{Jar: AuthSession.CookieJar}
-				resp, err = AuthSession.Client.Do(req)
-			} else {
-				fmt.Println(err)
-				return nil, nil
-			}
-		}
-		rbody, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			fmt.Println(err)
+func mapiRequestRPC(body []byte) (*http.Response, []byte) {
+	var URL = "http://mail.evilcorp.ninja/rpc/rpcproxy.dll?7bb476d4-8e1f-4a57-bbd8-beac7912fb77@evilcorp.ninja:6001"
+	if AuthSession.RPCSet == false {
+		var err error
+		rpchttp.AuthSession = &AuthSession
+		if err = rpchttp.RPCOpen(rpchttp.RPCIN, URL); err != nil {
 			return nil, nil
 		}
-		fmt.Println(req.Header)
-		fmt.Println(resp)
-
-		fmt.Println(rbody)
-		return resp, rbody
-	*/
+		if err = rpchttp.RPCOpen(rpchttp.RPCOUT, URL); err != nil {
+			return nil, nil
+		}
+		rpchttp.RPCAuth()
+		AuthSession.RPCSet = true
+	}
 	return nil, nil
 }
 
@@ -176,6 +149,15 @@ func isAuthenticated() {
 		fmt.Println("[x] No authentication cookies found. You may not be authenticated.")
 		fmt.Println("[*] Trying to authenticate you")
 		Authenticate()
+	}
+}
+
+func specialFolders(folderResponse []byte) {
+	AuthSession.Folderids = make([][]byte, 13)
+	cnt := 0
+	for k := 0; k < 13; k++ {
+		AuthSession.Folderids[k] = folderResponse[cnt : cnt+8]
+		cnt += 8
 	}
 }
 
@@ -201,13 +183,17 @@ func Authenticate() (*RopLogonResponse, error) {
 
 	connRequest.UserDN = []byte(AuthSession.LID)
 	connRequest.UserDN = append(connRequest.UserDN, []byte{0x00}...) //append nullbyte
-	connRequest.Flags = uFlagsUser
+	if AuthSession.Admin == true {
+		connRequest.Flags = uFlagsAdmin
+	} else {
+		connRequest.Flags = uFlagsUser
+	}
 	connRequest.DefaultCodePage = 1252
 	connRequest.LcidSort = 2057
 	connRequest.LcidString = 1033
 
 	if AuthSession.Transport == HTTP {
-		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Connect", BodyToBytes(connRequest))
+		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Connect", connRequest.Marshal())
 
 		responseBody, err := readResponse(resp.Header, rbody)
 		if err != nil {
@@ -222,9 +208,8 @@ func Authenticate() (*RopLogonResponse, error) {
 			return AuthenticateFetchMailbox(connRequest.UserDN)
 		}
 		return nil, fmt.Errorf("[x]Authentication failed with non-zero status code")
-	} else {
-		mapiRequestRPC("", BodyToBytes(connRequest))
-
+	} else if AuthSession.Transport == RPC {
+		mapiRequestRPC(connRequest.Marshal())
 	}
 	return nil, fmt.Errorf("[x] An Unspecified error occurred")
 }
@@ -235,21 +220,23 @@ func AuthenticateFetchMailbox(essdn []byte) (*RopLogonResponse, error) {
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
 
-	logonBody := RopLogonRequest{}
-	logonBody.RopID = 0xFE
-	logonBody.LogonID = AuthSession.LogonID
+	logonBody := RopLogonRequest{RopID: 0xFE, LogonID: AuthSession.LogonID}
 	logonBody.OutputHandleIndex = 0x00
 	logonBody.LogonFlags = 0x01
-	logonBody.OpenFlags = []byte{0x0C, 0x04, 0x00, 0x21}
-	logonBody.StoreState = []byte{0x00, 0x00, 0x00, 0x00}
+	if AuthSession.Admin == true {
+		logonBody.OpenFlags = UseAdminPrivilege | TakeOwnership | UserPerMdbReplidMapping
+	} else {
+		logonBody.OpenFlags = UserPerMdbReplidMapping | HomeLogon | TakeOwnership //[]byte{0x0C, 0x04, 0x00, 0x21}
+	}
+	logonBody.StoreState = 0x00000000
 	logonBody.Essdn = essdn
 	logonBody.EssdnSize = uint16(len(logonBody.Essdn))
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0xFF, 0xFF, 0xFF, 0xFF}
-	execRequest.RopBuffer.ROP.RopsList = BodyToBytes(logonBody)
+	execRequest.RopBuffer.ROP.RopsList = logonBody.Marshal()
 
 	execRequest.CalcSizes()
 	if AuthSession.Transport == HTTP { // HTTP
-		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Execute", BodyToBytes(execRequest))
+		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Execute", execRequest.Marshal())
 		responseBody, err := readResponse(resp.Header, rbody)
 
 		if err != nil {
@@ -262,10 +249,10 @@ func AuthenticateFetchMailbox(essdn []byte) (*RopLogonResponse, error) {
 
 			logonResponse := RopLogonResponse{}
 			logonResponse.Unmarshal(execResponse.RopBuffer)
-			AuthSession.Folderids = logonResponse.FolderIds
-
+			specialFolders(logonResponse.FolderIds)
 			return &logonResponse, nil
 		}
+
 	}
 	return nil, fmt.Errorf("[x]Unspecified error occurred\n")
 }
@@ -280,7 +267,7 @@ func Disconnect() (int, error) {
 	disconnectBody.AuxilliaryBufSize = 0
 
 	if AuthSession.Transport == HTTP {
-		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Disconnect", BodyToBytes(disconnectBody))
+		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Disconnect", disconnectBody.Marshal())
 		_, err := readResponse(resp.Header, rbody)
 		if err != nil {
 			return -1, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
@@ -289,19 +276,95 @@ func Disconnect() (int, error) {
 	return 0, nil
 }
 
+//CreateMessage func to create a new message on the Exchange server
+//this should be the precursor to sending an email
+func CreateMessage() (*RopCreateMessageResponse, error) {
+
+	execRequest := ExecuteRequest{}
+	execRequest.Init()
+
+	createMessage := RopCreateMessage{RopID: 0x06, LogonID: AuthSession.LogonID}
+	createMessage.InputHandle = 0x00
+	createMessage.OutputHandle = 0x01
+	createMessage.FolderID = AuthSession.Folderids[OUTBOX]
+	createMessage.AssociatedFlag = 0
+	getProperties := RopGetPropertiesSpecific{RopID: 0x07, LogonID: AuthSession.LogonID}
+	getProperties.InputHandle = 0x01
+	getProperties.PropertySizeLimit = 0x00
+	getProperties.WantUnicode = []byte{0x00, 0x01}
+	getProperties.PropertyTagCount = 30
+
+	propertyTags := make([]PropertyTag, getProperties.PropertyTagCount)
+	propertyTags[0] = PropertyTag{PtypInteger64, 0x6749}
+	propertyTags[1] = PropertyTag{PtypInteger32, 0x0ff4}
+	propertyTags[2] = PropertyTag{PtypBinary, 0x6672}
+	propertyTags[3] = PropertyTag{PtypString, 0x36e5}
+	propertyTags[4] = PropertyTag{PtypString, 0x36e6}
+	propertyTags[5] = PropertyTag{PtypString, 0x3001}
+	propertyTags[6] = PropertyTag{PtypInteger32, 0x3601}
+	propertyTags[7] = PropertyTag{PtypInteger32, 0x3602}
+	propertyTags[8] = PropertyTag{PtypInteger32, 0x3603}
+	propertyTags[9] = PropertyTag{PtypBoolean, 0x360a}
+	propertyTags[10] = PropertyTag{PtypString, 0x3613}
+	propertyTags[11] = PropertyTag{PtypBinary, 0x3616}
+	propertyTags[12] = PropertyTag{PtypBinary, 0x36d0}
+	propertyTags[13] = PropertyTag{PtypBinary, 0x36d1}
+	propertyTags[14] = PropertyTag{PtypBinary, 0x36d2}
+	propertyTags[15] = PropertyTag{PtypBinary, 0x36d3}
+	propertyTags[16] = PropertyTag{PtypBinary, 0x36d4}
+	propertyTags[17] = PropertyTag{PtypBinary, 0x36d5}
+	propertyTags[18] = PropertyTag{PtypBinary, 0x36d6}
+	propertyTags[19] = PropertyTag{PtypBinary, 0x36d7}
+	propertyTags[20] = PropertyTag{PtypMultipleBinary, 0x36d8}
+	propertyTags[21] = PropertyTag{PtypBinary, 0x36d9}
+	propertyTags[22] = PropertyTag{PtypInteger32, 0x36de}
+	propertyTags[21] = PropertyTag{PtypBinary, 0x36df}
+	propertyTags[21] = PropertyTag{PtypBinary, 0x36e0}
+	propertyTags[22] = PropertyTag{PtypInteger32, 0x36e1}
+	propertyTags[23] = PropertyTag{PtypMultipleBinary, 0x36e4}
+	propertyTags[24] = PropertyTag{PtypBinary, 0x36eb}
+	propertyTags[25] = PropertyTag{PtypInteger32, 0x6639}
+	propertyTags[26] = PropertyTag{PtypBinary, 0x36da}
+	propertyTags[27] = PropertyTag{PtypBinary, 0x3018}
+	propertyTags[28] = PropertyTag{PtypInteger32, 0x301e}
+	propertyTags[29] = PropertyTag{PtypBinary, 0x36da}
+
+	k := append(createMessage.Marshal(), getProperties.Marshal()...)
+	k = append(k, BodyToBytes(propertyTags)...)
+
+	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF}
+	execRequest.RopBuffer.ROP.RopsList = k //createMessage.Marshal()
+
+	execRequest.CalcSizes()
+	if AuthSession.Transport == HTTP { // HTTP
+		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Execute", execRequest.Marshal())
+		responseBody, err := readResponse(resp.Header, rbody)
+
+		if err != nil {
+			return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
+		}
+		execResponse := ExecuteResponse{}
+		execResponse.Unmarshal(responseBody)
+		fmt.Println(execResponse.ErrorCode)
+		fmt.Println(string(execResponse.AuxilliaryBuf))
+		if execResponse.ErrorCode == 0 && len(responseBody) < 256 {
+			AuthSession.Authenticated = true
+
+			createMessageResponse := RopCreateMessageResponse{}
+			createMessageResponse.Unmarshal(execResponse.RopBuffer)
+
+			return &createMessageResponse, nil
+		}
+	}
+	return nil, fmt.Errorf("[x]Unspecified error occurred\n")
+}
+
 //ExecuteFetchMailRules fetches the current mailrules
 func ExecuteFetchMailRules(messageID []byte) (*ExecuteResponse, error) {
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
 	execRequest.MaxRopOut = 262144
-	cnt := 0
-	var folder []byte
-	for k := 0; k < 13; k++ {
-		if k == 4 { //inbox
-			folder = AuthSession.Folderids[cnt : cnt+8]
-		}
-		cnt += 8
-	}
+	folder := AuthSession.Folderids[INBOX]
 
 	getRulesOrganizer := []byte{0x01, AuthSession.LogonID, 0x00, 0x03, AuthSession.LogonID, 0x01, 0x02, 0xff, 0x0f}
 	getRulesOrganizer = append(getRulesOrganizer, folder...)
@@ -315,7 +378,7 @@ func ExecuteFetchMailRules(messageID []byte) (*ExecuteResponse, error) {
 	execRequest.CalcSizes()
 	//fetch rules
 	if AuthSession.Transport == HTTP { // HTTP
-		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Execute", BodyToBytes(execRequest))
+		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Execute", execRequest.Marshal())
 		responseBody, err := readResponse(resp.Header, rbody)
 		if err != nil {
 			return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
@@ -345,7 +408,7 @@ func GetContentsTable() (*RopGetContentsTableResponse, error) {
 	execRequest.CalcSizes()
 	//fetch contents
 	if AuthSession.Transport == HTTP { // HTTP
-		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Execute", BodyToBytes(execRequest))
+		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Execute", execRequest.Marshal())
 		responseBody, err := readResponse(resp.Header, rbody)
 		if err != nil {
 			return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
@@ -366,38 +429,82 @@ func GetContentsTable() (*RopGetContentsTableResponse, error) {
 }
 
 //GetFolder function get's a folder from the folders id
-func GetFolder() (*ExecuteResponse, error) {
+//FolderIds can be any of the "specialFolders" as defined in Exchange
+//mapi/datastructs.go folder id/locations constants
+func GetFolder(folderid int) (*ExecuteResponse, error) {
 
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
+	execRequest.MaxRopOut = 262144
 
-	cnt := 0
-	var folder []byte
-	for k := 0; k < 13; k++ {
-		if k == 4 { //inbox
-			folder = AuthSession.Folderids[cnt : cnt+8]
-		}
-		cnt += 8
-	}
+	folder := AuthSession.Folderids[folderid]
 
-	getFolder := []byte{0x02, AuthSession.LogonID, 0x00, 0x01}
-	getFolder = append(getFolder, folder...)
-	getFolder = append(getFolder, []byte{0x00, 0x07, AuthSession.LogonID, 0x01, 0x00, 0x00, 0x01, 0x00, 0x21, 0x00, 0x14, 0x00, 0x49, 0x67, 0x03, 0x00, 0xf4, 0x0f, 0x02, 0x01, 0x72, 0x66, 0x1f, 0x00, 0xe5, 0x36, 0x1f, 0x00, 0xe6, 0x36, 0x1f, 0x00, 0x01, 0x30, 0x03, 0x00, 0x01, 0x36, 0x03, 0x00, 0x02, 0x36, 0x03, 0x00, 0x03, 0x36, 0x0b, 0x00, 0x0a, 0x36, 0x1f, 0x00, 0x13, 0x36, 0x02, 0x01, 0x16, 0x36, 0x02, 0x01, 0xd0, 0x36, 0x02, 0x01, 0xd1, 0x36, 0x02, 0x01, 0xd2, 0x36, 0x02, 0x01, 0xd3, 0x36, 0x02, 0x01, 0xd4, 0x36, 0x02, 0x01, 0xd5, 0x36, 0x02, 0x01, 0xd6, 0x36, 0x02, 0x01, 0xd7, 0x36, 0x02, 0x11, 0xd8, 0x36, 0x02, 0x01, 0xd9, 0x36, 0x03, 0x00, 0xde, 0x36, 0x02, 0x01, 0xdf, 0x36, 0x02, 0x01, 0xe0, 0x36, 0x03, 0x00, 0xe1, 0x36, 0x02, 0x11, 0xe4, 0x36, 0x02, 0x01, 0xeb, 0x36, 0x03, 0x00, 0x39, 0x66, 0x02, 0x01, 0xda, 0x36, 0x02, 0x01, 0x18, 0x30, 0x03, 0x00, 0x1e, 0x30, 0x02, 0x01, 0xda, 0x36}...)
+	getFolder := RopOpenFolder{RopID: 0x02, LogonID: AuthSession.LogonID}
+	getFolder.InputHandle = 0x00
+	getFolder.OutputHandle = 0x01
+	getFolder.FolderID = folder
+	getFolder.OpenModeFlags = 0x00
 
-	execRequest.RopBuffer.ROP.RopsList = getFolder
+	getProperties := RopGetPropertiesSpecific{}
+	getProperties.RopID = 0x07
+	getProperties.LogonID = AuthSession.LogonID
+	getProperties.InputHandle = 0x01
+	getProperties.PropertySizeLimit = 0x00
+	getProperties.WantUnicode = []byte{0x00, 0x01}
+	getProperties.PropertyTagCount = 30
 
+	propertyTags := make([]PropertyTag, getProperties.PropertyTagCount)
+	propertyTags[0] = PropertyTag{PtypInteger64, 0x6749}
+	propertyTags[1] = PropertyTag{PtypInteger32, 0x0ff4}
+	propertyTags[2] = PropertyTag{PtypBinary, 0x6672}
+	propertyTags[3] = PropertyTag{PtypString, 0x36e5}
+	propertyTags[4] = PropertyTag{PtypString, 0x36e6}
+	propertyTags[5] = PropertyTag{PtypString, 0x3001}
+	propertyTags[6] = PropertyTag{PtypInteger32, 0x3601}
+	propertyTags[7] = PropertyTag{PtypInteger32, 0x3602}
+	propertyTags[8] = PropertyTag{PtypInteger32, 0x3603}
+	propertyTags[9] = PropertyTag{PtypBoolean, 0x360a}
+	propertyTags[10] = PropertyTag{PtypString, 0x3613}
+	propertyTags[11] = PropertyTag{PtypBinary, 0x3616}
+	propertyTags[12] = PropertyTag{PtypBinary, 0x36d0}
+	propertyTags[13] = PropertyTag{PtypBinary, 0x36d1}
+	propertyTags[14] = PropertyTag{PtypBinary, 0x36d2}
+	propertyTags[15] = PropertyTag{PtypBinary, 0x36d3}
+	propertyTags[16] = PropertyTag{PtypBinary, 0x36d4}
+	propertyTags[17] = PropertyTag{PtypBinary, 0x36d5}
+	propertyTags[18] = PropertyTag{PtypBinary, 0x36d6}
+	propertyTags[19] = PropertyTag{PtypBinary, 0x36d7}
+	propertyTags[20] = PropertyTag{PtypMultipleBinary, 0x36d8}
+	propertyTags[21] = PropertyTag{PtypBinary, 0x36d9}
+	propertyTags[22] = PropertyTag{PtypInteger32, 0x36de}
+	propertyTags[21] = PropertyTag{PtypBinary, 0x36df}
+	propertyTags[21] = PropertyTag{PtypBinary, 0x36e0}
+	propertyTags[22] = PropertyTag{PtypInteger32, 0x36e1}
+	propertyTags[23] = PropertyTag{PtypMultipleBinary, 0x36e4}
+	propertyTags[24] = PropertyTag{PtypBinary, 0x36eb}
+	propertyTags[25] = PropertyTag{PtypInteger32, 0x6639}
+	propertyTags[26] = PropertyTag{PtypBinary, 0x36da}
+	propertyTags[27] = PropertyTag{PtypBinary, 0x3018}
+	propertyTags[28] = PropertyTag{PtypInteger32, 0x301e}
+	propertyTags[29] = PropertyTag{PtypBinary, 0x36da}
+
+	k := append(getFolder.Marshal(), getProperties.Marshal()...)
+	k = append(k, BodyToBytes(propertyTags)...)
+
+	execRequest.RopBuffer.ROP.RopsList = k
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF}
 
 	execRequest.CalcSizes()
 	//fetch folder
 	if AuthSession.Transport == HTTP { // HTTP
-		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Execute", BodyToBytes(execRequest))
+		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Execute", execRequest.Marshal())
 		responseBody, err := readResponse(resp.Header, rbody)
 		if err != nil {
 			return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
 		}
 		execResponse := ExecuteResponse{}
 		execResponse.Unmarshal(responseBody)
+
 		return &execResponse, nil
 
 	}
@@ -411,17 +518,27 @@ func DisplayRules() ([]Rule, error) {
 	execRequest.Init()
 
 	getFolder := []byte{0x3f, AuthSession.LogonID, 0x00, 0x01, 0x40}
-	getFolder = append(getFolder, []byte{0x12, AuthSession.LogonID, 0x01, 0x00, 0x02, 0x00, 0x14, 0x00, 0x74, 0x66, 0x1f, 0x00, 0x82, 0x66}...)
-	getFolder = append(getFolder, []byte{0x15, AuthSession.LogonID, 0x01, 0x00, 0x01, 0x32, 0x00}...)
-	execRequest.RopBuffer.ROP.RopsList = getFolder
+	//RopSetColumns
+	setColumns := RopSetColumnsRequest{RopID: 0x12, LogonID: AuthSession.LogonID}
+	setColumns.InputHandle = 0x01
+	setColumns.PropertyTagCount = 0x02
+	setColumns.PropertyTags = make([]PropertyTag, 2)
+	setColumns.PropertyTags[0] = PropertyTag{PtypInteger64, 0x6674}
+	setColumns.PropertyTags[1] = PropertyTag{PtypString, 0x6682}
+	//RopQueryRows
+	queryRows := RopQueryRowsRequest{0x15, AuthSession.LogonID, 0x01, 0x00, 0x01, 0x0032}
 
+	getFolder = append(getFolder, setColumns.Marshal()...)
+	getFolder = append(getFolder, queryRows.Marshal()...)
+
+	execRequest.RopBuffer.ROP.RopsList = getFolder
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x01, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF}
 
 	execRequest.CalcSizes()
 
 	//fetch folder
 	if AuthSession.Transport == HTTP { // HTTP
-		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Execute", BodyToBytes(execRequest))
+		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Execute", execRequest.Marshal())
 		responseBody, err := readResponse(resp.Header, rbody)
 		if err != nil {
 			return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
@@ -480,7 +597,7 @@ func ExecuteMailRuleAdd(rulename, triggerword, triggerlocation string, delete bo
 	ruleAction.ActionFlags = 0
 	ruleAction.ActionData = actionData
 
-	pdat := BodyToBytes(ruleAction)
+	pdat := ruleAction.Marshal()
 
 	propertyValues[4] = TaggedPropertyValue{PidTagRuleActions, pdat}
 	//PidTagRuleProvider
@@ -501,7 +618,7 @@ func ExecuteMailRuleAdd(rulename, triggerword, triggerlocation string, delete bo
 	execRequest.CalcSizes()
 
 	if AuthSession.Transport == HTTP { // HTTP
-		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Execute", BodyToBytes(execRequest))
+		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Execute", execRequest.Marshal())
 		responseBody, err := readResponse(resp.Header, rbody)
 		if err != nil {
 			return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
@@ -524,7 +641,7 @@ func ExecuteMailRuleDelete(ruleid []byte) error {
 	delRule.RuleData.RuleDataFlags = 0x04
 	delRule.RuleData.PropertyValueCount = uint16(1)
 	delRule.RuleData.PropertyValues = make([]TaggedPropertyValue, 1)
-	delRule.RuleData.PropertyValues[0] = TaggedPropertyValue{PidTagRuleId, ruleid}
+	delRule.RuleData.PropertyValues[0] = TaggedPropertyValue{PidTagRuleID, ruleid}
 
 	ruleBytes := BodyToBytes(delRule)
 	execRequest.RopBuffer.ROP.RopsList = ruleBytes
@@ -533,7 +650,7 @@ func ExecuteMailRuleDelete(ruleid []byte) error {
 	execRequest.CalcSizes()
 
 	if AuthSession.Transport == HTTP { // HTTP
-		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Execute", BodyToBytes(execRequest))
+		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Execute", execRequest.Marshal())
 		responseBody, err := readResponse(resp.Header, rbody)
 		if err != nil {
 			return fmt.Errorf("[x] A HTTP server side error occurred while deleting the rule.\n %s", err)

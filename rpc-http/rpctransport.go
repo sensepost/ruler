@@ -1,7 +1,6 @@
 package rpchttp
 
 import (
-	"crypto/tls"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -24,88 +23,86 @@ func addRPCHeaders(req *http.Request) {
 	req.Header.Set("User-Agent", "MSRPC")
 	req.Header.Add("Cache-Control", "no-cache")
 	req.Header.Add("Accept", "application/rpc")
+	req.Header.Add("Connection", "keep-alive")
 }
 
 var rpcInData http.Client
 var rpcOutData http.Client
-var AuthSession utils.Session
 
-func RPCInDataOpen(URL string) (res *http.Response, err error) {
-	r, _ := http.NewRequest("RPC_IN_DATA", URL, strings.NewReader(""))
+//AuthSession Keep track of session data
+var AuthSession *utils.Session
+
+const (
+	RPCIN  = 1
+	RPCOUT = 2
+)
+
+//RPCOpen opens HTTP for RPC_IN_DATA or RPC_OUT_DATA
+func RPCOpen(rpcType int, URL string) (err error) {
+	var method string
+	if rpcType == 1 {
+		method = "RPC_IN_DATA"
+	} else if rpcType == 2 {
+		method = "RPC_OUT_DATA"
+	} else {
+		return fmt.Errorf("Bad rpc type")
+	}
+	r, _ := http.NewRequest(method, URL, strings.NewReader(" "))
 	addRPCHeaders(r)
-	r.Header.Add("Content-length", "0")
-	//req.SetBasicAuth(NtlmTransport.Email, NtlmTransport.Password)
 
-	rpcInData = http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		},
-	}
-	resp, err := rpcInData.Do(r)
-
-	if err != nil {
-		//check if this error was because of ntml auth when basic auth was expected.
-		if m, _ := regexp.Match("illegal base64", []byte(err.Error())); m == true {
-			rpcInData = http.Client{}
-			resp, err = rpcInData.Do(r)
-		} else {
-			fmt.Println(err)
-			return nil, nil
-		}
-	}
-
-	if err == nil && resp.StatusCode == http.StatusUnauthorized {
-		// it's necessary to reuse the same http connection
-		// in order to do that it's required to read Body and close it
-		_, err = io.Copy(ioutil.Discard, resp.Body)
-		if err != nil {
-			return nil, err
-		}
-		err = resp.Body.Close()
-		if err != nil {
-			return nil, err
-		}
-	}
-	return resp, err
-}
-
-func (t NtlmTransport) RPCOutDataOpen(req *http.Request) (res *http.Response, err error) {
-	r, _ := http.NewRequest("RPC_OUT_DATA", req.URL.String(), strings.NewReader(""))
-	addRPCHeaders(r)
-	req.Header.Add("Content-length", "0")
-	//req.SetBasicAuth(NtlmTransport.Email, NtlmTransport.Password)
-
-	rpcInData := http.Client{
+	rpcData := http.Client{
 		Transport: &httpntlm.NtlmTransport{
 			Domain:   "",
 			User:     AuthSession.User,
 			Password: AuthSession.Pass,
 			Insecure: AuthSession.Insecure,
 		},
+		Jar: AuthSession.CookieJar,
 	}
-	resp, err := rpcInData.Do(r)
+	resp, err := rpcData.Do(r)
 
 	if err != nil {
-		return nil, err
+		//check if this error was because of ntml auth when basic auth was expected.
+		if m, _ := regexp.Match("illegal base64", []byte(err.Error())); m == true {
+			rpcInData = http.Client{}
+			resp, err = rpcData.Do(r)
+		} else {
+			fmt.Println(err)
+			return nil
+		}
 	}
-	if err == nil && resp.StatusCode == http.StatusUnauthorized {
 
+	if err == nil && resp.StatusCode == http.StatusUnauthorized {
 		// it's necessary to reuse the same http connection
 		// in order to do that it's required to read Body and close it
 		_, err = io.Copy(ioutil.Discard, resp.Body)
 		if err != nil {
-			return nil, err
+			fmt.Println(err)
+			return err
 		}
 		err = resp.Body.Close()
 		if err != nil {
-			return nil, err
+			fmt.Println(err)
+			return err
 		}
 	}
-	return resp, err
+	fmt.Println(resp)
+
+	if rpcType == 1 {
+		rpcInData = rpcData
+	} else if rpcType == 2 {
+		rpcOutData = rpcData
+	}
+	return err
+}
+
+func RPCSend(data []byte) {
+
 }
 
 //RPCAUTH allows us to do the NTLM auth inside the RPC message
-func RPCAUTH() (res *http.Response, err error) {
+func RPCAuth() (err error) {
+
 	//resp, err = client.Do()
 	//session, err := ntlm.CreateClientSession(ntlm.Version1, ntlm.ConnectionlessMode)
 	//if err != nil {
@@ -139,5 +136,5 @@ func RPCAUTH() (res *http.Response, err error) {
 
 		return resp, err
 	*/
-	return nil, nil
+	return nil
 }
