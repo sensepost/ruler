@@ -104,6 +104,8 @@ If you encounter an Exchange server where the Autodiscover service is failing, y
 
 If you run into issues with Authentication (and you know the creds are correct), you can try and force the use of basic authentication with ```-basic```
 
+The ```-v``` flag will also give you some insight into the process being used by the autodiscover service.
+
 
 ## Display existing rules / verify account
 
