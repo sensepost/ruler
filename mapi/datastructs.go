@@ -7,87 +7,6 @@ import (
 	"reflect"
 )
 
-const (
-	uFlagsUser         = 0x00000000
-	uFlagsAdmin        = 0x00000001
-	uFlagsNotSpecified = 0x00008000
-)
-
-const (
-	ropFlagsCompression = 0x0001 //[]byte{0x01, 0x00} //LittleEndian 0x0001
-	ropFlagsXorMagic    = 0x0002 //[]byte{0x02, 0x00}    //LittleEndian 0x0002
-	ropFlagsChain       = 0x0004 //[]byte{0x04, 0x00}       //LittleEndian 0x0004
-)
-
-//PidTagRuleID the TaggedPropertyValue for rule id
-var PidTagRuleID = PropertyTag{PtypInteger64, 0x6674}
-
-//PidTagRuleName the TaggedPropertyValue for rule id
-var PidTagRuleName = PropertyTag{PtypString, 0x6682}
-
-//PidTagRuleSequence the TaggedPropertyValue for rule id
-var PidTagRuleSequence = PropertyTag{PtypInteger32, 0x6676}
-
-//PidTagRuleState the TaggedPropertyValue for rule id
-var PidTagRuleState = PropertyTag{PtypInteger32, 0x6677}
-
-//PidTagRuleCondition the TaggedPropertyValue for rule id
-var PidTagRuleCondition = PropertyTag{PtypRestriction, 0x6679}
-
-//PidTagRuleActions the TaggedPropertyValue for rule id
-var PidTagRuleActions = PropertyTag{PtypRuleAction, 0x6680}
-
-//PidTagRuleProvider the TaggedPropertyValue for rule id
-var PidTagRuleProvider = PropertyTag{PtypString, 0x6681}
-
-//PidTagRuleProviderData the TaggedPropertyValue for rule id
-var PidTagRuleProviderData = PropertyTag{PtypBinary, 0x6684}
-
-//PidTagRuleLevel the TaggedPropertyValue for rule level
-var PidTagRuleLevel = PropertyTag{PtypInteger32, 0x6683}
-
-//OpenFlags
-const (
-	UseAdminPrivilege       = 0x00000001
-	Public                  = 0x00000002
-	HomeLogon               = 0x00000004
-	TakeOwnership           = 0x00000008
-	AlternateServer         = 0x00000100
-	IgnoreHomeMDB           = 0x00000200
-	NoMail                  = 0x00000400
-	UserPerMdbReplidMapping = 0x01000000
-	SupportProgress         = 0x20000000
-)
-
-//Property Data types
-const (
-	PtypInteger16      = 0x0002
-	PtypInteger32      = 0x0003
-	PtypInteger64      = 0x0014
-	PtypFloating32     = 0x0004
-	PtypFloating64     = 0x0005
-	PtypBoolean        = 0x000B
-	PtypString         = 0x001F
-	PtypString8        = 0x001E
-	PtypGUID           = 0x0048
-	PtypRuleAction     = 0x00FE
-	PtypRestriction    = 0x00FD
-	PtypBinary         = 0x0102
-	PtypMultipleBinary = 0x1102
-)
-
-//Folder id/locations -- https://msdn.microsoft.com/en-us/library/office/cc815825.aspx
-const (
-	OUTBOX   = 0 //Contains outgoing IPM messages.
-	DELETED  = 1 //Contains IPM messages that are marked for deletion.
-	SENT     = 2 //Contains IPM messages that have been sent.
-	IPM      = 3 //IPM root folder Contains folders for managing IPM messages.
-	INBOX    = 4 //Receive folder Contains incoming messages for a particular message class.
-	SEARCH   = 5 //Search-results root folder Contains folders for managing search results.
-	COMMON   = 6 //Common-views root folder Contains folders for managing views for the message store.
-	PERSONAL = 7 //Personal-views root folder
-)
-
 //ConnectRequest struct
 type ConnectRequest struct {
 	UserDN            []byte
@@ -200,8 +119,8 @@ type RopLogonResponse struct {
 	StoreState        []byte
 }
 
-//RopGetRulesRequestData struct
-type RopGetRulesRequestData struct {
+//RopGetRulesRequest struct
+type RopGetRulesRequest struct {
 	RopID             uint8 //0x3f
 	LogonID           uint8
 	InputHandleIndex  uint8
@@ -217,6 +136,15 @@ type RopModifyRulesRequestBuffer struct {
 	ModifyRulesFlag  byte
 	RulesCount       uint16
 	RulesData        []byte
+}
+
+//RopGetContentsTableRequest struct
+type RopGetContentsTableRequest struct {
+	RopID             uint8 //0x05
+	LogonID           uint8
+	InputHandleIndex  uint8
+	OutputHandleIndex uint8
+	TableFlags        uint8
 }
 
 //RopGetContentsTableResponse struct
@@ -236,7 +164,16 @@ type RopGetPropertiesSpecific struct {
 	PropertySizeLimit uint16
 	WantUnicode       []byte //apparently bool
 	PropertyTagCount  uint16
-	PropertyTags      []byte
+	PropertyTags      []PropertyTag //[]byte
+}
+
+//RopGetPropertiesSpecificResponse struct to get propertiesfor a folder
+type RopGetPropertiesSpecificResponse struct {
+	RopID             uint8 //0x07
+	InputHandleIndex  uint8
+	ReturnValue       uint32
+	PropertySizeLimit uint16
+	RowData           []PropertyRow
 }
 
 //RopOpenFolder struct used to open a folder
@@ -303,6 +240,16 @@ type RopReadStreamRequest struct {
 	MaximumByteCount uint32
 }
 
+//RopRestrictRequest strcut
+type RopRestrictRequest struct {
+	RopID            uint8 //0x14
+	LogonID          uint8
+	InputHandle      uint8
+	RestrictFlags    uint8
+	RestrictDataSize uint16
+	RestrictionData  []byte
+}
+
 //RopSetColumnsRequest struct used to select the columns to use
 type RopSetColumnsRequest struct {
 	RopID            uint8 //0x12
@@ -313,6 +260,14 @@ type RopSetColumnsRequest struct {
 	PropertyTags     []PropertyTag
 }
 
+//RopSetColumnsResponse struct used to select the columns to use
+type RopSetColumnsResponse struct {
+	RopID       uint8 //0x12
+	InputHandle uint8
+	ReturnValue uint32
+	TableStatus uint8
+}
+
 //RopQueryRowsRequest struct used to select the columns to use
 type RopQueryRowsRequest struct {
 	RopID          uint8 //0x15
@@ -321,6 +276,16 @@ type RopQueryRowsRequest struct {
 	QueryRowsFlags uint8
 	ForwardRead    byte
 	RowCount       uint16
+}
+
+//RopQueryRowsResponse struct used to select the columns to use
+type RopQueryRowsResponse struct {
+	RopID       uint8 //0x15
+	InputHandle uint8
+	ReturnValue uint32
+	Origin      byte
+	RowCount    uint16
+	RowData     [][]PropertyRow
 }
 
 //RopReleaseRequest struct used to release all resources associated with a server object
@@ -347,6 +312,13 @@ type RopModifyRulesRequest struct {
 	ModifyRulesFlag  byte
 	RulesCount       uint16
 	RuleData         RuleData
+}
+
+//RopGetRulesTableResponse strcut
+type RopGetRulesTableResponse struct {
+	RopID        uint8
+	OutputHandle uint8
+	ReturnValue  uint32
 }
 
 //RuleData struct
@@ -430,6 +402,12 @@ type AUXHeader struct {
 	Type    []byte //AUX_TYPE_PERF_CLIENTINFO 0x02
 }
 
+//PropertyRow used to hold the data of getRow requests such as RopGetPropertiesSpecific
+type PropertyRow struct {
+	Flag       uint8 //non-zero indicates error
+	ValueArray []byte
+}
+
 //RopResponse interface for common methods on RopResponses
 type RopResponse interface {
 	Unmarshal([]byte) error
@@ -491,6 +469,13 @@ func decodeUint16(num []byte) uint16 {
 	binary.Read(bf, binary.LittleEndian, &number)
 	return number
 }
+
+func decodeUint8(num []byte) uint8 {
+	var number uint8
+	bf := bytes.NewReader(num)
+	binary.Read(bf, binary.LittleEndian, &number)
+	return number
+}
 func encodeNum(v interface{}) []byte {
 	byteNum := new(bytes.Buffer)
 	binary.Write(byteNum, binary.LittleEndian, v)
@@ -544,6 +529,9 @@ func readUint32(pos int, buff []byte) (uint32, int) {
 
 func readUint16(pos int, buff []byte) (uint16, int) {
 	return decodeUint16(buff[pos : pos+2]), pos + 2
+}
+func readUint8(pos int, buff []byte) (uint8, int) {
+	return decodeUint8(buff[pos : pos+2]), pos + 2
 }
 
 func readBytes(pos, count int, buff []byte) ([]byte, int) {
@@ -620,6 +608,16 @@ func (openFolder RopOpenFolder) Marshal() []byte {
 //Marshal turn RopGetPropertiesSpecific into Bytes
 func (getProps RopGetPropertiesSpecific) Marshal() []byte {
 	return BodyToBytes(getProps)
+}
+
+//Marshal turn RopGetContentsTableRequest into Bytes
+func (getContentsTable RopGetContentsTableRequest) Marshal() []byte {
+	return BodyToBytes(getContentsTable)
+}
+
+//Marshal turn RopGetRulesRequest into Bytes
+func (getRules RopGetRulesRequest) Marshal() []byte {
+	return BodyToBytes(getRules)
 }
 
 //Marshal turn ExecuteRequest into Bytes
@@ -754,47 +752,188 @@ func (execRequest *ExecuteRequest) Init() {
 	execRequest.MaxRopOut = 32775
 }
 
-//DecodeRulesResponse func
-func DecodeRulesResponse(resp []byte) ([]Rule, []byte) {
+//Unmarshal func
+func (queryRows *RopQueryRowsResponse) Unmarshal(resp []byte, properties []PropertyTag) (int, error) {
+	pos := 0
+	queryRows.RopID, pos = readByte(pos, resp)
+	queryRows.InputHandle, pos = readByte(pos, resp)
+	queryRows.ReturnValue, pos = readUint32(pos, resp)
+	if queryRows.ReturnValue != 0 {
+		return pos, fmt.Errorf("Non-zero return value %d", queryRows.ReturnValue)
+	}
+	queryRows.Origin, pos = readByte(pos, resp)
+	queryRows.RowCount, pos = readUint16(pos, resp)
+
+	rows := make([][]PropertyRow, queryRows.RowCount)
+
+	for k := 0; k < int(queryRows.RowCount); k++ {
+		trow := PropertyRow{}
+		trow.Flag, pos = readByte(pos, resp)
+		for _, property := range properties {
+			if property.PropertyType == PtypInteger32 {
+				trow.ValueArray, pos = readBytes(pos, 2, resp)
+				rows[k] = append(rows[k], trow)
+			} else if property.PropertyType == PtypInteger64 {
+				trow.ValueArray, pos = readBytes(pos, 8, resp)
+				rows[k] = append(rows[k], trow)
+			} else if property.PropertyType == PtypString {
+				trow.ValueArray, pos = readUnicodeString(pos, resp)
+				rows[k] = append(rows[k], trow)
+				pos++
+			} else if property.PropertyType == PtypBinary {
+				cnt, p := readByte(pos, resp)
+				pos = p
+				trow.ValueArray, pos = readBytes(pos, int(cnt), resp)
+				rows[k] = append(rows[k], trow)
+			}
+		}
+
+	}
+
+	queryRows.RowData = rows
+	return pos, nil
+}
+
+//Unmarshal func
+func (setColumnsResponse *RopSetColumnsResponse) Unmarshal(resp []byte) (int, error) {
+	pos := 0
+	setColumnsResponse.RopID, pos = readByte(pos, resp)
+	setColumnsResponse.InputHandle, pos = readByte(pos, resp)
+	setColumnsResponse.ReturnValue, pos = readUint32(pos, resp)
+	setColumnsResponse.TableStatus, pos = readByte(pos, resp)
+	if setColumnsResponse.ReturnValue != 0 {
+		return pos, fmt.Errorf("Non-zero return value %d", setColumnsResponse.ReturnValue)
+	}
+	return pos, nil
+}
+
+//Unmarshal function to produce RopLogonResponse struct
+func (getRulesTable *RopGetRulesTableResponse) Unmarshal(resp []byte) (int, error) {
+	var pos = 0
+	getRulesTable.RopID, pos = readByte(pos, resp)
+	getRulesTable.OutputHandle, pos = readByte(pos, resp)
+	getRulesTable.ReturnValue, pos = readUint32(pos, resp)
+	if getRulesTable.ReturnValue != 0 {
+		return pos, fmt.Errorf("Non-zero return value %d", getRulesTable.ReturnValue)
+	}
+
+	return pos, nil
+}
+
+//Unmarshal func
+func (ropOpenFolderResponse *RopOpenFolderResponse) Unmarshal(resp []byte) (int, error) {
+	pos := 10
+	ropOpenFolderResponse.RopID, pos = readByte(pos, resp)
+	ropOpenFolderResponse.OutputHandle, pos = readByte(pos, resp)
+	ropOpenFolderResponse.ReturnValue, pos = readUint32(pos, resp)
+
+	if ropOpenFolderResponse.ReturnValue != 0x000000 {
+		return pos, fmt.Errorf("Non-zero reponse value %d", ropOpenFolderResponse.ReturnValue)
+	}
+
+	ropOpenFolderResponse.HasRules, pos = readByte(pos, resp)
+	ropOpenFolderResponse.IsGhosted, pos = readByte(pos, resp)
+
+	if ropOpenFolderResponse.IsGhosted == 1 {
+		ropOpenFolderResponse.ServerCount, pos = readUint16(pos, resp)
+		ropOpenFolderResponse.CheapServerCount, pos = readUint16(pos, resp)
+		ropOpenFolderResponse.Servers, pos = readASCIIString(pos, resp)
+	}
+	return pos, nil
+}
+
+//Unmarshal func
+func (ropGetPropertiesSpecificResponse *RopGetPropertiesSpecificResponse) Unmarshal(resp []byte, columns []PropertyTag) (int, error) {
+	pos := 0
+	ropGetPropertiesSpecificResponse.RopID, pos = readByte(pos, resp)
+	ropGetPropertiesSpecificResponse.InputHandleIndex, pos = readByte(pos, resp)
+	ropGetPropertiesSpecificResponse.ReturnValue, pos = readUint32(pos, resp)
+
+	if ropGetPropertiesSpecificResponse.ReturnValue != 0x000000 {
+		return pos, fmt.Errorf("Non-zero reponse value %d", ropGetPropertiesSpecificResponse.ReturnValue)
+	}
+	var rows []PropertyRow
+	for _, property := range columns {
+		trow := PropertyRow{}
+		trow.Flag, pos = readByte(pos, resp)
+		if property.PropertyType == PtypInteger32 {
+			trow.ValueArray, pos = readBytes(pos, 2, resp)
+			rows = append(rows, trow)
+		} else if property.PropertyType == PtypString {
+			trow.ValueArray, pos = readUnicodeString(pos, resp)
+			rows = append(rows, trow)
+		} else if property.PropertyType == PtypBinary {
+			cnt, p := readByte(pos, resp)
+			pos = p
+			trow.ValueArray, pos = readBytes(pos, int(cnt), resp)
+			rows = append(rows, trow)
+		}
+	}
+	ropGetPropertiesSpecificResponse.RowData = rows
+	return pos, nil
+}
+
+//DecodeGetTableResponse function Unmarshals the various parts of a getproperties response (this includes the initial openfolder request)
+//and returns the RopGetPropertiesSpecificResponse object to us, we can then cycle through the rows to view the values
+//needs the list of columns that were supplied in the initial request.
+func DecodeGetTableResponse(resp []byte, columns []PropertyTag) (*RopGetPropertiesSpecificResponse, error) {
 	pos := 10
 
-	var ret uint32
-	var rowcount uint16
-	_, pos = readByte(pos, resp)     //RopGetRulesTable should be 0x3f
-	_, pos = readByte(pos, resp)     //RopGetRulesTable InputHandleIndex
-	ret, pos = readUint32(pos, resp) //check that no error
-	if ret != 0 {
-		fmt.Println("Bad GetRules")
+	var err error
+
+	openFolderResp := RopOpenFolderResponse{}
+	pos, err = openFolderResp.Unmarshal(resp)
+	if err != nil {
+		return nil, err
+	}
+	properties := RopGetPropertiesSpecificResponse{}
+	_, err = properties.Unmarshal(resp[pos:], columns)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &properties, nil
+}
+
+//DecodeRulesResponse func
+func DecodeRulesResponse(resp []byte, properties []PropertyTag) ([]Rule, []byte) {
+
+	pos, tpos := 10, 0
+	var err error
+
+	rulesTableResponse := RopGetRulesTableResponse{}
+	tpos, err = rulesTableResponse.Unmarshal(resp[pos:])
+	pos += tpos
+
+	if err != nil {
+		fmt.Println(err)
 		return nil, nil
 	}
-	_, pos = readByte(pos, resp)     //RopSetColumns should be 0x12
-	_, pos = readByte(pos, resp)     //RopSetColumns InputHandleIndex
-	ret, pos = readUint32(pos, resp) //check that no error
-	if ret != 0 {
+	columns := RopSetColumnsResponse{}
+	tpos, err = columns.Unmarshal(resp[pos:])
+	pos += tpos
+
+	if err != nil {
 		fmt.Println("Bad SetColumns")
 		return nil, nil
 	}
-	_, pos = readByte(pos, resp)
 
-	_, pos = readByte(pos, resp)     //(RopQueryRows) should be 0x15
-	_, pos = readByte(pos, resp)     //(RopQueryRows) InputHandleIndex
-	ret, pos = readUint32(pos, resp) //check that no error
-	if ret != 0 {
+	rows := RopQueryRowsResponse{}
+	tpos, err = rows.Unmarshal(resp[pos:], properties)
+	if err != nil {
 		fmt.Println("Bad QueryRows")
 		return nil, nil
 	}
-	_, pos = readByte(pos, resp)
-	rowcount, pos = readUint16(pos, resp)
+	pos += tpos
 
-	rules := make([]Rule, rowcount)
+	rules := make([]Rule, int(rows.RowCount))
 
-	for k := 0; k < int(rowcount); k++ {
+	for k := 0; k < int(rows.RowCount); k++ {
 		rule := Rule{}
-		rule.HasFlag, pos = readByte(pos, resp)
-		rule.RuleID, pos = readBytes(pos, 8, resp)
-		rule.RuleName, pos = readUnicodeString(pos, resp)
+		rule.RuleID = rows.RowData[k][0].ValueArray
+		rule.RuleName = rows.RowData[k][1].ValueArray
 		rules[k] = rule
-		pos++
 	}
 	ruleshandle := resp[pos+4:]
 

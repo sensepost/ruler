@@ -251,7 +251,6 @@ func AuthenticateFetchMailbox(essdn []byte) (*RopLogonResponse, error) {
 			specialFolders(logonResponse.FolderIds)
 			return &logonResponse, nil
 		}
-
 	}
 	return nil, fmt.Errorf("[x]Unspecified error occurred\n")
 }
@@ -291,43 +290,44 @@ func CreateMessage() (*RopCreateMessageResponse, error) {
 	getProperties.InputHandle = 0x01
 	getProperties.PropertySizeLimit = 0x00
 	getProperties.WantUnicode = []byte{0x00, 0x01}
-	getProperties.PropertyTagCount = 30
+	getProperties.PropertyTagCount = 3
 
 	propertyTags := make([]PropertyTag, getProperties.PropertyTagCount)
-	propertyTags[0] = PropertyTag{PtypInteger64, 0x6749}
-	propertyTags[1] = PropertyTag{PtypInteger32, 0x0ff4}
-	propertyTags[2] = PropertyTag{PtypBinary, 0x6672}
-	propertyTags[3] = PropertyTag{PtypString, 0x36e5}
-	propertyTags[4] = PropertyTag{PtypString, 0x36e6}
-	propertyTags[5] = PropertyTag{PtypString, 0x3001}
-	propertyTags[6] = PropertyTag{PtypInteger32, 0x3601}
-	propertyTags[7] = PropertyTag{PtypInteger32, 0x3602}
-	propertyTags[8] = PropertyTag{PtypInteger32, 0x3603}
-	propertyTags[9] = PropertyTag{PtypBoolean, 0x360a}
-	propertyTags[10] = PropertyTag{PtypString, 0x3613}
-	propertyTags[11] = PropertyTag{PtypBinary, 0x3616}
-	propertyTags[12] = PropertyTag{PtypBinary, 0x36d0}
-	propertyTags[13] = PropertyTag{PtypBinary, 0x36d1}
-	propertyTags[14] = PropertyTag{PtypBinary, 0x36d2}
-	propertyTags[15] = PropertyTag{PtypBinary, 0x36d3}
-	propertyTags[16] = PropertyTag{PtypBinary, 0x36d4}
-	propertyTags[17] = PropertyTag{PtypBinary, 0x36d5}
-	propertyTags[18] = PropertyTag{PtypBinary, 0x36d6}
-	propertyTags[19] = PropertyTag{PtypBinary, 0x36d7}
-	propertyTags[20] = PropertyTag{PtypMultipleBinary, 0x36d8}
-	propertyTags[21] = PropertyTag{PtypBinary, 0x36d9}
-	propertyTags[22] = PropertyTag{PtypInteger32, 0x36de}
-	propertyTags[21] = PropertyTag{PtypBinary, 0x36df}
-	propertyTags[21] = PropertyTag{PtypBinary, 0x36e0}
-	propertyTags[22] = PropertyTag{PtypInteger32, 0x36e1}
-	propertyTags[23] = PropertyTag{PtypMultipleBinary, 0x36e4}
-	propertyTags[24] = PropertyTag{PtypBinary, 0x36eb}
-	propertyTags[25] = PropertyTag{PtypInteger32, 0x6639}
-	propertyTags[26] = PropertyTag{PtypBinary, 0x36da}
-	propertyTags[27] = PropertyTag{PtypBinary, 0x3018}
-	propertyTags[28] = PropertyTag{PtypInteger32, 0x301e}
-	propertyTags[29] = PropertyTag{PtypBinary, 0x36da}
-
+	propertyTags[0] = PidTagParentFolderID
+	propertyTags[1] = PidTagAccess
+	propertyTags[2] = PidTagMemberName
+	/*
+		propertyTags[3] = PropertyTag{PtypString, 0x36e5}
+		propertyTags[4] = PropertyTag{PtypString, 0x36e6}
+		propertyTags[5] = PropertyTag{PtypString, 0x3001}
+		propertyTags[6] = PropertyTag{PtypInteger32, 0x3601}
+		propertyTags[7] = PropertyTag{PtypInteger32, 0x3602}
+		propertyTags[8] = PropertyTag{PtypInteger32, 0x3603}
+		propertyTags[9] = PropertyTag{PtypBoolean, 0x360a}
+		propertyTags[10] = PropertyTag{PtypString, 0x3613}
+		propertyTags[11] = PropertyTag{PtypBinary, 0x3616}
+		propertyTags[12] = PropertyTag{PtypBinary, 0x36d0}
+		propertyTags[13] = PropertyTag{PtypBinary, 0x36d1}
+		propertyTags[14] = PropertyTag{PtypBinary, 0x36d2}
+		propertyTags[15] = PropertyTag{PtypBinary, 0x36d3}
+		propertyTags[16] = PropertyTag{PtypBinary, 0x36d4}
+		propertyTags[17] = PropertyTag{PtypBinary, 0x36d5}
+		propertyTags[18] = PropertyTag{PtypBinary, 0x36d6}
+		propertyTags[19] = PropertyTag{PtypBinary, 0x36d7}
+		propertyTags[20] = PropertyTag{PtypMultipleBinary, 0x36d8}
+		propertyTags[21] = PropertyTag{PtypBinary, 0x36d9}
+		propertyTags[22] = PropertyTag{PtypInteger32, 0x36de}
+		propertyTags[21] = PropertyTag{PtypBinary, 0x36df}
+		propertyTags[21] = PropertyTag{PtypBinary, 0x36e0}
+		propertyTags[22] = PropertyTag{PtypInteger32, 0x36e1}
+		propertyTags[23] = PropertyTag{PtypMultipleBinary, 0x36e4}
+		propertyTags[24] = PropertyTag{PtypBinary, 0x36eb}
+		propertyTags[25] = PropertyTag{PtypInteger32, 0x6639}
+		propertyTags[26] = PropertyTag{PtypBinary, 0x36da}
+		propertyTags[27] = PropertyTag{PtypBinary, 0x3018}
+		propertyTags[28] = PropertyTag{PtypInteger32, 0x301e}
+		propertyTags[29] = PropertyTag{PtypBinary, 0x36da}
+	*/
 	k := append(createMessage.Marshal(), getProperties.Marshal()...)
 	k = append(k, BodyToBytes(propertyTags)...)
 
@@ -405,10 +405,23 @@ func GetContentsTable() (*RopGetContentsTableResponse, error) {
 	execRequest.Init()
 	execRequest.MaxRopOut = 262144
 
-	getContents := []byte{0x05, AuthSession.LogonID, 0x00, 0x01, 0x02}
-	getContents = append(getContents, []byte{0x12, AuthSession.LogonID, 0x01, 0x00, 0x06, 0x00, 0x14, 0x00, 0x48, 0x67, 0x14, 0x00, 0x4a, 0x67, 0x14, 0x00, 0x4d, 0x67, 0x03, 0x00, 0x4e, 0x67, 0x1f, 0x00, 0x1a, 0x00, 0x40, 0x00, 0x08, 0x30, 0x14, AuthSession.LogonID, 0x01, 0x00, 0x2e, 0x00, 0x04, 0x04, 0x1f, 0x00, 0x1a, 0x00, 0x1f, 0x00, 0x1a, 0x00, 0x49, 0x00, 0x50, 0x00, 0x4d, 0x00, 0x2e, 0x00, 0x52, 0x00, 0x75, 0x00, 0x6c, 0x00, 0x65, 0x00, 0x4f, 0x00, 0x72, 0x00, 0x67, 0x00, 0x61, 0x00, 0x6e, 0x00, 0x69, 0x00, 0x7a, 0x00, 0x65, 0x00, 0x72, 0x00, 0x00, 0x00, 0x13, AuthSession.LogonID, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x08, 0x30, 0x01, 0x18, AuthSession.LogonID, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x15, AuthSession.LogonID, 0x01, 0x02, 0x01, 0x00, 0x10}...)
+	getContents := RopGetContentsTableRequest{RopID: 0x05, LogonID: AuthSession.LogonID, InputHandleIndex: 0x00, OutputHandleIndex: 0x01, TableFlags: 0x02}
+	setColumns := RopSetColumnsRequest{RopID: 0x12, LogonID: AuthSession.LogonID, InputHandle: 0x01, SetColumnFlags: 0x00, PropertyTagCount: 0x0006}
 
-	execRequest.RopBuffer.ROP.RopsList = getContents
+	propertyTags := make([]PropertyTag, setColumns.PropertyTagCount)
+	propertyTags[0] = PropertyTag{PtypInteger64, 0x4867}
+	propertyTags[1] = PropertyTag{PtypInteger64, 0x4a67}
+	propertyTags[2] = PropertyTag{PtypInteger64, 0x4d67}
+	propertyTags[3] = PropertyTag{PtypInteger32, 0x4e67}
+	propertyTags[4] = PropertyTag{PtypString, 0x1a00}
+	propertyTags[5] = PropertyTag{PtypTime, 0x0830}
+
+	setColumns.PropertyTags = propertyTags
+	//0x14, AuthSession.LogonID, 0x01, 0x00, 0x2e, 0x00, 0x04, 0x04, 0x1f, 0x00, 0x1a, 0x00, 0x1f, 0x00, 0x1a, 0x00, 0x49, 0x00, 0x50, 0x00, 0x4d, 0x00, 0x2e, 0x00, 0x52, 0x00, 0x75, 0x00, 0x6c, 0x00, 0x65, 0x00, 0x4f, 0x00, 0x72, 0x00, 0x67, 0x00, 0x61, 0x00, 0x6e, 0x00, 0x69, 0x00, 0x7a, 0x00, 0x65, 0x00, 0x72, 0x00, 0x00, 0x00, 0x13, AuthSession.LogonID, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x08, 0x30, 0x01
+	//restrict := RopRestrictRequest{RopID: 0x14, LogonID: AuthSession.LogonID, InputHandle: 0x01, RestrictFlags: 0x00, RestrictDataSize: 0x002e}
+	//getContents = append(getContents.Marshal(), []byte{0x12, AuthSession.LogonID, 0x01, 0x00, 0x06, 0x00, 0x14, 0x00, 0x48, 0x67, 0x14, 0x00, 0x4a, 0x67, 0x14, 0x00, 0x4d, 0x67, 0x03, 0x00, 0x4e, 0x67, 0x1f, 0x00, 0x1a, 0x00, 0x40, 0x00, 0x08, 0x30, 0x14, AuthSession.LogonID, 0x01, 0x00, 0x2e, 0x00, 0x04, 0x04, 0x1f, 0x00, 0x1a, 0x00, 0x1f, 0x00, 0x1a, 0x00, 0x49, 0x00, 0x50, 0x00, 0x4d, 0x00, 0x2e, 0x00, 0x52, 0x00, 0x75, 0x00, 0x6c, 0x00, 0x65, 0x00, 0x4f, 0x00, 0x72, 0x00, 0x67, 0x00, 0x61, 0x00, 0x6e, 0x00, 0x69, 0x00, 0x7a, 0x00, 0x65, 0x00, 0x72, 0x00, 0x00, 0x00, 0x13, AuthSession.LogonID, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x08, 0x30, 0x01, 0x18, AuthSession.LogonID, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x15, AuthSession.LogonID, 0x01, 0x02, 0x01, 0x00, 0x10}...)
+
+	execRequest.RopBuffer.ROP.RopsList = append(getContents.Marshal())
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x01, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF}
 
 	//fetch contents
@@ -436,7 +449,7 @@ func GetContentsTable() (*RopGetContentsTableResponse, error) {
 //GetFolder function get's a folder from the folders id
 //FolderIds can be any of the "specialFolders" as defined in Exchange
 //mapi/datastructs.go folder id/locations constants
-func GetFolder(folderid int) (*ExecuteResponse, error) {
+func GetFolder(folderid int, columns []PropertyTag) (*ExecuteResponse, error) {
 
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
@@ -456,45 +469,36 @@ func GetFolder(folderid int) (*ExecuteResponse, error) {
 	getProperties.InputHandle = 0x01
 	getProperties.PropertySizeLimit = 0x00
 	getProperties.WantUnicode = []byte{0x00, 0x01}
-	getProperties.PropertyTagCount = 30
+	getProperties.PropertyTagCount = uint16(len(columns))
+	getProperties.PropertyTags = columns
 
-	propertyTags := make([]PropertyTag, getProperties.PropertyTagCount)
-	propertyTags[0] = PropertyTag{PtypInteger64, 0x6749}
-	propertyTags[1] = PropertyTag{PtypInteger32, 0x0ff4}
-	propertyTags[2] = PropertyTag{PtypBinary, 0x6672}
-	propertyTags[3] = PropertyTag{PtypString, 0x36e5}
-	propertyTags[4] = PropertyTag{PtypString, 0x36e6}
-	propertyTags[5] = PropertyTag{PtypString, 0x3001}
-	propertyTags[6] = PropertyTag{PtypInteger32, 0x3601}
-	propertyTags[7] = PropertyTag{PtypInteger32, 0x3602}
-	propertyTags[8] = PropertyTag{PtypInteger32, 0x3603}
-	propertyTags[9] = PropertyTag{PtypBoolean, 0x360a}
-	propertyTags[10] = PropertyTag{PtypString, 0x3613}
-	propertyTags[11] = PropertyTag{PtypBinary, 0x3616}
-	propertyTags[12] = PropertyTag{PtypBinary, 0x36d0}
-	propertyTags[13] = PropertyTag{PtypBinary, 0x36d1}
-	propertyTags[14] = PropertyTag{PtypBinary, 0x36d2}
-	propertyTags[15] = PropertyTag{PtypBinary, 0x36d3}
-	propertyTags[16] = PropertyTag{PtypBinary, 0x36d4}
-	propertyTags[17] = PropertyTag{PtypBinary, 0x36d5}
-	propertyTags[18] = PropertyTag{PtypBinary, 0x36d6}
-	propertyTags[19] = PropertyTag{PtypBinary, 0x36d7}
-	propertyTags[20] = PropertyTag{PtypMultipleBinary, 0x36d8}
-	propertyTags[21] = PropertyTag{PtypBinary, 0x36d9}
-	propertyTags[22] = PropertyTag{PtypInteger32, 0x36de}
-	propertyTags[21] = PropertyTag{PtypBinary, 0x36df}
-	propertyTags[21] = PropertyTag{PtypBinary, 0x36e0}
-	propertyTags[22] = PropertyTag{PtypInteger32, 0x36e1}
-	propertyTags[23] = PropertyTag{PtypMultipleBinary, 0x36e4}
-	propertyTags[24] = PropertyTag{PtypBinary, 0x36eb}
-	propertyTags[25] = PropertyTag{PtypInteger32, 0x6639}
-	propertyTags[26] = PropertyTag{PtypBinary, 0x36da}
-	propertyTags[27] = PropertyTag{PtypBinary, 0x3018}
-	propertyTags[28] = PropertyTag{PtypInteger32, 0x301e}
-	propertyTags[29] = PropertyTag{PtypBinary, 0x36da}
-
+	/*
+		propertyTags[10] = PropertyTag{PtypString, 0x3613}
+		propertyTags[11] = PropertyTag{PtypBinary, 0x3616}
+		propertyTags[12] = PropertyTag{PtypBinary, 0x36d0}
+		propertyTags[13] = PropertyTag{PtypBinary, 0x36d1}
+		propertyTags[14] = PropertyTag{PtypBinary, 0x36d2}
+		propertyTags[15] = PropertyTag{PtypBinary, 0x36d3}
+		propertyTags[16] = PropertyTag{PtypBinary, 0x36d4}
+		propertyTags[17] = PropertyTag{PtypBinary, 0x36d5}
+		propertyTags[18] = PropertyTag{PtypBinary, 0x36d6}
+		propertyTags[19] = PropertyTag{PtypBinary, 0x36d7}
+		propertyTags[20] = PropertyTag{PtypMultipleBinary, 0x36d8}
+		propertyTags[21] = PropertyTag{PtypBinary, 0x36d9}
+		propertyTags[22] = PropertyTag{PtypInteger32, 0x36de}
+		propertyTags[21] = PropertyTag{PtypBinary, 0x36df}
+		propertyTags[21] = PropertyTag{PtypBinary, 0x36e0}
+		propertyTags[22] = PropertyTag{PtypInteger32, 0x36e1}
+		propertyTags[23] = PropertyTag{PtypMultipleBinary, 0x36e4}
+		propertyTags[24] = PropertyTag{PtypBinary, 0x36eb}
+		propertyTags[25] = PropertyTag{PtypInteger32, 0x6639}
+		propertyTags[26] = PropertyTag{PtypBinary, 0x36da}
+		propertyTags[27] = PropertyTag{PtypBinary, 0x3018}
+		propertyTags[28] = PropertyTag{PtypInteger32, 0x301e}
+		propertyTags[29] = PropertyTag{PtypBinary, 0x36da}
+	*/
 	k := append(getFolder.Marshal(), getProperties.Marshal()...)
-	k = append(k, BodyToBytes(propertyTags)...)
+	//k = append(k, BodyToBytes(propertyTags)...)
 
 	execRequest.RopBuffer.ROP.RopsList = k
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF}
@@ -521,22 +525,22 @@ func DisplayRules() ([]Rule, error) {
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
 
-	getFolder := []byte{0x3f, AuthSession.LogonID, 0x00, 0x01, 0x40}
+	getRulesFolder := RopGetRulesRequest{RopID: 0x3f, LogonID: AuthSession.LogonID, InputHandleIndex: 0x00, OutputHandleIndex: 0x01, TableFlags: 0x40}
 	//RopSetColumns
 	setColumns := RopSetColumnsRequest{RopID: 0x12, LogonID: AuthSession.LogonID}
 	setColumns.InputHandle = 0x01
 	setColumns.PropertyTagCount = 0x02
 	setColumns.PropertyTags = make([]PropertyTag, 2)
-	setColumns.PropertyTags[0] = PropertyTag{PtypInteger64, 0x6674}
-	setColumns.PropertyTags[1] = PropertyTag{PtypString, 0x6682}
+	setColumns.PropertyTags[0] = PidTagRuleID
+	setColumns.PropertyTags[1] = PidTagRuleName
 
 	//RopQueryRows
 	queryRows := RopQueryRowsRequest{RopID: 0x15, LogonID: AuthSession.LogonID, InputHandle: 0x01, QueryRowsFlags: 0x00, ForwardRead: 0x01, RowCount: 0x32}
 
-	getFolder = append(getFolder, setColumns.Marshal()...)
-	getFolder = append(getFolder, queryRows.Marshal()...)
+	getRules := append(getRulesFolder.Marshal(), setColumns.Marshal()...)
+	getRules = append(getRules, queryRows.Marshal()...)
 
-	execRequest.RopBuffer.ROP.RopsList = getFolder
+	execRequest.RopBuffer.ROP.RopsList = getRules
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x01, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF}
 
 	//fetch folder
@@ -549,7 +553,7 @@ func DisplayRules() ([]Rule, error) {
 		execResponse := ExecuteResponse{}
 		execResponse.Unmarshal(responseBody)
 
-		rules, _ := DecodeRulesResponse(execResponse.RopBuffer)
+		rules, _ := DecodeRulesResponse(execResponse.RopBuffer, setColumns.PropertyTags)
 		if rules == nil {
 			return nil, fmt.Errorf("[x] Error retrieving rules")
 		}
@@ -591,12 +595,8 @@ func ExecuteMailRuleAdd(rulename, triggerword, triggerlocation string, delete bo
 	actionData.Elem = []byte{0x80, 0x49, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
 	actionData.EndPoint = append(UTF16BE(triggerlocation, 1), []byte{0x80, 0x4a, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x80, 0x42, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}...)
 
-	ruleAction := RuleAction{}
-	ruleAction.Actions = 1
+	ruleAction := RuleAction{Actions: 1, ActionType: 0x05, ActionFlavor: 0, ActionFlags: 0}
 	ruleAction.ActionLen = uint16(len(BodyToBytes(actionData)) + 9)
-	ruleAction.ActionType = 0x05 //DEFER
-	ruleAction.ActionFlavor = 0
-	ruleAction.ActionFlags = 0
 	ruleAction.ActionData = actionData
 
 	pdat := ruleAction.Marshal()
@@ -613,7 +613,6 @@ func ExecuteMailRuleAdd(rulename, triggerword, triggerlocation string, delete bo
 	addRule.RuleData.PropertyValueCount = uint16(len(propertyValues))
 	ruleBytes := BodyToBytes(addRule)
 
-	//execRequest.RopBuffer.ROP.RopsList = append([]byte{0x01, AuthSession.LogonID, 0x01}, ruleBytes...)
 	execRequest.RopBuffer.ROP.RopsList = ruleBytes
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x01, 0x00, 0x00, AuthSession.LogonID} //append(AuthSession.RulesHandle, []byte{0xFF, 0xFF, 0xFF, 0xFF}...)
 

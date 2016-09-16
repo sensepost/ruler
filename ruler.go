@@ -169,7 +169,17 @@ func main() {
 		fmt.Println("[+] Mailbox GUID: ", logon.MailboxGUID)
 		fmt.Println("[*] Openning the Inbox")
 
-		mapi.GetFolder(mapi.INBOX) //Open Inbox
+		propertyTags := make([]mapi.PropertyTag, 8)
+		propertyTags[0] = mapi.PidTagParentFolderID
+		propertyTags[1] = mapi.PidTagAccess
+		propertyTags[2] = mapi.PidTagMemberName
+		propertyTags[3] = mapi.PidTagDefaultPostMessageClass
+		propertyTags[4] = mapi.PidTagDisplayName
+		propertyTags[5] = mapi.PidTagFolderType
+		propertyTags[6] = mapi.PidTagContentCount
+		propertyTags[7] = mapi.PidTagSubfolders
+
+		mapi.GetFolder(mapi.INBOX, propertyTags) //Open Inbox
 
 		//Display All rules
 		if *displayRules == true {
@@ -210,9 +220,23 @@ func main() {
 		}
 		if *createPtr == true {
 			fmt.Println("[*] Create message")
+			/*
+				PR_DISPLAY_NAME, PR_EMAIL_ADDRESS, PR_NT_USER_NAME, PR_CONTENT_COUNT,
+				PR_LOCALE_ID, PR_MESSAGE_SIZE, PR_MESSAGE_SIZE_EXTENDED,
+				PR_ASSOC_CONTENT_COUNT, PR_LAST_LOGON_TIME, PR_LAST_LOGOFF_TIME,
+				PR_STORAGE_LIMIT_INFORMATION, PR_INSTANCE_KEY
+			*/
+			propertyTags := make([]mapi.PropertyTag, 3)
+			propertyTags[0] = mapi.PidTagDisplayName
+			propertyTags[1] = mapi.PidTagMemberName
+			propertyTags[2] = mapi.PidTagLocaleID
 
-			_, a := mapi.CreateMessage()
-			fmt.Println(a)
+			a, _ := mapi.GetFolder(mapi.INBOX, propertyTags)
+
+			rows, _ := mapi.DecodeGetTableResponse(a.RopBuffer, propertyTags)
+			for _, r := range rows.RowData {
+				fmt.Println(r.ValueArray)
+			}
 			exit(nil)
 		}
 
