@@ -234,7 +234,6 @@ func AuthenticateFetchMailbox(essdn []byte) (*RopLogonResponse, error) {
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0xFF, 0xFF, 0xFF, 0xFF}
 	execRequest.RopBuffer.ROP.RopsList = logonBody.Marshal()
 
-	execRequest.CalcSizes()
 	if AuthSession.Transport == HTTP { // HTTP
 		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Execute", execRequest.Marshal())
 		responseBody, err := readResponse(resp.Header, rbody)
@@ -335,7 +334,6 @@ func CreateMessage() (*RopCreateMessageResponse, error) {
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF}
 	execRequest.RopBuffer.ROP.RopsList = k //createMessage.Marshal()
 
-	execRequest.CalcSizes()
 	if AuthSession.Transport == HTTP { // HTTP
 		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Execute", execRequest.Marshal())
 		responseBody, err := readResponse(resp.Header, rbody)
@@ -385,7 +383,6 @@ func ExecuteFetchMailRules(messageID []byte) (*ExecuteResponse, error) {
 	execRequest.RopBuffer.ROP.RopsList = getRulesOrganizer
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x1A, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
 
-	execRequest.CalcSizes()
 	//fetch rules
 	if AuthSession.Transport == HTTP { // HTTP
 		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Execute", execRequest.Marshal())
@@ -412,10 +409,8 @@ func GetContentsTable() (*RopGetContentsTableResponse, error) {
 	getContents = append(getContents, []byte{0x12, AuthSession.LogonID, 0x01, 0x00, 0x06, 0x00, 0x14, 0x00, 0x48, 0x67, 0x14, 0x00, 0x4a, 0x67, 0x14, 0x00, 0x4d, 0x67, 0x03, 0x00, 0x4e, 0x67, 0x1f, 0x00, 0x1a, 0x00, 0x40, 0x00, 0x08, 0x30, 0x14, AuthSession.LogonID, 0x01, 0x00, 0x2e, 0x00, 0x04, 0x04, 0x1f, 0x00, 0x1a, 0x00, 0x1f, 0x00, 0x1a, 0x00, 0x49, 0x00, 0x50, 0x00, 0x4d, 0x00, 0x2e, 0x00, 0x52, 0x00, 0x75, 0x00, 0x6c, 0x00, 0x65, 0x00, 0x4f, 0x00, 0x72, 0x00, 0x67, 0x00, 0x61, 0x00, 0x6e, 0x00, 0x69, 0x00, 0x7a, 0x00, 0x65, 0x00, 0x72, 0x00, 0x00, 0x00, 0x13, AuthSession.LogonID, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x08, 0x30, 0x01, 0x18, AuthSession.LogonID, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x15, AuthSession.LogonID, 0x01, 0x02, 0x01, 0x00, 0x10}...)
 
 	execRequest.RopBuffer.ROP.RopsList = getContents
-
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x01, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF}
 
-	execRequest.CalcSizes()
 	//fetch contents
 	if AuthSession.Transport == HTTP { // HTTP
 		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Execute", execRequest.Marshal())
@@ -504,7 +499,6 @@ func GetFolder(folderid int) (*ExecuteResponse, error) {
 	execRequest.RopBuffer.ROP.RopsList = k
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF}
 
-	execRequest.CalcSizes()
 	//fetch folder
 	if AuthSession.Transport == HTTP { // HTTP
 		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Execute", execRequest.Marshal())
@@ -535,16 +529,15 @@ func DisplayRules() ([]Rule, error) {
 	setColumns.PropertyTags = make([]PropertyTag, 2)
 	setColumns.PropertyTags[0] = PropertyTag{PtypInteger64, 0x6674}
 	setColumns.PropertyTags[1] = PropertyTag{PtypString, 0x6682}
+
 	//RopQueryRows
-	queryRows := RopQueryRowsRequest{0x15, AuthSession.LogonID, 0x01, 0x00, 0x01, 0x0032}
+	queryRows := RopQueryRowsRequest{RopID: 0x15, LogonID: AuthSession.LogonID, InputHandle: 0x01, QueryRowsFlags: 0x00, ForwardRead: 0x01, RowCount: 0x32}
 
 	getFolder = append(getFolder, setColumns.Marshal()...)
 	getFolder = append(getFolder, queryRows.Marshal()...)
 
 	execRequest.RopBuffer.ROP.RopsList = getFolder
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x01, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF}
-
-	execRequest.CalcSizes()
 
 	//fetch folder
 	if AuthSession.Transport == HTTP { // HTTP
@@ -577,8 +570,7 @@ func ExecuteMailRuleAdd(rulename, triggerword, triggerlocation string, delete bo
 	execRequest.Init()
 	execRequest.MaxRopOut = 262144
 
-	addRule := ModRuleData{0x41, AuthSession.LogonID, 0x00, 0x00, uint16(1), RuleData{}}
-	addRule.RuleData.RuleDataFlags = 0x01
+	addRule := RopModifyRulesRequest{RopID: 0x41, LoginID: AuthSession.LogonID, InputHandleIndex: 0x00, ModifyRulesFlag: 0x00, RulesCount: 0x01, RuleData: RuleData{RuleDataFlags: 0x01}}
 
 	propertyValues := make([]TaggedPropertyValue, 8)
 	//RUle Name
@@ -625,8 +617,6 @@ func ExecuteMailRuleAdd(rulename, triggerword, triggerlocation string, delete bo
 	execRequest.RopBuffer.ROP.RopsList = ruleBytes
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x01, 0x00, 0x00, AuthSession.LogonID} //append(AuthSession.RulesHandle, []byte{0xFF, 0xFF, 0xFF, 0xFF}...)
 
-	execRequest.CalcSizes()
-
 	if AuthSession.Transport == HTTP { // HTTP
 		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Execute", execRequest.Marshal())
 		responseBody, err := readResponse(resp.Header, rbody)
@@ -647,17 +637,15 @@ func ExecuteMailRuleDelete(ruleid []byte) error {
 	execRequest.Init()
 	execRequest.MaxRopOut = 262144
 
-	delRule := ModRuleData{0x41, AuthSession.LogonID, 0x00, 0x00, uint16(1), RuleData{}}
+	delRule := RopModifyRulesRequest{RopID: 0x41, LoginID: AuthSession.LogonID, InputHandleIndex: 0x00, ModifyRulesFlag: 0x00, RulesCount: 0x01, RuleData: RuleData{}}
 	delRule.RuleData.RuleDataFlags = 0x04
-	delRule.RuleData.PropertyValueCount = uint16(1)
+	delRule.RuleData.PropertyValueCount = 0x01
 	delRule.RuleData.PropertyValues = make([]TaggedPropertyValue, 1)
 	delRule.RuleData.PropertyValues[0] = TaggedPropertyValue{PidTagRuleID, ruleid}
 
 	ruleBytes := BodyToBytes(delRule)
 	execRequest.RopBuffer.ROP.RopsList = ruleBytes
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x01, 0x00, 0x00, AuthSession.LogonID} //append(AuthSession.RulesHandle, []byte{0xFF, 0xFF, 0xFF, 0xFF}...)
-
-	execRequest.CalcSizes()
 
 	if AuthSession.Transport == HTTP { // HTTP
 		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Execute", execRequest.Marshal())

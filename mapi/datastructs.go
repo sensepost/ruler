@@ -339,8 +339,8 @@ type RopCreateMessageResponse struct {
 	MessageID    []byte //bool
 }
 
-//ModRuleData struct
-type ModRuleData struct {
+//RopModifyRulesRequest struct
+type RopModifyRulesRequest struct {
 	RopID            uint8 //0x41
 	LoginID          uint8
 	InputHandleIndex uint8
@@ -583,6 +583,7 @@ func DecodeAuxBuffer(buff []byte) AUXBuffer {
 
 //Marshal turn ExecuteRequest into Bytes
 func (execRequest ExecuteRequest) Marshal() []byte {
+	execRequest.CalcSizes()
 	return BodyToBytes(execRequest)
 }
 
