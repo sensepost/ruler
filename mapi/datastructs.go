@@ -272,6 +272,37 @@ type RopCreateMessage struct {
 	AssociatedFlag byte //bool
 }
 
+//RopOpenMessageRequest struct used to open handle to  message
+type RopOpenMessageRequest struct {
+	RopID         uint8 //0x03
+	LogonID       uint8
+	InputHandle   uint8
+	OutputHandle  uint8
+	CodePageID    uint16
+	FolderID      []byte
+	OpenModeFlags byte
+	MessageID     []byte
+}
+
+//RopOpenStreamRequest struct used to open a stream
+type RopOpenStreamRequest struct {
+	RopID         uint8 //0x2B
+	LogonID       uint8
+	InputHandle   uint8
+	OutputHandle  uint8
+	PropertyTag   []byte
+	OpenModeFlags byte
+}
+
+//RopReadStreamRequest struct used to open a stream
+type RopReadStreamRequest struct {
+	RopID            uint8 //0x2C
+	LogonID          uint8
+	InputHandle      uint8
+	ByteCount        uint16
+	MaximumByteCount uint32
+}
+
 //RopSetColumnsRequest struct used to select the columns to use
 type RopSetColumnsRequest struct {
 	RopID            uint8 //0x12
@@ -290,6 +321,13 @@ type RopQueryRowsRequest struct {
 	QueryRowsFlags uint8
 	ForwardRead    byte
 	RowCount       uint16
+}
+
+//RopReleaseRequest struct used to release all resources associated with a server object
+type RopReleaseRequest struct {
+	RopID       uint8 //0x01
+	LogonID     uint8
+	InputHandle uint8
 }
 
 //RopCreateMessageResponse struct used to open handle to new email message
@@ -588,9 +626,29 @@ func (createMessage RopCreateMessage) Marshal() []byte {
 	return BodyToBytes(createMessage)
 }
 
+//Marshal turn RopOpenMessageRequest into Bytes
+func (openMessage RopOpenMessageRequest) Marshal() []byte {
+	return BodyToBytes(openMessage)
+}
+
+//Marshal turn RopOpenStreamRequest into Bytes
+func (openStream RopOpenStreamRequest) Marshal() []byte {
+	return BodyToBytes(openStream)
+}
+
+//Marshal turn RopReadStreamRequest into Bytes
+func (readStream RopReadStreamRequest) Marshal() []byte {
+	return BodyToBytes(readStream)
+}
+
 //Marshal turn RuleAction into Bytes
 func (ruleAction RuleAction) Marshal() []byte {
 	return BodyToBytes(ruleAction)
+}
+
+//Marshal turn RopReleaseRequest into Bytes
+func (releaseRequest RopReleaseRequest) Marshal() []byte {
+	return BodyToBytes(releaseRequest)
 }
 
 //Unmarshal function to convert response into ConnectResponse struct

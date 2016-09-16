@@ -366,11 +366,21 @@ func ExecuteFetchMailRules(messageID []byte) (*ExecuteResponse, error) {
 	execRequest.MaxRopOut = 262144
 	folder := AuthSession.Folderids[INBOX]
 
-	getRulesOrganizer := []byte{0x01, AuthSession.LogonID, 0x00, 0x03, AuthSession.LogonID, 0x01, 0x02, 0xff, 0x0f}
-	getRulesOrganizer = append(getRulesOrganizer, folder...)
-	getRulesOrganizer = append(getRulesOrganizer, []byte{0x03}...)
-	getRulesOrganizer = append(getRulesOrganizer, messageID...)
-	getRulesOrganizer = append(getRulesOrganizer, []byte{0x2B, AuthSession.LogonID, 0x02, 0x03, 0x02, 0x01, 0x02, 0x68, 0x00, 0x2C, AuthSession.LogonID, 0x03, 0x00, 0x7C}...)
+	ropRelease := RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandle: 0x00}
+	getRulesOrganizer := ropRelease.Marshal()
+
+	openMessage := RopOpenMessageRequest{RopID: 0x03, LogonID: AuthSession.LogonID, InputHandle: 0x01, OutputHandle: 0x02, CodePageID: 0x0fff}
+	openMessage.FolderID = folder
+	openMessage.OpenModeFlags = 0x03
+	openMessage.MessageID = messageID
+	getRulesOrganizer = append(getRulesOrganizer, openMessage.Marshal()...)
+
+	openStream := RopOpenStreamRequest{RopID: 0x2B, LogonID: AuthSession.LogonID, InputHandle: 0x02, OutputHandle: 0x03, OpenModeFlags: 0x00}
+	openStream.PropertyTag = BodyToBytes(PropertyTag{PtypBinary, 0x6802})
+	getRulesOrganizer = append(getRulesOrganizer, openMessage.Marshal()...)
+
+	readStream := RopReadStreamRequest{RopID: 0x2C, LogonID: AuthSession.LogonID, InputHandle: 0x03, ByteCount: 0x7C00}
+	getRulesOrganizer = append(getRulesOrganizer, readStream.Marshal()...)
 
 	execRequest.RopBuffer.ROP.RopsList = getRulesOrganizer
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x1A, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
