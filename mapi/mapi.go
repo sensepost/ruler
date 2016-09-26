@@ -157,6 +157,7 @@ func specialFolders(folderResponse []byte) {
 	cnt := 0
 	for k := 0; k < 13; k++ {
 		AuthSession.Folderids[k] = folderResponse[cnt : cnt+8]
+		//fmt.Printf("%d : %x\n", k, AuthSession.Folderids[k])
 		cnt += 8
 	}
 }
@@ -205,6 +206,7 @@ func Authenticate() (*RopLogonResponse, error) {
 		if connResponse.StatusCode == 0 {
 			fmt.Println("[+] User DN: ", string(connRequest.UserDN))
 			fmt.Println("[*] Got Context, Doing ROPLogin")
+			AuthSession.UserDN = connRequest.UserDN
 			return AuthenticateFetchMailbox(connRequest.UserDN)
 		}
 		return nil, fmt.Errorf("[x]Authentication failed with non-zero status code")
@@ -274,65 +276,135 @@ func Disconnect() (int, error) {
 	return 0, nil
 }
 
-//CreateMessage func to create a new message on the Exchange server
-//this should be the precursor to sending an email
-func CreateMessage() (*RopCreateMessageResponse, error) {
+func ReleaseObject(inputHandle byte) (*RopReleaseResponse, error) {
+	execRequest := ExecuteRequest{}
+	execRequest.Init()
+	ropRelease := RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandle: inputHandle}
+	fullReq := ropRelease.Marshal()
+	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF}
+	execRequest.RopBuffer.ROP.RopsList = fullReq
+	if AuthSession.Transport == HTTP { // HTTP
+		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Execute", execRequest.Marshal())
+		responseBody, err := readResponse(resp.Header, rbody)
+
+		if err != nil {
+			return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
+		}
+		execResponse := ExecuteResponse{}
+		execResponse.Unmarshal(responseBody)
+
+		if execResponse.ErrorCode == 0 {
+			ropReleaseResponse := RopReleaseResponse{}
+			_, err = ropReleaseResponse.Unmarshal(execResponse.RopBuffer[10:])
+			if err != nil {
+				return nil, err
+			}
+			return &ropReleaseResponse, nil
+		}
+	}
+	return nil, fmt.Errorf("[x] Unknown error occurred or empty response")
+}
+
+//SendMessage func to create a new message on the Exchange server
+//and then sends an email to the target using their own email
+func SendMessage(triggerWord string) (*RopSubmitMessageResponse, error) {
 
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
 
-	createMessage := RopCreateMessage{RopID: 0x06, LogonID: AuthSession.LogonID}
+	//ropRelease := RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandle: 0x00}
+	//fullReq := ropRelease.Marshal()
+
+	createMessage := RopCreateMessageRequest{RopID: 0x06, LogonID: AuthSession.LogonID}
 	createMessage.InputHandle = 0x00
 	createMessage.OutputHandle = 0x01
 	createMessage.FolderID = AuthSession.Folderids[OUTBOX]
+	createMessage.CodePageID = 0xFFF
 	createMessage.AssociatedFlag = 0
-	getProperties := RopGetPropertiesSpecific{RopID: 0x07, LogonID: AuthSession.LogonID}
-	getProperties.InputHandle = 0x01
-	getProperties.PropertySizeLimit = 0x00
-	getProperties.WantUnicode = []byte{0x00, 0x01}
-	getProperties.PropertyTagCount = 3
 
-	propertyTags := make([]PropertyTag, getProperties.PropertyTagCount)
-	propertyTags[0] = PidTagParentFolderID
-	propertyTags[1] = PidTagAccess
-	propertyTags[2] = PidTagMemberName
+	fullReq := createMessage.Marshal()
+
+	setProperties := RopSetPropertiesRequest{RopID: 0x0A, LogonID: AuthSession.LogonID}
+	setProperties.InputHandle = 0x01
+	setProperties.PropertValueCount = 8
+
+	propertyTags := make([]TaggedPropertyValue, setProperties.PropertValueCount)
+	propertyTags[0] = TaggedPropertyValue{PidTagBody, UniString("This is the body.\n\r")}
+	propertyTags[1] = PidTagMessageClass
+	propertyTags[2] = TaggedPropertyValue{PidTagMessageFlags, []byte{0x00, 0x00, 0x00, 0x08}} //unsent
+	propertyTags[3] = TaggedPropertyValue{PidTagConversationTopic, UniString(triggerWord)}
+	propertyTags[4] = PidTagIconIndex
+	propertyTags[5] = PidTagMessageEditorFormat
+	propertyTags[5] = TaggedPropertyValue{PidTagNativeBody, []byte{0x00, 0x00, 0x00, 0x01}}
+	propertyTags[6] = TaggedPropertyValue{PidTagSubject, UniString(triggerWord)}
+	propertyTags[7] = TaggedPropertyValue{PidTagNormalizedSubject, UniString(triggerWord)}
+
+	setProperties.PropertyValues = propertyTags
+	propertySize := 0
+	for _, p := range propertyTags {
+		propertySize += len(BodyToBytes(p))
+	}
+
+	setProperties.PropertValueSize = uint16(propertySize + 2)
+
+	fullReq = append(fullReq, setProperties.Marshal()...)
+
+	modRecipients := RopModifyRecipientsRequest{RopID: 0x0E, LogonID: AuthSession.LogonID, InputHandle: 0x01}
+	modRecipients.ColumnCount = 8
+	modRecipients.RecipientColumns = make([]PropertyTag, modRecipients.ColumnCount)
+
+	modRecipients.RecipientColumns[0] = PidTagObjectType
+	modRecipients.RecipientColumns[1] = PidTagDisplayType
+	//modRecipients.RecipientColumns[2] = PidTagSMTPAddress
+	modRecipients.RecipientColumns[2] = PidTagEmailAddress
+	modRecipients.RecipientColumns[3] = PidTagSendInternetEncoding
+	modRecipients.RecipientColumns[4] = PidTagDisplayTypeEx
+	modRecipients.RecipientColumns[5] = PidTagRecipientDisplayName
+	modRecipients.RecipientColumns[6] = PidTagRecipientFlags
+	modRecipients.RecipientColumns[7] = PidTagRecipientTrackStatus
+
+	modRecipients.RowCount = 0x0001
+
+	modRecipients.RecipientRows = make([]ModifyRecipientRow, modRecipients.RowCount)
+	modRecipients.RecipientRows[0] = ModifyRecipientRow{RowID: 0x00000001, RecipientType: 0x00000001}
+	modRecipients.RecipientRows[0].RecipientRow = RecipientRow{}
+	modRecipients.RecipientRows[0].RecipientRow.RecipientFlags = 0x0008 | 0x0003 | 0x0200 | 0x0010 | 0x3 | 0x0020 //| 0x0040 //| 0x0010 // | (0x1) | 0x0400 | 0x0200 //0x0651 //0x0040 | 0x0010 | 0x1007 | 0x0400 | 0x0100 //email address and display name
+	//modRecipients.RecipientRows[0].RecipientRow.AddressPrefixUsed = 0x5A
+	//modRecipients.RecipientRows[0].RecipientRow.DisplayType = 0x00
+	modRecipients.RecipientRows[0].RecipientRow.EmailAddress = UniString(AuthSession.Email) //email address and display name
+	modRecipients.RecipientRows[0].RecipientRow.DisplayName = UniString("Self")             //email address and display name
+	modRecipients.RecipientRows[0].RecipientRow.SimpleDisplayName = UniString("Self")       //email address and display name
+	modRecipients.RecipientRows[0].RecipientRow.RecipientColumnCount = modRecipients.ColumnCount
+
+	modRecipients.RecipientRows[0].RecipientRow.RecipientProperties = StandardPropertyRow{Flag: 0x00}
+
+	modRecipients.RecipientRows[0].RecipientRow.RecipientProperties.ValueArray = make([][]byte, modRecipients.RecipientRows[0].RecipientRow.RecipientColumnCount)
+	modRecipients.RecipientRows[0].RecipientRow.RecipientProperties.ValueArray[0] = []byte{0x06, 0x00, 0x00, 0x00}
+	modRecipients.RecipientRows[0].RecipientRow.RecipientProperties.ValueArray[1] = []byte{0x00, 0x00, 0x00, 0x00}
+	modRecipients.RecipientRows[0].RecipientRow.RecipientProperties.ValueArray[2] = UniString(AuthSession.Email)
+	modRecipients.RecipientRows[0].RecipientRow.RecipientProperties.ValueArray[3] = []byte{0x00, 0x00, 0x00, 0x00}
+	modRecipients.RecipientRows[0].RecipientRow.RecipientProperties.ValueArray[4] = []byte{0x00, 0x00, 0x00, 0x40}
+	modRecipients.RecipientRows[0].RecipientRow.RecipientProperties.ValueArray[5] = UniString("Self")
+	modRecipients.RecipientRows[0].RecipientRow.RecipientProperties.ValueArray[6] = []byte{0x01, 0x00, 0x00, 0x00}
+	modRecipients.RecipientRows[0].RecipientRow.RecipientProperties.ValueArray[7] = []byte{0x00, 0x00, 0x00, 0x00}
+
+	modRecipients.RecipientRows[0].RecipientRowSize = uint16(len(BodyToBytes(modRecipients.RecipientRows[0].RecipientRow)))
+	fullReq = append(fullReq, modRecipients.Marshal()...)
+
+	//submitMessage := RopSubmitMessageRequest{RopID: 0x32, LogonID: AuthSession.LogonID, InputHandle: 0x02, SubmitFlags: 0x00}
+	//fullReq = append(fullReq, submitMessage.Marshal()...)
+	submitMessage := RopSubmitMessageRequest{RopID: 0x32, LogonID: AuthSession.LogonID, InputHandle: 0x01, SubmitFlags: 0x00}
+	fullReq = append(fullReq, submitMessage.Marshal()...)
 	/*
-		propertyTags[3] = PropertyTag{PtypString, 0x36e5}
-		propertyTags[4] = PropertyTag{PtypString, 0x36e6}
-		propertyTags[5] = PropertyTag{PtypString, 0x3001}
-		propertyTags[6] = PropertyTag{PtypInteger32, 0x3601}
-		propertyTags[7] = PropertyTag{PtypInteger32, 0x3602}
-		propertyTags[8] = PropertyTag{PtypInteger32, 0x3603}
-		propertyTags[9] = PropertyTag{PtypBoolean, 0x360a}
-		propertyTags[10] = PropertyTag{PtypString, 0x3613}
-		propertyTags[11] = PropertyTag{PtypBinary, 0x3616}
-		propertyTags[12] = PropertyTag{PtypBinary, 0x36d0}
-		propertyTags[13] = PropertyTag{PtypBinary, 0x36d1}
-		propertyTags[14] = PropertyTag{PtypBinary, 0x36d2}
-		propertyTags[15] = PropertyTag{PtypBinary, 0x36d3}
-		propertyTags[16] = PropertyTag{PtypBinary, 0x36d4}
-		propertyTags[17] = PropertyTag{PtypBinary, 0x36d5}
-		propertyTags[18] = PropertyTag{PtypBinary, 0x36d6}
-		propertyTags[19] = PropertyTag{PtypBinary, 0x36d7}
-		propertyTags[20] = PropertyTag{PtypMultipleBinary, 0x36d8}
-		propertyTags[21] = PropertyTag{PtypBinary, 0x36d9}
-		propertyTags[22] = PropertyTag{PtypInteger32, 0x36de}
-		propertyTags[21] = PropertyTag{PtypBinary, 0x36df}
-		propertyTags[21] = PropertyTag{PtypBinary, 0x36e0}
-		propertyTags[22] = PropertyTag{PtypInteger32, 0x36e1}
-		propertyTags[23] = PropertyTag{PtypMultipleBinary, 0x36e4}
-		propertyTags[24] = PropertyTag{PtypBinary, 0x36eb}
-		propertyTags[25] = PropertyTag{PtypInteger32, 0x6639}
-		propertyTags[26] = PropertyTag{PtypBinary, 0x36da}
-		propertyTags[27] = PropertyTag{PtypBinary, 0x3018}
-		propertyTags[28] = PropertyTag{PtypInteger32, 0x301e}
-		propertyTags[29] = PropertyTag{PtypBinary, 0x36da}
-	*/
-	k := append(createMessage.Marshal(), getProperties.Marshal()...)
-	k = append(k, BodyToBytes(propertyTags)...)
+		saveMessage := RopSaveChangesMessageRequest{RopID: 0x0C, LogonID: AuthSession.LogonID}
+		saveMessage.ResponseHandleIndex = 0x02
+		saveMessage.InputHandle = 0x01
+		saveMessage.SaveFlags = 0x02
 
-	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF}
-	execRequest.RopBuffer.ROP.RopsList = k //createMessage.Marshal()
+		fullReq = append(fullReq, saveMessage.Marshal()...)
+	*/
+	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
+	execRequest.RopBuffer.ROP.RopsList = fullReq
 
 	if AuthSession.Transport == HTTP { // HTTP
 		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Execute", execRequest.Marshal())
@@ -343,59 +415,119 @@ func CreateMessage() (*RopCreateMessageResponse, error) {
 		}
 		execResponse := ExecuteResponse{}
 		execResponse.Unmarshal(responseBody)
-		fmt.Println(execResponse.ErrorCode)
-		fmt.Println(string(execResponse.AuxilliaryBuf))
-		if execResponse.ErrorCode == 0 && len(responseBody) < 256 {
-			AuthSession.Authenticated = true
+
+		if execResponse.ErrorCode == 0 {
+
+			bufPtr := 10
 
 			createMessageResponse := RopCreateMessageResponse{}
-			createMessageResponse.Unmarshal(execResponse.RopBuffer)
 
-			return &createMessageResponse, nil
+			p, e := createMessageResponse.Unmarshal(execResponse.RopBuffer[bufPtr:])
+			if e != nil {
+				return nil, fmt.Errorf("[x]An error occurred %s\n", e)
+			}
+			bufPtr += p
+
+			propertiesResponse := RopSetPropertiesResponse{}
+			p, e = propertiesResponse.Unmarshal(execResponse.RopBuffer[bufPtr:])
+			if e != nil {
+				return nil, fmt.Errorf("[x]An error occurred %s\n", e)
+			}
+
+			bufPtr += p
+			modRecipients := RopModifyRecipientsResponse{}
+			p, e = modRecipients.Unmarshal(execResponse.RopBuffer[bufPtr:])
+			bufPtr += p
+			if e != nil {
+				return nil, fmt.Errorf("[x]An error occurred %s\n", e)
+			}
+
+			/*
+				saveMessageResponse := RopSaveChangesMessageResponse{}
+				saveMessageResponse.Unmarshal(execResponse.RopBuffer[bufPtr:])
+			*/
+			submitMessageResp := RopSubmitMessageResponse{}
+			_, err = submitMessageResp.Unmarshal(execResponse.RopBuffer[bufPtr:])
+			if err != nil {
+				return nil, fmt.Errorf("[x]An error occurred %s\n", e)
+			}
+			//fmt.Printf("[+] Message ID: %x\n", saveMessageResponse.MessageID)
+
+			return &submitMessageResp, nil
 		}
 	}
+
 	return nil, fmt.Errorf("[x]Unspecified error occurred\n")
 }
 
-//ExecuteFetchMailRules fetches the current mailrules
-func ExecuteFetchMailRules(messageID []byte) (*ExecuteResponse, error) {
+//SendMessage is used to set the recipients of a message prior to sending it
+func SendMessageOld(messageID []byte) (*RopSubmitMessageResponse, error) {
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
-	execRequest.MaxRopOut = 262144
-	folder := AuthSession.Folderids[INBOX]
 
-	ropRelease := RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandle: 0x00}
-	getRulesOrganizer := ropRelease.Marshal()
+	//ropRelease := RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandle: 0x01}
+	//fullReq := ropRelease.Marshal()
+	//ropRelease = RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandle: 0x01}
+	//fullReq = append(fullReq, ropRelease.Marshal()...)
+	//ropRelease = RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandle: 0x02}
+	//fullReq = append(fullReq, ropRelease.Marshal()...)
 
-	openMessage := RopOpenMessageRequest{RopID: 0x03, LogonID: AuthSession.LogonID, InputHandle: 0x01, OutputHandle: 0x02, CodePageID: 0x0fff}
-	openMessage.FolderID = folder
+	getFolder := RopOpenFolder{RopID: 0x02, LogonID: AuthSession.LogonID}
+	getFolder.InputHandle = 0x00
+	getFolder.OutputHandle = 0x01
+	getFolder.FolderID = AuthSession.Folderids[SENT]
+	getFolder.OpenModeFlags = 0x03
+
+	//fullReq = append(fullReq, getFolder.Marshal()...)
+	//fullReq := getFolder.Marshal()
+
+	openMessage := RopOpenMessageRequest{RopID: 0x03, LogonID: AuthSession.LogonID, InputHandle: 0x00, OutputHandle: 0x01}
+	openMessage.CodePageID = 0x0FFF
+	openMessage.FolderID = AuthSession.Folderids[OUTBOX]
 	openMessage.OpenModeFlags = 0x03
 	openMessage.MessageID = messageID
-	getRulesOrganizer = append(getRulesOrganizer, openMessage.Marshal()...)
 
-	openStream := RopOpenStreamRequest{RopID: 0x2B, LogonID: AuthSession.LogonID, InputHandle: 0x02, OutputHandle: 0x03, OpenModeFlags: 0x00}
-	openStream.PropertyTag = BodyToBytes(PropertyTag{PtypBinary, 0x6802})
-	getRulesOrganizer = append(getRulesOrganizer, openMessage.Marshal()...)
+	fullReq := openMessage.Marshal()
 
-	readStream := RopReadStreamRequest{RopID: 0x2C, LogonID: AuthSession.LogonID, InputHandle: 0x03, ByteCount: 0x7C00}
-	getRulesOrganizer = append(getRulesOrganizer, readStream.Marshal()...)
+	submitMessage := RopSubmitMessageRequest{RopID: 0x32, LogonID: AuthSession.LogonID, InputHandle: 0x01, SubmitFlags: 0x00}
+	fullReq = append(fullReq, submitMessage.Marshal()...)
 
-	execRequest.RopBuffer.ROP.RopsList = getRulesOrganizer
-	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x1A, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
+	//ropRelease := RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandle: 0x01}
+	//fullReq = append(fullReq, ropRelease.Marshal()...)
+	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
+	execRequest.RopBuffer.ROP.RopsList = fullReq
 
-	//fetch rules
 	if AuthSession.Transport == HTTP { // HTTP
 		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Execute", execRequest.Marshal())
 		responseBody, err := readResponse(resp.Header, rbody)
+
 		if err != nil {
 			return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
 		}
 		execResponse := ExecuteResponse{}
 		execResponse.Unmarshal(responseBody)
-		return &execResponse, nil
 
+		if execResponse.ErrorCode == 0 {
+			bufPtr := 10
+			openMessage := RopOpenMessageResponse{}
+			p, err := openMessage.Unmarshal(execResponse.RopBuffer[bufPtr:])
+			if err != nil {
+				return nil, err
+			}
+			bufPtr += p
+
+			submitMessageResp := RopSubmitMessageResponse{}
+			_, err = submitMessageResp.Unmarshal(execResponse.RopBuffer[bufPtr:])
+
+			if err != nil {
+				return nil, err
+			}
+
+			return &submitMessageResp, nil
+
+		}
 	}
-	return nil, fmt.Errorf("[x] An Unspecified error occurred")
+	return nil, fmt.Errorf("[x]Unspecified error occurred\n")
 }
 
 //GetContentsTable function get's a folder from the folders id
@@ -455,50 +587,29 @@ func GetFolder(folderid int, columns []PropertyTag) (*ExecuteResponse, error) {
 	execRequest.Init()
 	execRequest.MaxRopOut = 262144
 
-	folder := AuthSession.Folderids[folderid]
-
 	getFolder := RopOpenFolder{RopID: 0x02, LogonID: AuthSession.LogonID}
 	getFolder.InputHandle = 0x00
 	getFolder.OutputHandle = 0x01
-	getFolder.FolderID = folder
+	getFolder.FolderID = AuthSession.Folderids[folderid]
 	getFolder.OpenModeFlags = 0x00
 
-	getProperties := RopGetPropertiesSpecific{}
-	getProperties.RopID = 0x07
-	getProperties.LogonID = AuthSession.LogonID
-	getProperties.InputHandle = 0x01
-	getProperties.PropertySizeLimit = 0x00
-	getProperties.WantUnicode = []byte{0x00, 0x01}
-	getProperties.PropertyTagCount = uint16(len(columns))
-	getProperties.PropertyTags = columns
+	var k []byte
 
-	/*
-		propertyTags[10] = PropertyTag{PtypString, 0x3613}
-		propertyTags[11] = PropertyTag{PtypBinary, 0x3616}
-		propertyTags[12] = PropertyTag{PtypBinary, 0x36d0}
-		propertyTags[13] = PropertyTag{PtypBinary, 0x36d1}
-		propertyTags[14] = PropertyTag{PtypBinary, 0x36d2}
-		propertyTags[15] = PropertyTag{PtypBinary, 0x36d3}
-		propertyTags[16] = PropertyTag{PtypBinary, 0x36d4}
-		propertyTags[17] = PropertyTag{PtypBinary, 0x36d5}
-		propertyTags[18] = PropertyTag{PtypBinary, 0x36d6}
-		propertyTags[19] = PropertyTag{PtypBinary, 0x36d7}
-		propertyTags[20] = PropertyTag{PtypMultipleBinary, 0x36d8}
-		propertyTags[21] = PropertyTag{PtypBinary, 0x36d9}
-		propertyTags[22] = PropertyTag{PtypInteger32, 0x36de}
-		propertyTags[21] = PropertyTag{PtypBinary, 0x36df}
-		propertyTags[21] = PropertyTag{PtypBinary, 0x36e0}
-		propertyTags[22] = PropertyTag{PtypInteger32, 0x36e1}
-		propertyTags[23] = PropertyTag{PtypMultipleBinary, 0x36e4}
-		propertyTags[24] = PropertyTag{PtypBinary, 0x36eb}
-		propertyTags[25] = PropertyTag{PtypInteger32, 0x6639}
-		propertyTags[26] = PropertyTag{PtypBinary, 0x36da}
-		propertyTags[27] = PropertyTag{PtypBinary, 0x3018}
-		propertyTags[28] = PropertyTag{PtypInteger32, 0x301e}
-		propertyTags[29] = PropertyTag{PtypBinary, 0x36da}
-	*/
-	k := append(getFolder.Marshal(), getProperties.Marshal()...)
-	//k = append(k, BodyToBytes(propertyTags)...)
+	if columns != nil {
+		getProperties := RopGetPropertiesSpecific{}
+		getProperties.RopID = 0x07
+		getProperties.LogonID = AuthSession.LogonID
+		getProperties.InputHandle = 0x01
+		getProperties.PropertySizeLimit = 0x00
+		getProperties.WantUnicode = []byte{0x00, 0x01}
+		getProperties.PropertyTagCount = uint16(len(columns))
+		getProperties.PropertyTags = columns
+
+		k = append(getFolder.Marshal(), getProperties.Marshal()...)
+
+	} else {
+		k = getFolder.Marshal()
+	}
 
 	execRequest.RopBuffer.ROP.RopsList = k
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF}
@@ -673,4 +784,71 @@ func Ping() {
 		fmt.Println(string(rbody))
 		fmt.Println(AuthSession.CookieJar)
 	}
+}
+
+//DecodeGetTableResponse function Unmarshals the various parts of a getproperties response (this includes the initial openfolder request)
+//and returns the RopGetPropertiesSpecificResponse object to us, we can then cycle through the rows to view the values
+//needs the list of columns that were supplied in the initial request.
+func DecodeGetTableResponse(resp []byte, columns []PropertyTag) (*RopGetPropertiesSpecificResponse, error) {
+	pos := 10
+
+	var err error
+
+	openFolderResp := RopOpenFolderResponse{}
+	pos, err = openFolderResp.Unmarshal(resp[pos:])
+	if err != nil {
+		return nil, err
+	}
+	properties := RopGetPropertiesSpecificResponse{}
+	_, err = properties.Unmarshal(resp[pos:], columns)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &properties, nil
+}
+
+//DecodeRulesResponse func
+func DecodeRulesResponse(resp []byte, properties []PropertyTag) ([]Rule, []byte) {
+
+	pos, tpos := 10, 0
+	var err error
+
+	rulesTableResponse := RopGetRulesTableResponse{}
+	tpos, err = rulesTableResponse.Unmarshal(resp[pos:])
+	pos += tpos
+
+	if err != nil {
+		fmt.Println(err)
+		return nil, nil
+	}
+	columns := RopSetColumnsResponse{}
+	tpos, err = columns.Unmarshal(resp[pos:])
+	pos += tpos
+
+	if err != nil {
+		fmt.Println("Bad SetColumns")
+		return nil, nil
+	}
+
+	rows := RopQueryRowsResponse{}
+	tpos, err = rows.Unmarshal(resp[pos:], properties)
+	if err != nil {
+		fmt.Println("Bad QueryRows")
+		return nil, nil
+	}
+	pos += tpos
+
+	rules := make([]Rule, int(rows.RowCount))
+
+	for k := 0; k < int(rows.RowCount); k++ {
+		rule := Rule{}
+		rule.RuleID = rows.RowData[k][0].ValueArray
+		rule.RuleName = rows.RowData[k][1].ValueArray
+		rules[k] = rule
+	}
+	ruleshandle := resp[pos+4:]
+
+	return rules, ruleshandle
 }

@@ -42,6 +42,8 @@ type Session struct {
 	RPCIn         http.Client
 	RPCOut        http.Client
 	RPCSet        bool
+	UserDN        []byte
+	Trigger       string
 }
 
 //AutodiscoverResp structure for unmarshal

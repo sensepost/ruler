@@ -44,15 +44,21 @@ const (
 )
 
 //Folder id/locations -- https://msdn.microsoft.com/en-us/library/office/cc815825.aspx
+// ^ this seems to lie
 const (
-	OUTBOX   = 0 //Contains outgoing IPM messages.
-	DELETED  = 1 //Contains IPM messages that are marked for deletion.
-	SENT     = 2 //Contains IPM messages that have been sent.
-	IPM      = 3 //IPM root folder Contains folders for managing IPM messages.
-	INBOX    = 4 //Receive folder Contains incoming messages for a particular message class.
-	SEARCH   = 5 //Search-results root folder Contains folders for managing search results.
-	COMMON   = 6 //Common-views root folder Contains folders for managing views for the message store.
-	PERSONAL = 7 //Personal-views root folder
+	TOP            = 0 //Contains outgoing IPM messages.
+	DEFFEREDACTION = 1 //Contains IPM messages that are marked for deletion.
+	SPOOLERQ       = 2 //Contains IPM messages that have been sent.
+	IPM            = 3 //IPM root folder Contains folders for managing IPM messages.
+	INBOX          = 4 //Receive folder Contains incoming messages for a particular message class.
+	OUTBOX         = 5 //Search-results root folder Contains folders for managing search results.
+	SENT           = 6 //Common-views root folder Contains folders for managing views for the message store.
+	DELETED        = 7 //Personal-views root folder
+	COMMON         = 8
+	SCHEDULE       = 9
+	FINDER         = 10
+	VIEWS          = 11
+	SHORTCUTS      = 12
 )
 
 //-------- TAGS -------
@@ -101,6 +107,12 @@ var PidTagDefaultPostMessageClass = PropertyTag{PtypString, 0x36e5}
 //PidTagDisplayName display name of the folder
 var PidTagDisplayName = PropertyTag{PtypString, 0x3001}
 
+//PidTagEmailAddress display name of the folder
+var PidTagEmailAddress = PropertyTag{PtypString, 0x3003}
+
+//PidTagAddressType display name of the folder
+var PidTagAddressType = PropertyTag{PtypString, 0x3001}
+
 //PidTagFolderType specifies the type of folder that includes the root folder,
 var PidTagFolderType = PropertyTag{PtypInteger32, 0x3601}
 
@@ -115,3 +127,80 @@ var PidTagSubfolders = PropertyTag{PtypBoolean, 0x360a}
 
 //PidTagLocaleID contains the Logon object LocaleID
 var PidTagLocaleID = PropertyTag{PtypInteger32, 0x66A1}
+
+//----Tags for email properties ----
+
+//PidTagSentMailSvrEID id of the sent folder
+var PidTagSentMailSvrEID = PropertyTag{0x00FB, 0x6740}
+
+//PidTagBody a
+var PidTagBody = PropertyTag{PtypString, 0x1000}
+
+//PidTagConversationTopic a
+var PidTagConversationTopic = PropertyTag{PtypString, 0x0070}
+
+//PidTagMessageClass this will always be IPM.Note
+var PidTagMessageClass = TaggedPropertyValue{PropertyTag{PtypString, 0x001A}, UniString("IPM.Note")}
+
+//PidTagMessageFlags setting this to unsent
+var PidTagMessageFlags = PropertyTag{PtypInteger32, 0x0E07} //0x00000008
+
+//PidTagIconIndex index of the icon to display
+var PidTagIconIndex = TaggedPropertyValue{PropertyTag{PtypInteger32, 0x1080}, []byte{0xFF, 0xFF, 0xFF, 0xFF}}
+
+//PidTagMessageEditorFormat format lets do plaintext
+var PidTagMessageEditorFormat = TaggedPropertyValue{PropertyTag{PtypInteger32, 0x5909}, []byte{0x01, 0x00, 0x00, 0x00}}
+
+//PidTagNativeBody format of the body
+var PidTagNativeBody = PropertyTag{PtypInteger32, 0x1016}
+
+//PidTagMessageLocaleID format lets do en-us
+var PidTagMessageLocaleID = TaggedPropertyValue{PropertyTag{PtypInteger32, 0x3FF1}, []byte{0x09, 0x04, 0x00, 0x00}}
+
+//PidTagPrimarySendAccount who is sending
+var PidTagPrimarySendAccount = PropertyTag{PtypString, 0x0E28}
+
+//PidTagObjectType used in recepient
+var PidTagObjectType = PropertyTag{PtypInteger32, 0x0FFE}
+
+//PidTagDisplayType  used in recepient
+var PidTagDisplayType = PropertyTag{PtypInteger32, 0x3900}
+
+//PidTagAddressBookDisplayNamePrintable  used in recepient
+var PidTagAddressBookDisplayNamePrintable = PropertyTag{PtypString, 0x39FF}
+
+//PidTagSMTPAddress used in recepient
+var PidTagSMTPAddress = PropertyTag{PtypString, 0x39FE}
+
+//PidTagSendInternetEncoding  used in recepient
+var PidTagSendInternetEncoding = PropertyTag{PtypInteger32, 0x3a71}
+
+//PidTagDisplayTypeEx used in recepient
+var PidTagDisplayTypeEx = PropertyTag{PtypInteger32, 0x3905}
+
+//PidTagRecipientDisplayName  used in recepient
+var PidTagRecipientDisplayName = PropertyTag{PtypString, 0x5FF6}
+
+//PidTagRecipientFlags used in recepient
+var PidTagRecipientFlags = PropertyTag{PtypInteger32, 0x5FFD}
+
+//PidTagRecipientTrackStatus used in recepient
+var PidTagRecipientTrackStatus = PropertyTag{PtypInteger32, 0x5FFF}
+
+//Unspecifiedproperty  used in recepient
+var Unspecifiedproperty = PropertyTag{PtypInteger32, 0x5FDE}
+
+//PidTagRecipientOrder used in recepient
+var PidTagRecipientOrder = PropertyTag{PtypInteger32, 0x5FDF}
+
+//PidTagRecipientEntryID  used in recepient
+var PidTagRecipientEntryID = PropertyTag{PtypBinary, 0x5FF7}
+
+//PidTagSubjectPrefix used in recepient
+var PidTagSubjectPrefix = PropertyTag{PtypString, 0x0003}
+
+//PidTagNormalizedSubject used in recepient
+var PidTagNormalizedSubject = PropertyTag{PtypString, 0x0E1D}
+
+//PidTagSubject used in recepient
+var PidTagSubject = PropertyTag{PtypString, 0x0037}

