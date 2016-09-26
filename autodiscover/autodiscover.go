@@ -18,21 +18,13 @@ import (
 
 //SessionConfig holds the configuration for this autodiscover session
 var SessionConfig *utils.Config
+var autodiscoverStep int
 
 //the xml for the autodiscover service
 const autodiscoverXML = `<?xml version="1.0" encoding="utf-8"?><Autodiscover xmlns="http://schemas.microsoft.com/exchange/autodiscover/outlook/requestschema/2006">
 <Request><EMailAddress>{{.Email}}</EMailAddress>
 <AcceptableResponseSchema>http://schemas.microsoft.com/exchange/autodiscover/outlook/responseschema/2006a</AcceptableResponseSchema>
 </Request></Autodiscover>`
-
-//Config containing the session variables
-type Config struct {
-	Domain   string
-	User     string
-	Pass     string
-	Email    string
-	Insecure bool
-}
 
 func parseTemplate(tmpl string) (string, error) {
 	t := template.Must(template.New("tmpl").Parse(tmpl))
@@ -49,20 +41,15 @@ func parseTemplate(tmpl string) (string, error) {
 //and checks if a DNS entry exists for it. If it doesn't it tries DNS for just the domain name.
 //returns an empty string if no valid domain was found.
 //returns the full (expected) autodiscover URL
-func createAutodiscover(domain string) string {
-	//create autodiscover.domain.com
-	autodiscoverDomain := fmt.Sprintf("autodiscover.%s", domain)
-	_, err := net.LookupHost(autodiscoverDomain) //check if valid autodiscover domain
-
+func createAutodiscover(domain string, https bool) string {
+	_, err := net.LookupHost(domain)
 	if err != nil {
-		_, err = net.LookupHost(domain)
-		if err != nil {
-			return ""
-		}
+		return ""
+	}
+	if https == true {
 		return fmt.Sprintf("https://%s/autodiscover/autodiscover.xml", domain)
 	}
-	return fmt.Sprintf("https://%s/autodiscover/autodiscover.xml", autodiscoverDomain)
-
+	return fmt.Sprintf("http://%s/autodiscover/autodiscover.xml", domain)
 }
 
 //Autodiscover function to retrieve mailbox details using the autodiscover mechanism from MS Exchange
@@ -104,12 +91,28 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, error) {
 		autodiscoverURL = domain
 	} else {
 		//create the autodiscover url
-		autodiscoverURL = createAutodiscover(domain)
-		if autodiscoverURL == "" {
-			return nil, fmt.Errorf("[x] Invalid domain or no autodiscover DNS record found")
+		if autodiscoverStep == 0 {
+			autodiscoverURL = createAutodiscover(domain, true)
+			if autodiscoverURL == "" {
+				autodiscoverStep++
+			}
+		}
+		if autodiscoverStep == 1 {
+			autodiscoverURL = createAutodiscover(fmt.Sprintf("autodiscover.%s", domain), true)
+			if autodiscoverURL == "" {
+				autodiscoverStep++
+			}
+		}
+		if autodiscoverStep == 2 {
+			autodiscoverURL = createAutodiscover(fmt.Sprintf("autodiscover.%s", domain), false)
+			if autodiscoverURL == "" {
+				return nil, fmt.Errorf("[x] Invalid domain or no autodiscover DNS record found")
+			}
 		}
 	}
-
+	if SessionConfig.Verbose == true {
+		fmt.Printf("[*] Autodiscover step %d - URL: %s\n", autodiscoverStep, autodiscoverURL)
+	}
 	req, err := http.NewRequest("POST", autodiscoverURL, strings.NewReader(r))
 	req.Header.Add("Content-Type", "text/xml")
 
@@ -136,7 +139,10 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, error) {
 				return nil, err
 			}
 		} else {
-			return nil, err
+			if autodiscoverStep < 2 {
+				autodiscoverStep++
+				return autodiscover(domain, mapi)
+			}
 		}
 	}
 
@@ -149,25 +155,35 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, error) {
 
 	//check if we got a 200 response
 	if resp.StatusCode == 200 {
-		//fmt.Println(string(body))
+
 		err := autodiscoverResp.Unmarshal(body)
-		//fmt.Println(string(body))
 		if err != nil {
+			if autodiscoverStep < 2 {
+				autodiscoverStep++
+				return autodiscover(domain, mapi)
+			}
 			return nil, fmt.Errorf("[x] Error in autodiscover response, %s", err)
 		}
-
+		//fmt.Println(string(body))
 		//check if we got a RedirectAddr ,
 		//if yes, get the new autodiscover url
 		if autodiscoverResp.Response.Account.Action == "redirectAddr" {
 			rediraddr := autodiscoverResp.Response.Account.RedirectAddr
 			rediraddr = regexp.MustCompile(".*@").Split(rediraddr, 2)[1]
-
 			return autodiscover(redirectAutodiscover(rediraddr), mapi)
 		}
 		return &autodiscoverResp, nil
 	}
-	if resp.StatusCode == 401 || resp.StatusCode == 403 {
-		return nil, fmt.Errorf("[x] Permission Denied: StatusCode [%d]\n", resp.StatusCode)
+	if resp.StatusCode == 401 || resp.StatusCode == 403 || resp.StatusCode == 404 {
+		if autodiscoverStep < 2 {
+			autodiscoverStep++
+			return autodiscover(domain, mapi)
+		}
+		return nil, fmt.Errorf("[x] Permission Denied or URL not found: StatusCode [%d]\n", resp.StatusCode)
+	}
+	if autodiscoverStep < 2 {
+		autodiscoverStep++
+		return autodiscover(domain, mapi)
 	}
 	return nil, fmt.Errorf("[x] Got an unexpected result: StatusCode [%d] %s\n", resp.StatusCode, body)
 }

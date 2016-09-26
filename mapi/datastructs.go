@@ -7,29 +7,10 @@ import (
 	"reflect"
 )
 
-var uFlagsUser = []byte{0x00, 0x00, 0x00, 0x00}
-var uFlagsAdmin = []byte{0x00, 0x00, 0x00, 0x01}
-var uFlagsNotSpecified = []byte{0x00, 0x00, 0x80, 0x00}
-
-var ropFlagsCompression = []byte{0x01, 0x00} //LittleEndian 0x000001
-var ropFlagsXorMagic = []byte{0x02, 0x00}    //LittleEndian 0x000002
-var ropFlagsChain = []byte{0x04, 0x00}       //LittleEndian 0x000004
-
-//ruletags
-var PidTagRuleId = []byte{0x14, 0x00, 0x74, 0x66}
-var PidTagRuleName = []byte{0x1F, 0x00, 0x82, 0x66}
-var PidTagRuleSequence = []byte{0x03, 0x00, 0x76, 0x66}
-var PidTagRuleState = []byte{0x03, 0x00, 0x77, 0x66}
-var PidTagRuleCondition = []byte{0xFD, 0x00, 0x79, 0x66}
-var PidTagRuleActions = []byte{0xFE, 0x00, 0x80, 0x66}
-var PidTagRuleProvider = []byte{0x1F, 0x00, 0x81, 0x66}
-var PidTagRuleProviderData = []byte{0x02, 0x01, 0x84, 0x66}
-var PidTagRuleLevel = []byte{0x03, 0x00, 0x83, 0x66}
-
 //ConnectRequest struct
 type ConnectRequest struct {
 	UserDN            []byte
-	Flags             []byte
+	Flags             uint32
 	DefaultCodePage   uint32
 	LcidSort          uint32
 	LcidString        uint32
@@ -37,7 +18,7 @@ type ConnectRequest struct {
 	AuxilliaryBuf     []byte
 }
 
-//DisconnectRequest
+//DisconnectRequest structure
 type DisconnectRequest struct {
 	AuxilliaryBufSize uint32
 	AuxilliaryBuf     []byte
@@ -45,7 +26,7 @@ type DisconnectRequest struct {
 
 //ExecuteRequest struct
 type ExecuteRequest struct {
-	Flags             []byte //lets stick to ropFlagsNoXorMagic
+	Flags             uint32 //[]byte //lets stick to ropFlagsNoXorMagic
 	RopBufferSize     uint32
 	RopBuffer         ROPBuffer
 	MaxRopOut         uint32
@@ -84,8 +65,8 @@ type RgbAuxIn struct {
 
 //RPCHeader struct
 type RPCHeader struct {
-	Version    []byte //always 0x0000
-	Flags      []byte //0x0001 Compressed, 0x0002 XorMagic, 0x0004 Last
+	Version    uint16 //always 0x0000
+	Flags      uint16 //0x0001 Compressed, 0x0002 XorMagic, 0x0004 Last
 	Size       uint16
 	SizeActual uint16 //Compressed size (if 0x0001 set)
 }
@@ -105,30 +86,30 @@ type ROP struct {
 
 //RopLogonRequest struct
 type RopLogonRequest struct {
-	RopID             byte //0xfe
-	LogonID           byte //logonID to use
-	OutputHandleIndex byte
+	RopID             uint8 //0xfe
+	LogonID           uint8 //logonID to use
+	OutputHandleIndex uint8
 	LogonFlags        byte
-	OpenFlags         []byte
-	StoreState        []byte //0x00000000
+	OpenFlags         uint32 //[]byte
+	StoreState        uint32 //0x00000000
 	EssdnSize         uint16
 	Essdn             []byte
 }
 
 //RopDisconnectRequest struct
 type RopDisconnectRequest struct {
-	RopID            byte //0x01
-	LogonID          byte //logonID to use
-	InputHandleIndex byte
+	RopID            uint8 //0x01
+	LogonID          uint8 //logonID to use
+	InputHandleIndex uint8
 }
 
 //RopLogonResponse struct
 type RopLogonResponse struct {
-	RopID             byte //0xfe
-	OutputHandleIndex byte
+	RopID             uint8
+	OutputHandleIndex uint8
 	ReturnValue       uint32
 	LogonFlags        byte
-	FolderIds         []byte //0x00000000
+	FolderIds         []byte
 	ResponseFlags     byte
 	MailboxGUID       []byte
 	RepID             []byte
@@ -138,42 +119,335 @@ type RopLogonResponse struct {
 	StoreState        []byte
 }
 
-//RopGetRulesRequestData struct
-type RopGetRulesRequestData struct {
-	RopID             byte //0x3f
-	LogonID           byte
-	InputHandleIndex  byte
-	OutputHandleIndex byte
+//RopGetRulesRequest struct
+type RopGetRulesRequest struct {
+	RopID             uint8 //0x3f
+	LogonID           uint8
+	InputHandleIndex  uint8
+	OutputHandleIndex uint8
 	TableFlags        byte
 }
 
 //RopModifyRulesRequestBuffer struct
 type RopModifyRulesRequestBuffer struct {
-	RopID            byte //0x02
-	LogonID          byte
-	InputHandleIndex byte
+	RopID            uint8 //0x02
+	LogonID          uint8
+	InputHandleIndex uint8
 	ModifyRulesFlag  byte
 	RulesCount       uint16
 	RulesData        []byte
 }
 
+//RopGetContentsTableRequest struct
+type RopGetContentsTableRequest struct {
+	RopID             uint8 //0x05
+	LogonID           uint8
+	InputHandleIndex  uint8
+	OutputHandleIndex uint8
+	TableFlags        uint8
+}
+
 //RopGetContentsTableResponse struct
 type RopGetContentsTableResponse struct {
-	RopID        byte //0x05
-	OutputHandle byte
+	RopID        uint8 //0x05
+	OutputHandle uint8
 	ReturnValue  uint32
 	RowCount     uint32
 	Rows         []byte
 }
 
-//ModRuleData struct
-type ModRuleData struct {
-	RopID            byte //0x41
-	LoginID          byte
-	InputHandleIndex byte
+//RopGetPropertiesSpecific struct to get propertiesfor a folder
+type RopGetPropertiesSpecific struct {
+	RopID             uint8 //0x07
+	LogonID           uint8
+	InputHandle       uint8
+	PropertySizeLimit uint16
+	WantUnicode       []byte //apparently bool
+	PropertyTagCount  uint16
+	PropertyTags      []PropertyTag //[]byte
+}
+
+//RopSetPropertiesRequest struct to set properties on an object
+type RopSetPropertiesRequest struct {
+	RopID             uint8 //0x0A
+	LogonID           uint8
+	InputHandle       uint8
+	PropertValueSize  uint16
+	PropertValueCount uint16
+	PropertyValues    []TaggedPropertyValue
+}
+
+//RopSetPropertiesResponse struct to set properties on an object
+type RopSetPropertiesResponse struct {
+	RopID               uint8 //0x0A
+	InputHandle         uint8
+	ReturnValue         uint32
+	PropertProblemCount uint16
+	PropertyProblems    []byte
+}
+
+//RopGetPropertiesSpecificResponse struct to get propertiesfor a folder
+type RopGetPropertiesSpecificResponse struct {
+	RopID             uint8 //0x07
+	InputHandleIndex  uint8
+	ReturnValue       uint32
+	PropertySizeLimit uint16
+	RowData           []PropertyRow
+}
+
+//RopOpenFolderRequest struct used to open a folder
+type RopOpenFolderRequest struct {
+	RopID         uint8 //0x02
+	LogonID       uint8
+	InputHandle   uint8
+	OutputHandle  uint8
+	FolderID      []byte
+	OpenModeFlags uint8
+}
+
+//RopOpenFolderResponse struct used to open a folder
+type RopOpenFolderResponse struct {
+	RopID            uint8
+	OutputHandle     uint8
+	ReturnValue      uint32
+	HasRules         byte   //bool
+	IsGhosted        byte   //bool
+	ServerCount      uint16 //only if IsGhosted == true
+	CheapServerCount uint16 //only if IsGhosted == true
+	Servers          []byte //only if IsGhosted == true
+}
+
+//RopCreateFolderRequest struct used to create a folder
+
+//RopCreateMessageRequest struct used to open handle to new email message
+type RopCreateMessageRequest struct {
+	RopID          uint8 //0x32
+	LogonID        uint8
+	InputHandle    uint8
+	OutputHandle   uint8
+	CodePageID     uint16
+	FolderID       []byte
+	AssociatedFlag byte //bool
+}
+
+//RopSubmitMessageRequest struct used to open handle to new email message
+type RopSubmitMessageRequest struct {
+	RopID       uint8
+	LogonID     uint8
+	InputHandle uint8
+	SubmitFlags uint8
+}
+
+//RopSubmitMessageResponse struct used to open handle to new email message
+type RopSubmitMessageResponse struct {
+	RopID       uint8
+	InputHandle uint8
+	ReturnValue uint32
+}
+
+//RopSaveChangesMessageRequest struct used to open handle to new email message
+type RopSaveChangesMessageRequest struct {
+	RopID               uint8
+	LogonID             uint8
+	ResponseHandleIndex uint8
+	InputHandle         uint8
+	SaveFlags           byte
+}
+
+//RopSaveChangesMessageResponse struct used to open handle to new email message
+type RopSaveChangesMessageResponse struct {
+	RopID               uint8
+	ResponseHandleIndex uint8
+	ReturnValue         uint32
+	InputHandle         uint8
+	MessageID           []byte
+}
+
+//RopSynchronizationOpenCollectorRequest struct used to open handle to new email message
+type RopSynchronizationOpenCollectorRequest struct {
+	RopID               uint8
+	LogonID             uint8
+	InputHandle         uint8
+	OutputHandle        uint8
+	IsContentsCollector byte
+}
+
+//RopSynchronizationOpenCollectorResponse struct used to open handle to new email message
+type RopSynchronizationOpenCollectorResponse struct {
+	RopID        uint8
+	OutputHandle uint8
+	ReturnValue  uint32
+}
+
+//RopOpenMessageRequest struct used to open handle to  message
+type RopOpenMessageRequest struct {
+	RopID         uint8 //0x03
+	LogonID       uint8
+	InputHandle   uint8
+	OutputHandle  uint8
+	CodePageID    uint16
+	FolderID      []byte
+	OpenModeFlags byte
+	MessageID     []byte
+}
+
+//RopOpenMessageResponse struct used to open handle to  message
+type RopOpenMessageResponse struct {
+	RopID              uint8 //0x03
+	OutputHandle       uint8
+	ReturnValue        uint32
+	HasNamedProperties byte
+	SubjectPrefix      []byte
+	NormalizedSubject  []byte
+	RecipientCount     uint16
+	ColumnCount        uint16
+	RecipientColumns   []PropertyTag
+	RowCount           uint8
+	RecipientRows      []RecipientRow
+}
+
+//RopOpenStreamRequest struct used to open a stream
+type RopOpenStreamRequest struct {
+	RopID         uint8 //0x2B
+	LogonID       uint8
+	InputHandle   uint8
+	OutputHandle  uint8
+	PropertyTag   []byte
+	OpenModeFlags byte
+}
+
+//RopReadStreamRequest struct used to open a stream
+type RopReadStreamRequest struct {
+	RopID            uint8 //0x2C
+	LogonID          uint8
+	InputHandle      uint8
+	ByteCount        uint16
+	MaximumByteCount uint32
+}
+
+//RopRestrictRequest strcut
+type RopRestrictRequest struct {
+	RopID            uint8 //0x14
+	LogonID          uint8
+	InputHandle      uint8
+	RestrictFlags    uint8
+	RestrictDataSize uint16
+	RestrictionData  []byte
+}
+
+//RopSetColumnsRequest struct used to select the columns to use
+type RopSetColumnsRequest struct {
+	RopID            uint8 //0x12
+	LogonID          uint8
+	InputHandle      uint8
+	SetColumnFlags   uint8
+	PropertyTagCount uint16
+	PropertyTags     []PropertyTag
+}
+
+//RopSetColumnsResponse struct used to select the columns to use
+type RopSetColumnsResponse struct {
+	RopID       uint8 //0x12
+	InputHandle uint8
+	ReturnValue uint32
+	TableStatus uint8
+}
+
+//RopQueryRowsRequest struct used to select the columns to use
+type RopQueryRowsRequest struct {
+	RopID          uint8 //0x15
+	LogonID        uint8
+	InputHandle    uint8
+	QueryRowsFlags uint8
+	ForwardRead    byte
+	RowCount       uint16
+}
+
+//RopQueryRowsResponse struct used to select the columns to use
+type RopQueryRowsResponse struct {
+	RopID       uint8 //0x15
+	InputHandle uint8
+	ReturnValue uint32
+	Origin      byte
+	RowCount    uint16
+	RowData     [][]PropertyRow
+}
+
+//RopReleaseRequest struct used to release all resources associated with a server object
+type RopReleaseRequest struct {
+	RopID       uint8 //0x01
+	LogonID     uint8
+	InputHandle uint8
+}
+
+//RopReleaseResponse struct used to release all resources associated with a server object
+type RopReleaseResponse struct {
+	RopID       uint8 //0x01
+	ReturnValue uint32
+}
+
+//RopCreateMessageResponse struct used to open handle to new email message
+type RopCreateMessageResponse struct {
+	RopID        uint8
+	OutputHandle uint8
+	ReturnValue  uint32
+	HasMessageID byte   //bool
+	MessageID    []byte //bool
+}
+
+//RopModifyRulesRequest struct
+type RopModifyRulesRequest struct {
+	RopID            uint8 //0x41
+	LoginID          uint8
+	InputHandleIndex uint8
 	ModifyRulesFlag  byte
 	RulesCount       uint16
 	RuleData         RuleData
+}
+
+//RopGetRulesTableResponse strcut
+type RopGetRulesTableResponse struct {
+	RopID        uint8
+	OutputHandle uint8
+	ReturnValue  uint32
+}
+
+//RopModifyRecipientsRequest to modify who is receiving email
+type RopModifyRecipientsRequest struct {
+	RopID            uint8 //0x0E
+	LogonID          uint8
+	InputHandle      uint8
+	ColumnCount      uint16
+	RecipientColumns []PropertyTag
+	RowCount         uint16
+	RecipientRows    []ModifyRecipientRow
+}
+
+//RopModifyRecipientsResponse to modify who is receiving email
+type RopModifyRecipientsResponse struct {
+	RopID       uint8 //0x0E
+	InputHandle uint8
+	ReturnValue uint32
+}
+
+//ModifyRecipientRow contains information about a recipient
+type ModifyRecipientRow struct {
+	RowID            uint32
+	RecipientType    uint8
+	RecipientRowSize uint16
+	RecipientRow     RecipientRow
+}
+
+//RecipientRow holds a recipient of a mail message
+type RecipientRow struct {
+	RecipientFlags uint16
+	//AddressPrefixUsed    uint8
+	//DisplayType          uint8
+	EmailAddress         []byte
+	DisplayName          []byte
+	SimpleDisplayName    []byte
+	RecipientColumnCount uint16
+	RecipientProperties  StandardPropertyRow
 }
 
 //RuleData struct
@@ -202,7 +476,7 @@ type Rule struct {
 
 //RuleCondition struct
 type RuleCondition struct {
-	Type        byte   //0x03 RES_CONTENT
+	Type        uint8  //0x03 RES_CONTENT
 	FuzzyLevel  []byte //0x00010001 //FL_SUBSTRING | IgnoreCase
 	PropertyTag []byte //where to look -- subject: 0x0037001F
 	Value       []byte //
@@ -234,14 +508,20 @@ type ActionData struct {
 
 //TaggedPropertyValue struct
 type TaggedPropertyValue struct {
-	PropertyTag   []byte //PropertyTag
+	PropertyTag   PropertyTag
 	PropertyValue []byte
 }
 
 //PropertyTag struct
 type PropertyTag struct {
 	PropertyType uint16
-	PropertyID   uint16
+	PropertyID   uint16 //[]byte //uint16
+}
+
+//StandardPropertyRow struct
+type StandardPropertyRow struct {
+	Flag       uint8
+	ValueArray [][]byte
 }
 
 //AUXBuffer struct
@@ -255,6 +535,12 @@ type AUXHeader struct {
 	Size    uint16 //
 	Version []byte //0x01, 0x02
 	Type    []byte //AUX_TYPE_PERF_CLIENTINFO 0x02
+}
+
+//PropertyRow used to hold the data of getRow requests such as RopGetPropertiesSpecific
+type PropertyRow struct {
+	Flag       uint8 //non-zero indicates error
+	ValueArray []byte
 }
 
 //RopResponse interface for common methods on RopResponses
@@ -318,6 +604,13 @@ func decodeUint16(num []byte) uint16 {
 	binary.Read(bf, binary.LittleEndian, &number)
 	return number
 }
+
+func decodeUint8(num []byte) uint8 {
+	var number uint8
+	bf := bytes.NewReader(num)
+	binary.Read(bf, binary.LittleEndian, &number)
+	return number
+}
 func encodeNum(v interface{}) []byte {
 	byteNum := new(bytes.Buffer)
 	binary.Write(byteNum, binary.LittleEndian, v)
@@ -372,6 +665,9 @@ func readUint32(pos int, buff []byte) (uint32, int) {
 func readUint16(pos int, buff []byte) (uint16, int) {
 	return decodeUint16(buff[pos : pos+2]), pos + 2
 }
+func readUint8(pos int, buff []byte) (uint8, int) {
+	return decodeUint8(buff[pos : pos+2]), pos + 2
+}
 
 func readBytes(pos, count int, buff []byte) ([]byte, int) {
 	return buff[pos : pos+count], pos + count
@@ -388,10 +684,20 @@ func readUnicodeString(pos int, buff []byte) ([]byte, int) {
 	str := buff[pos : pos+index]
 	return []byte(str), pos + index + 2
 }
+
 func readASCIIString(pos int, buff []byte) ([]byte, int) {
 	bf := bytes.NewBuffer(buff[pos:])
 	str, _ := bf.ReadString(0x00)
 	return []byte(str), pos + len(str)
+}
+
+func readTypedString(pos int, buff []byte) ([]byte, int) {
+	var t = buff[pos]
+	if t == 0 { //no string
+		return []byte{}, pos + 1
+	}
+	str, _ := readBytes(pos+1, 4, buff)
+	return str, pos + len(str)
 }
 
 //DecodeAuxBuffer func
@@ -399,13 +705,119 @@ func DecodeAuxBuffer(buff []byte) AUXBuffer {
 	pos := 0
 	auxBuf := AUXBuffer{}
 	auxBuf.RPCHeader = RPCHeader{}
-	auxBuf.RPCHeader.Version, pos = readBytes(pos, 2, buff)
-	auxBuf.RPCHeader.Flags, pos = readBytes(pos, 2, buff)
+	auxBuf.RPCHeader.Version, pos = readUint16(pos, buff)
+	auxBuf.RPCHeader.Flags, pos = readUint16(pos, buff)
 	auxBuf.RPCHeader.Size, pos = readUint16(pos, buff)
 	auxBuf.RPCHeader.SizeActual, _ = readUint16(pos, buff)
 	auxBuf.Header = AUXHeader{}
 	auxBuf.Header.Size = uint16(1)
 	return auxBuf
+}
+
+//Marshal turn ExecuteRequest into Bytes
+func (execRequest ExecuteRequest) Marshal() []byte {
+	execRequest.CalcSizes()
+	return BodyToBytes(execRequest)
+}
+
+//Marshal turn ConnectRequest into Bytes
+func (connRequest ConnectRequest) Marshal() []byte {
+	return BodyToBytes(connRequest)
+}
+
+//Marshal turn DisconnectRequest into Bytes
+func (disconnectRequest DisconnectRequest) Marshal() []byte {
+	return BodyToBytes(disconnectRequest)
+}
+
+//Marshal turn RopLogonRequest into Bytes
+func (logonRequest RopLogonRequest) Marshal() []byte {
+	return BodyToBytes(logonRequest)
+}
+
+//Marshal turn the RopQueryRowsRequest into bytes
+func (queryRows RopQueryRowsRequest) Marshal() []byte {
+	return BodyToBytes(queryRows)
+}
+
+//Marshal to turn the RopSetColumnsRequest into bytes
+func (setColumns RopSetColumnsRequest) Marshal() []byte {
+	return BodyToBytes(setColumns)
+}
+
+//Marshal turn RopOpenFolder into Bytes
+func (openFolder RopOpenFolderRequest) Marshal() []byte {
+	return BodyToBytes(openFolder)
+}
+
+//Marshal turn RopGetPropertiesSpecific into Bytes
+func (getProps RopGetPropertiesSpecific) Marshal() []byte {
+	return BodyToBytes(getProps)
+}
+
+//Marshal turn RopGetContentsTableRequest into Bytes
+func (getContentsTable RopGetContentsTableRequest) Marshal() []byte {
+	return BodyToBytes(getContentsTable)
+}
+
+//Marshal turn RopGetRulesRequest into Bytes
+func (getRules RopGetRulesRequest) Marshal() []byte {
+	return BodyToBytes(getRules)
+}
+
+//Marshal turn ExecuteRequest into Bytes
+func (createMessage RopCreateMessageRequest) Marshal() []byte {
+	return BodyToBytes(createMessage)
+}
+
+//Marshal turn RopSetPropertiesRequest into Bytes
+func (setProperties RopSetPropertiesRequest) Marshal() []byte {
+	return BodyToBytes(setProperties)
+}
+
+//Marshal turn  RopSaveChangesMessageRequest into Bytes
+func (saveMessage RopSaveChangesMessageRequest) Marshal() []byte {
+	return BodyToBytes(saveMessage)
+}
+
+//Marshal turn RopOpenMessageRequest into Bytes
+func (openMessage RopOpenMessageRequest) Marshal() []byte {
+	return BodyToBytes(openMessage)
+}
+
+//Marshal turn RopSubmitMessageRequest into Bytes
+func (submitMessage RopSubmitMessageRequest) Marshal() []byte {
+	return BodyToBytes(submitMessage)
+}
+
+//Marshal turn RopSynchronizationOpenCollectorRequest into Bytes
+func (syncRop RopSynchronizationOpenCollectorRequest) Marshal() []byte {
+	return BodyToBytes(syncRop)
+}
+
+//Marshal turn RopOpenStreamRequest into Bytes
+func (openStream RopOpenStreamRequest) Marshal() []byte {
+	return BodyToBytes(openStream)
+}
+
+//Marshal turn RopReadStreamRequest into Bytes
+func (readStream RopReadStreamRequest) Marshal() []byte {
+	return BodyToBytes(readStream)
+}
+
+//Marshal turn RuleAction into Bytes
+func (ruleAction RuleAction) Marshal() []byte {
+	return BodyToBytes(ruleAction)
+}
+
+//Marshal turn RopReleaseRequest into Bytes
+func (releaseRequest RopReleaseRequest) Marshal() []byte {
+	return BodyToBytes(releaseRequest)
+}
+
+//Marshal turn RopModifyRecipientsRequest into Bytes
+func (modRecipients RopModifyRecipientsRequest) Marshal() []byte {
+	return BodyToBytes(modRecipients)
 }
 
 //Unmarshal function to convert response into ConnectResponse struct
@@ -434,6 +846,9 @@ func (logonResponse *RopLogonResponse) Unmarshal(resp []byte) error {
 	logonResponse.RopID, pos = readByte(pos, resp)
 	logonResponse.OutputHandleIndex, pos = readByte(pos, resp)
 	logonResponse.ReturnValue, pos = readUint32(pos, resp)
+	if logonResponse.ReturnValue != 0 {
+		return fmt.Errorf("[x] Non-zero response value: %d", logonResponse.ReturnValue)
+	}
 	logonResponse.LogonFlags, pos = readByte(pos, resp)
 	logonResponse.FolderIds, pos = readBytes(pos, 104, resp)
 	logonResponse.ResponseFlags, pos = readByte(pos, resp)
@@ -468,6 +883,17 @@ func (execResponse *ExecuteResponse) Unmarshal(resp []byte) error {
 }
 
 //Unmarshal func
+func (ropRelease *RopReleaseResponse) Unmarshal(resp []byte) (int, error) {
+	pos := 0
+	ropRelease.RopID, pos = readByte(pos, resp)
+	ropRelease.ReturnValue, pos = readUint32(pos, resp)
+	if ropRelease.ReturnValue != 0 {
+		return pos, fmt.Errorf("non-zero return code %d", ropRelease.ReturnValue)
+	}
+	return pos, nil
+}
+
+//Unmarshal func
 func (ropContents *RopGetContentsTableResponse) Unmarshal(resp []byte) error {
 	pos := 10
 	ropContents.RopID, pos = readByte(pos, resp)
@@ -475,6 +901,102 @@ func (ropContents *RopGetContentsTableResponse) Unmarshal(resp []byte) error {
 	ropContents.ReturnValue, pos = readUint32(pos, resp)
 	ropContents.RowCount, pos = readUint32(pos, resp)
 	ropContents.Rows = resp[pos:]
+	return nil
+}
+
+//Unmarshal function to produce RopCreateMessageResponse struct
+func (createMessageResponse *RopCreateMessageResponse) Unmarshal(resp []byte) (int, error) {
+	pos := 0
+
+	createMessageResponse.RopID, pos = readByte(pos, resp)
+	createMessageResponse.OutputHandle, pos = readByte(pos, resp)
+	createMessageResponse.ReturnValue, pos = readUint32(pos, resp)
+
+	if createMessageResponse.ReturnValue == 0 {
+		createMessageResponse.HasMessageID, pos = readByte(pos, resp)
+		if createMessageResponse.HasMessageID == 1 {
+			createMessageResponse.MessageID, _ = readBytes(pos, 8, resp)
+
+		}
+	} else {
+		return pos, fmt.Errorf("non-zero return code %d", createMessageResponse.ReturnValue)
+	}
+	return pos, nil
+}
+
+//Unmarshal function to produce RopCreateMessageResponse struct
+func (modRecipientsResponse *RopModifyRecipientsResponse) Unmarshal(resp []byte) (int, error) {
+	pos := 0
+
+	modRecipientsResponse.RopID, pos = readByte(pos, resp)
+	modRecipientsResponse.InputHandle, pos = readByte(pos, resp)
+	modRecipientsResponse.ReturnValue, pos = readUint32(pos, resp)
+
+	if modRecipientsResponse.ReturnValue != 0 {
+		return pos, fmt.Errorf("non-zero return code %d", modRecipientsResponse.ReturnValue)
+	}
+	return pos, nil
+}
+
+//Unmarshal function to produce RopSynchronizationOpenCollectorResponse struct
+func (syncResponse *RopSynchronizationOpenCollectorResponse) Unmarshal(resp []byte) (int, error) {
+	pos := 0
+
+	syncResponse.RopID, pos = readByte(pos, resp)
+	syncResponse.OutputHandle, pos = readByte(pos, resp)
+	syncResponse.ReturnValue, pos = readUint32(pos, resp)
+
+	if syncResponse.ReturnValue != 0 {
+		return pos, fmt.Errorf("non-zero return code %d", syncResponse.ReturnValue)
+	}
+	return pos, nil
+}
+
+//Unmarshal function to produce RopCreateMessageResponse struct
+func (submitMessageResp *RopSubmitMessageResponse) Unmarshal(resp []byte) (int, error) {
+	pos := 0
+
+	submitMessageResp.RopID, pos = readByte(pos, resp)
+	submitMessageResp.InputHandle, pos = readByte(pos, resp)
+	submitMessageResp.ReturnValue, pos = readUint32(pos, resp)
+
+	if submitMessageResp.ReturnValue != 0 {
+		return pos, fmt.Errorf("non-zero return code %d", submitMessageResp.ReturnValue)
+	}
+	return pos, nil
+}
+
+//Unmarshal function to produce RopCreateMessageResponse struct
+func (setPropertiesResponse *RopSetPropertiesResponse) Unmarshal(resp []byte) (int, error) {
+	pos := 0
+
+	setPropertiesResponse.RopID, pos = readByte(pos, resp)
+	setPropertiesResponse.InputHandle, pos = readByte(pos, resp)
+	setPropertiesResponse.ReturnValue, pos = readUint32(pos, resp)
+
+	if setPropertiesResponse.ReturnValue == 0 {
+		setPropertiesResponse.PropertProblemCount, pos = readUint16(pos, resp)
+		if setPropertiesResponse.PropertProblemCount > 0 {
+			fmt.Println(setPropertiesResponse.PropertProblemCount)
+		}
+	} else {
+		return pos, fmt.Errorf("non-zero return code %d", setPropertiesResponse.ReturnValue)
+	}
+	return pos, nil
+}
+
+//Unmarshal function to produce RopSaveChangesMessageResponse struct
+func (saveMessageResponse *RopSaveChangesMessageResponse) Unmarshal(resp []byte) error {
+	pos := 0
+
+	saveMessageResponse.RopID, pos = readByte(pos, resp)
+	saveMessageResponse.ResponseHandleIndex, pos = readByte(pos, resp)
+	saveMessageResponse.ReturnValue, pos = readUint32(pos, resp)
+
+	if saveMessageResponse.ReturnValue == 0 {
+		saveMessageResponse.InputHandle, pos = readByte(pos, resp)
+		saveMessageResponse.MessageID, _ = readBytes(pos, 8, resp)
+	}
 	return nil
 }
 
@@ -487,57 +1009,158 @@ func (execRequest *ExecuteRequest) CalcSizes() error {
 	return nil
 }
 
+//Init function to create a base ExecuteRequest object
 func (execRequest *ExecuteRequest) Init() {
-	execRequest.Flags = []byte{0x02, 0x00, 0x00, 0x00}
-
-	execRequest.RopBuffer.Header.Version = []byte{0x00, 0x00}
-	execRequest.RopBuffer.Header.Flags = []byte{0x04, 0x00} //ropFlagsChain
+	execRequest.Flags = 0x00000002
+	execRequest.RopBuffer.Header.Version = 0x0000
+	execRequest.RopBuffer.Header.Flags = ropFlagsChain //[]byte{0x04, 0x00}
 	execRequest.MaxRopOut = 32775
 }
 
-//DecodeRulesResponse func
-func DecodeRulesResponse(resp []byte) ([]Rule, []byte) {
-	pos := 10
-
-	var ret uint32
-	var rowcount uint16
-	_, pos = readByte(pos, resp)     //RopGetRulesTable should be 0x3f
-	_, pos = readByte(pos, resp)     //RopGetRulesTable InputHandleIndex
-	ret, pos = readUint32(pos, resp) //check that no error
-	if ret != 0 {
-		fmt.Println("Bad GetRUles")
-		return nil, nil
+//Unmarshal func
+func (queryRows *RopQueryRowsResponse) Unmarshal(resp []byte, properties []PropertyTag) (int, error) {
+	pos := 0
+	queryRows.RopID, pos = readByte(pos, resp)
+	queryRows.InputHandle, pos = readByte(pos, resp)
+	queryRows.ReturnValue, pos = readUint32(pos, resp)
+	if queryRows.ReturnValue != 0 {
+		return pos, fmt.Errorf("Non-zero return value %d", queryRows.ReturnValue)
 	}
-	_, pos = readByte(pos, resp)     //RopSetColumns should be 0x12
-	_, pos = readByte(pos, resp)     //RopSetColumns InputHandleIndex
-	ret, pos = readUint32(pos, resp) //check that no error
-	if ret != 0 {
-		fmt.Println("Bad SetColumns")
-		return nil, nil
+	queryRows.Origin, pos = readByte(pos, resp)
+	queryRows.RowCount, pos = readUint16(pos, resp)
+
+	rows := make([][]PropertyRow, queryRows.RowCount)
+
+	for k := 0; k < int(queryRows.RowCount); k++ {
+		trow := PropertyRow{}
+		trow.Flag, pos = readByte(pos, resp)
+		for _, property := range properties {
+			if property.PropertyType == PtypInteger32 {
+				trow.ValueArray, pos = readBytes(pos, 2, resp)
+				rows[k] = append(rows[k], trow)
+			} else if property.PropertyType == PtypInteger64 {
+				trow.ValueArray, pos = readBytes(pos, 8, resp)
+				rows[k] = append(rows[k], trow)
+			} else if property.PropertyType == PtypString {
+				trow.ValueArray, pos = readUnicodeString(pos, resp)
+				rows[k] = append(rows[k], trow)
+				pos++
+			} else if property.PropertyType == PtypBinary {
+				cnt, p := readByte(pos, resp)
+				pos = p
+				trow.ValueArray, pos = readBytes(pos, int(cnt), resp)
+				rows[k] = append(rows[k], trow)
+			}
+		}
+
 	}
-	_, pos = readByte(pos, resp)
 
-	_, pos = readByte(pos, resp)     //(RopQueryRows) should be 0x15
-	_, pos = readByte(pos, resp)     //(RopQueryRows) InputHandleIndex
-	ret, pos = readUint32(pos, resp) //check that no error
-	if ret != 0 {
-		fmt.Println("Bad QueryRows")
-		return nil, nil
+	queryRows.RowData = rows
+	return pos, nil
+}
+
+//Unmarshal func
+func (setColumnsResponse *RopSetColumnsResponse) Unmarshal(resp []byte) (int, error) {
+	pos := 0
+	setColumnsResponse.RopID, pos = readByte(pos, resp)
+	setColumnsResponse.InputHandle, pos = readByte(pos, resp)
+	setColumnsResponse.ReturnValue, pos = readUint32(pos, resp)
+	setColumnsResponse.TableStatus, pos = readByte(pos, resp)
+	if setColumnsResponse.ReturnValue != 0 {
+		return pos, fmt.Errorf("Non-zero return value %d", setColumnsResponse.ReturnValue)
 	}
-	_, pos = readByte(pos, resp)
-	rowcount, pos = readUint16(pos, resp)
+	return pos, nil
+}
 
-	rules := make([]Rule, rowcount)
-
-	for k := 0; k < int(rowcount); k++ {
-		rule := Rule{}
-		rule.HasFlag, pos = readByte(pos, resp)
-		rule.RuleID, pos = readBytes(pos, 8, resp)
-		rule.RuleName, pos = readUnicodeString(pos, resp)
-		rules[k] = rule
-		pos++
+//Unmarshal function to produce RopLogonResponse struct
+func (getRulesTable *RopGetRulesTableResponse) Unmarshal(resp []byte) (int, error) {
+	var pos = 0
+	getRulesTable.RopID, pos = readByte(pos, resp)
+	getRulesTable.OutputHandle, pos = readByte(pos, resp)
+	getRulesTable.ReturnValue, pos = readUint32(pos, resp)
+	if getRulesTable.ReturnValue != 0 {
+		return pos, fmt.Errorf("Non-zero return value %d", getRulesTable.ReturnValue)
 	}
-	ruleshandle := resp[pos+4:]
 
-	return rules, ruleshandle
+	return pos, nil
+}
+
+//Unmarshal func
+func (ropOpenFolderResponse *RopOpenFolderResponse) Unmarshal(resp []byte) (int, error) {
+	pos := 0
+	ropOpenFolderResponse.RopID, pos = readByte(pos, resp)
+	ropOpenFolderResponse.OutputHandle, pos = readByte(pos, resp)
+	ropOpenFolderResponse.ReturnValue, pos = readUint32(pos, resp)
+
+	if ropOpenFolderResponse.ReturnValue != 0x000000 {
+		return pos, fmt.Errorf("Non-zero reponse value %d", ropOpenFolderResponse.ReturnValue)
+	}
+
+	ropOpenFolderResponse.HasRules, pos = readByte(pos, resp)
+	ropOpenFolderResponse.IsGhosted, pos = readByte(pos, resp)
+
+	if ropOpenFolderResponse.IsGhosted == 1 {
+		ropOpenFolderResponse.ServerCount, pos = readUint16(pos, resp)
+		ropOpenFolderResponse.CheapServerCount, pos = readUint16(pos, resp)
+		ropOpenFolderResponse.Servers, pos = readASCIIString(pos, resp)
+	}
+
+	return pos, nil
+}
+
+//Unmarshal func
+func (ropOpenMessageResponse *RopOpenMessageResponse) Unmarshal(resp []byte) (int, error) {
+	pos := 0
+	ropOpenMessageResponse.RopID, pos = readByte(pos, resp)
+	ropOpenMessageResponse.OutputHandle, pos = readByte(pos, resp)
+	ropOpenMessageResponse.ReturnValue, pos = readUint32(pos, resp)
+
+	if ropOpenMessageResponse.ReturnValue != 0x000000 {
+		return pos, fmt.Errorf("Non-zero reponse value %d", ropOpenMessageResponse.ReturnValue)
+	}
+
+	ropOpenMessageResponse.HasNamedProperties, pos = readByte(pos, resp)
+	if ropOpenMessageResponse.HasNamedProperties > 0 {
+		ropOpenMessageResponse.SubjectPrefix, pos = readTypedString(pos, resp) //readUnicodeString(pos, resp)
+		ropOpenMessageResponse.NormalizedSubject, pos = readTypedString(pos, resp)
+		ropOpenMessageResponse.RecipientCount, pos = readUint16(pos, resp)
+
+		//read recipients
+
+	}
+	ropOpenMessageResponse.ColumnCount, pos = readUint16(pos, resp)
+	ropOpenMessageResponse.RowCount, pos = readByte(pos, resp)
+
+	return pos, nil
+}
+
+//Unmarshal func
+func (ropGetPropertiesSpecificResponse *RopGetPropertiesSpecificResponse) Unmarshal(resp []byte, columns []PropertyTag) (int, error) {
+	pos := 0
+	ropGetPropertiesSpecificResponse.RopID, pos = readByte(pos, resp)
+	ropGetPropertiesSpecificResponse.InputHandleIndex, pos = readByte(pos, resp)
+	ropGetPropertiesSpecificResponse.ReturnValue, pos = readUint32(pos, resp)
+
+	if ropGetPropertiesSpecificResponse.ReturnValue != 0x000000 {
+		return pos, fmt.Errorf("Non-zero reponse value %d", ropGetPropertiesSpecificResponse.ReturnValue)
+	}
+	var rows []PropertyRow
+	for _, property := range columns {
+		trow := PropertyRow{}
+		trow.Flag, pos = readByte(pos, resp)
+		if property.PropertyType == PtypInteger32 {
+			trow.ValueArray, pos = readBytes(pos, 2, resp)
+			rows = append(rows, trow)
+		} else if property.PropertyType == PtypString {
+			trow.ValueArray, pos = readUnicodeString(pos, resp)
+			rows = append(rows, trow)
+		} else if property.PropertyType == PtypBinary {
+			cnt, p := readByte(pos, resp)
+			pos = p
+			trow.ValueArray, pos = readBytes(pos, int(cnt), resp)
+			rows = append(rows, trow)
+		}
+	}
+	ropGetPropertiesSpecificResponse.RowData = rows
+	return pos, nil
 }

