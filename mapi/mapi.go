@@ -206,6 +206,7 @@ func Authenticate() (*RopLogonResponse, error) {
 		if connResponse.StatusCode == 0 {
 			fmt.Println("[+] User DN: ", string(connRequest.UserDN))
 			fmt.Println("[*] Got Context, Doing ROPLogin")
+
 			AuthSession.UserDN = connRequest.UserDN
 			return AuthenticateFetchMailbox(connRequest.UserDN)
 		}
@@ -245,13 +246,16 @@ func AuthenticateFetchMailbox(essdn []byte) (*RopLogonResponse, error) {
 		}
 		execResponse := ExecuteResponse{}
 		execResponse.Unmarshal(responseBody)
-		if execResponse.ErrorCode == 0 && len(responseBody) < 256 {
+		if execResponse.ErrorCode == 0 && len(execResponse.RopBuffer) > 0 {
 			AuthSession.Authenticated = true
 
 			logonResponse := RopLogonResponse{}
 			logonResponse.Unmarshal(execResponse.RopBuffer)
 			specialFolders(logonResponse.FolderIds)
 			return &logonResponse, nil
+		}
+		if AuthSession.Admin {
+			return nil, fmt.Errorf("[x] Invalid logon. Admin privileges requested but user is not admin")
 		}
 	}
 	return nil, fmt.Errorf("[x]Unspecified error occurred\n")
@@ -276,6 +280,7 @@ func Disconnect() (int, error) {
 	return 0, nil
 }
 
+//ReleaseObject issues a RopReleaseRequest to free a server handle to an object
 func ReleaseObject(inputHandle byte) (*RopReleaseResponse, error) {
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
@@ -311,9 +316,6 @@ func SendMessage(triggerWord string) (*RopSubmitMessageResponse, error) {
 
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
-
-	//ropRelease := RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandle: 0x00}
-	//fullReq := ropRelease.Marshal()
 
 	createMessage := RopCreateMessageRequest{RopID: 0x06, LogonID: AuthSession.LogonID}
 	createMessage.InputHandle = 0x00
@@ -442,16 +444,11 @@ func SendMessage(triggerWord string) (*RopSubmitMessageResponse, error) {
 				return nil, fmt.Errorf("[x]An error occurred %s\n", e)
 			}
 
-			/*
-				saveMessageResponse := RopSaveChangesMessageResponse{}
-				saveMessageResponse.Unmarshal(execResponse.RopBuffer[bufPtr:])
-			*/
 			submitMessageResp := RopSubmitMessageResponse{}
 			_, err = submitMessageResp.Unmarshal(execResponse.RopBuffer[bufPtr:])
 			if err != nil {
 				return nil, fmt.Errorf("[x]An error occurred %s\n", e)
 			}
-			//fmt.Printf("[+] Message ID: %x\n", saveMessageResponse.MessageID)
 
 			return &submitMessageResp, nil
 		}
@@ -460,37 +457,26 @@ func SendMessage(triggerWord string) (*RopSubmitMessageResponse, error) {
 	return nil, fmt.Errorf("[x]Unspecified error occurred\n")
 }
 
-//SendMessage is used to set the recipients of a message prior to sending it
-func SendMessageOld(messageID []byte) (*RopSubmitMessageResponse, error) {
+//CreateMessage is used to create a message on the exchange server
+func CreateMessage(folderID []byte) (*RopSaveChangesMessageResponse, error) {
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
 
-	//ropRelease := RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandle: 0x01}
-	//fullReq := ropRelease.Marshal()
-	//ropRelease = RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandle: 0x01}
-	//fullReq = append(fullReq, ropRelease.Marshal()...)
-	//ropRelease = RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandle: 0x02}
-	//fullReq = append(fullReq, ropRelease.Marshal()...)
+	createMessage := RopCreateMessageRequest{RopID: 0x06, LogonID: AuthSession.LogonID}
+	createMessage.InputHandle = 0x00
+	createMessage.OutputHandle = 0x01
+	createMessage.FolderID = folderID
+	createMessage.CodePageID = 0xFFF
+	createMessage.AssociatedFlag = 0
 
-	getFolder := RopOpenFolder{RopID: 0x02, LogonID: AuthSession.LogonID}
-	getFolder.InputHandle = 0x00
-	getFolder.OutputHandle = 0x01
-	getFolder.FolderID = AuthSession.Folderids[SENT]
-	getFolder.OpenModeFlags = 0x03
+	fullReq := createMessage.Marshal()
 
-	//fullReq = append(fullReq, getFolder.Marshal()...)
-	//fullReq := getFolder.Marshal()
+	saveMessage := RopSaveChangesMessageRequest{RopID: 0x0C, LogonID: AuthSession.LogonID}
+	saveMessage.ResponseHandleIndex = 0x02
+	saveMessage.InputHandle = 0x01
+	saveMessage.SaveFlags = 0x02
 
-	openMessage := RopOpenMessageRequest{RopID: 0x03, LogonID: AuthSession.LogonID, InputHandle: 0x00, OutputHandle: 0x01}
-	openMessage.CodePageID = 0x0FFF
-	openMessage.FolderID = AuthSession.Folderids[OUTBOX]
-	openMessage.OpenModeFlags = 0x03
-	openMessage.MessageID = messageID
-
-	fullReq := openMessage.Marshal()
-
-	submitMessage := RopSubmitMessageRequest{RopID: 0x32, LogonID: AuthSession.LogonID, InputHandle: 0x01, SubmitFlags: 0x00}
-	fullReq = append(fullReq, submitMessage.Marshal()...)
+	fullReq = append(fullReq, saveMessage.Marshal()...)
 
 	//ropRelease := RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandle: 0x01}
 	//fullReq = append(fullReq, ropRelease.Marshal()...)
@@ -509,21 +495,23 @@ func SendMessageOld(messageID []byte) (*RopSubmitMessageResponse, error) {
 
 		if execResponse.ErrorCode == 0 {
 			bufPtr := 10
-			openMessage := RopOpenMessageResponse{}
-			p, err := openMessage.Unmarshal(execResponse.RopBuffer[bufPtr:])
-			if err != nil {
-				return nil, err
+
+			createMessageResponse := RopCreateMessageResponse{}
+
+			p, e := createMessageResponse.Unmarshal(execResponse.RopBuffer[bufPtr:])
+			if e != nil {
+				return nil, fmt.Errorf("[x]An error occurred %s\n", e)
 			}
 			bufPtr += p
 
-			submitMessageResp := RopSubmitMessageResponse{}
-			_, err = submitMessageResp.Unmarshal(execResponse.RopBuffer[bufPtr:])
+			saveMessageResponse := RopSaveChangesMessageResponse{}
+			saveMessageResponse.Unmarshal(execResponse.RopBuffer[bufPtr:])
 
 			if err != nil {
 				return nil, err
 			}
 
-			return &submitMessageResp, nil
+			return &saveMessageResponse, nil
 
 		}
 	}
@@ -587,7 +575,7 @@ func GetFolder(folderid int, columns []PropertyTag) (*ExecuteResponse, error) {
 	execRequest.Init()
 	execRequest.MaxRopOut = 262144
 
-	getFolder := RopOpenFolder{RopID: 0x02, LogonID: AuthSession.LogonID}
+	getFolder := RopOpenFolderRequest{RopID: 0x02, LogonID: AuthSession.LogonID}
 	getFolder.InputHandle = 0x00
 	getFolder.OutputHandle = 0x01
 	getFolder.FolderID = AuthSession.Folderids[folderid]

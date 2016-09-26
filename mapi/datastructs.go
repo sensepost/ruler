@@ -195,8 +195,8 @@ type RopGetPropertiesSpecificResponse struct {
 	RowData           []PropertyRow
 }
 
-//RopOpenFolder struct used to open a folder
-type RopOpenFolder struct {
+//RopOpenFolderRequest struct used to open a folder
+type RopOpenFolderRequest struct {
 	RopID         uint8 //0x02
 	LogonID       uint8
 	InputHandle   uint8
@@ -216,6 +216,8 @@ type RopOpenFolderResponse struct {
 	CheapServerCount uint16 //only if IsGhosted == true
 	Servers          []byte //only if IsGhosted == true
 }
+
+//RopCreateFolderRequest struct used to create a folder
 
 //RopCreateMessageRequest struct used to open handle to new email message
 type RopCreateMessageRequest struct {
@@ -744,7 +746,7 @@ func (setColumns RopSetColumnsRequest) Marshal() []byte {
 }
 
 //Marshal turn RopOpenFolder into Bytes
-func (openFolder RopOpenFolder) Marshal() []byte {
+func (openFolder RopOpenFolderRequest) Marshal() []byte {
 	return BodyToBytes(openFolder)
 }
 
@@ -844,6 +846,9 @@ func (logonResponse *RopLogonResponse) Unmarshal(resp []byte) error {
 	logonResponse.RopID, pos = readByte(pos, resp)
 	logonResponse.OutputHandleIndex, pos = readByte(pos, resp)
 	logonResponse.ReturnValue, pos = readUint32(pos, resp)
+	if logonResponse.ReturnValue != 0 {
+		return fmt.Errorf("[x] Non-zero response value: %d", logonResponse.ReturnValue)
+	}
 	logonResponse.LogonFlags, pos = readByte(pos, resp)
 	logonResponse.FolderIds, pos = readBytes(pos, 104, resp)
 	logonResponse.ResponseFlags, pos = readByte(pos, resp)
