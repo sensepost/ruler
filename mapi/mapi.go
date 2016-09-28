@@ -458,7 +458,7 @@ func SendMessage(triggerWord string) (*RopSubmitMessageResponse, error) {
 }
 
 //CreateMessage is used to create a message on the exchange server
-func CreateMessage(folderID []byte) (*RopSaveChangesMessageResponse, error) {
+func CreateMessage(folderID []byte, action string) (*RopSaveChangesMessageResponse, error) {
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
 
@@ -470,6 +470,22 @@ func CreateMessage(folderID []byte) (*RopSaveChangesMessageResponse, error) {
 	createMessage.AssociatedFlag = 0
 
 	fullReq := createMessage.Marshal()
+
+	setProperties := RopSetPropertiesRequest{RopID: 0x0A, LogonID: AuthSession.LogonID}
+	setProperties.InputHandle = 0x01
+	setProperties.PropertValueCount = 2
+
+	propertyTags := make([]TaggedPropertyValue, setProperties.PropertValueCount)
+	propertyTags[0] = TaggedPropertyValue{PidTagBody, UniString(action)}
+	propertyTags[1] = TaggedPropertyValue{PidTagConversationTopic, UniString("command")}
+
+	setProperties.PropertyValues = propertyTags
+	propertySize := 0
+	for _, p := range propertyTags {
+		propertySize += len(BodyToBytes(p))
+	}
+
+	setProperties.PropertValueSize = uint16(propertySize + 2)
 
 	saveMessage := RopSaveChangesMessageRequest{RopID: 0x0C, LogonID: AuthSession.LogonID}
 	saveMessage.ResponseHandleIndex = 0x02
@@ -518,58 +534,10 @@ func CreateMessage(folderID []byte) (*RopSaveChangesMessageResponse, error) {
 	return nil, fmt.Errorf("[x]Unspecified error occurred\n")
 }
 
-//GetContentsTable function get's a folder from the folders id
-func GetContentsTable() (*RopGetContentsTableResponse, error) {
-
-	execRequest := ExecuteRequest{}
-	execRequest.Init()
-	execRequest.MaxRopOut = 262144
-
-	getContents := RopGetContentsTableRequest{RopID: 0x05, LogonID: AuthSession.LogonID, InputHandleIndex: 0x00, OutputHandleIndex: 0x01, TableFlags: 0x02}
-	setColumns := RopSetColumnsRequest{RopID: 0x12, LogonID: AuthSession.LogonID, InputHandle: 0x01, SetColumnFlags: 0x00, PropertyTagCount: 0x0006}
-
-	propertyTags := make([]PropertyTag, setColumns.PropertyTagCount)
-	propertyTags[0] = PropertyTag{PtypInteger64, 0x4867}
-	propertyTags[1] = PropertyTag{PtypInteger64, 0x4a67}
-	propertyTags[2] = PropertyTag{PtypInteger64, 0x4d67}
-	propertyTags[3] = PropertyTag{PtypInteger32, 0x4e67}
-	propertyTags[4] = PropertyTag{PtypString, 0x1a00}
-	propertyTags[5] = PropertyTag{PtypTime, 0x0830}
-
-	setColumns.PropertyTags = propertyTags
-	//0x14, AuthSession.LogonID, 0x01, 0x00, 0x2e, 0x00, 0x04, 0x04, 0x1f, 0x00, 0x1a, 0x00, 0x1f, 0x00, 0x1a, 0x00, 0x49, 0x00, 0x50, 0x00, 0x4d, 0x00, 0x2e, 0x00, 0x52, 0x00, 0x75, 0x00, 0x6c, 0x00, 0x65, 0x00, 0x4f, 0x00, 0x72, 0x00, 0x67, 0x00, 0x61, 0x00, 0x6e, 0x00, 0x69, 0x00, 0x7a, 0x00, 0x65, 0x00, 0x72, 0x00, 0x00, 0x00, 0x13, AuthSession.LogonID, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x08, 0x30, 0x01
-	//restrict := RopRestrictRequest{RopID: 0x14, LogonID: AuthSession.LogonID, InputHandle: 0x01, RestrictFlags: 0x00, RestrictDataSize: 0x002e}
-	//getContents = append(getContents.Marshal(), []byte{0x12, AuthSession.LogonID, 0x01, 0x00, 0x06, 0x00, 0x14, 0x00, 0x48, 0x67, 0x14, 0x00, 0x4a, 0x67, 0x14, 0x00, 0x4d, 0x67, 0x03, 0x00, 0x4e, 0x67, 0x1f, 0x00, 0x1a, 0x00, 0x40, 0x00, 0x08, 0x30, 0x14, AuthSession.LogonID, 0x01, 0x00, 0x2e, 0x00, 0x04, 0x04, 0x1f, 0x00, 0x1a, 0x00, 0x1f, 0x00, 0x1a, 0x00, 0x49, 0x00, 0x50, 0x00, 0x4d, 0x00, 0x2e, 0x00, 0x52, 0x00, 0x75, 0x00, 0x6c, 0x00, 0x65, 0x00, 0x4f, 0x00, 0x72, 0x00, 0x67, 0x00, 0x61, 0x00, 0x6e, 0x00, 0x69, 0x00, 0x7a, 0x00, 0x65, 0x00, 0x72, 0x00, 0x00, 0x00, 0x13, AuthSession.LogonID, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x08, 0x30, 0x01, 0x18, AuthSession.LogonID, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x15, AuthSession.LogonID, 0x01, 0x02, 0x01, 0x00, 0x10}...)
-
-	execRequest.RopBuffer.ROP.RopsList = append(getContents.Marshal())
-	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x01, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF}
-
-	//fetch contents
-	if AuthSession.Transport == HTTP { // HTTP
-		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Execute", execRequest.Marshal())
-		responseBody, err := readResponse(resp.Header, rbody)
-		if err != nil {
-			return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
-		}
-
-		execResponse := ExecuteResponse{}
-		execResponse.Unmarshal(responseBody)
-		if execResponse.StatusCode != 0 {
-			return nil, fmt.Errorf("[x] Status code > 0. Error occurred")
-
-		}
-		ropContents := RopGetContentsTableResponse{}
-		ropContents.Unmarshal(execResponse.RopBuffer)
-		return &ropContents, nil
-
-	}
-	return nil, fmt.Errorf("[x] An Unspecified error occurred")
-}
-
 //GetFolder function get's a folder from the folders id
 //FolderIds can be any of the "specialFolders" as defined in Exchange
 //mapi/datastructs.go folder id/locations constants
-func GetFolder(folderid int, columns []PropertyTag) (*ExecuteResponse, error) {
+func GetFolder(folderid int, columns []PropertyTag) (*RopOpenFolderResponse, error) {
 
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
@@ -612,8 +580,297 @@ func GetFolder(folderid int, columns []PropertyTag) (*ExecuteResponse, error) {
 		execResponse := ExecuteResponse{}
 		execResponse.Unmarshal(responseBody)
 
-		return &execResponse, nil
+		if execResponse.ErrorCode == 0 {
+			bufPtr := 10
+			openFolder := RopOpenFolderResponse{}
+			_, err := openFolder.Unmarshal(execResponse.RopBuffer[bufPtr:])
+			if err != nil {
+				return nil, err
+			}
+			//this should be the handle to the folder
+			//fmt.Println(execResponse.RopBuffer[len(execResponse.RopBuffer)-4:])
+			return &openFolder, nil
+		}
+	}
+	return nil, fmt.Errorf("[x] An Unspecified error occurred")
+}
 
+//GetContentsTable function get's a folder from the folders id
+//and returns a hanlde to the contents table for that folder
+func GetContentsTable(folderid []byte) (*RopGetContentsTableResponse, []byte, error) {
+	execRequest := ExecuteRequest{}
+	execRequest.Init()
+	execRequest.MaxRopOut = 262144
+
+	getFolder := RopOpenFolderRequest{RopID: 0x02, LogonID: AuthSession.LogonID}
+	getFolder.InputHandle = 0x00
+	getFolder.OutputHandle = 0x01
+	getFolder.FolderID = folderid
+	getFolder.OpenModeFlags = 0x00
+	fullReq := getFolder.Marshal()
+
+	getContents := RopGetContentsTableRequest{RopID: 0x05, LogonID: AuthSession.LogonID, InputHandleIndex: 0x01, OutputHandleIndex: 0x02, TableFlags: 0x40}
+
+	fullReq = append(fullReq, getContents.Marshal()...)
+
+	execRequest.RopBuffer.ROP.RopsList = fullReq
+	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
+
+	//fetch contents
+	if AuthSession.Transport == HTTP { // HTTP
+		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Execute", execRequest.Marshal())
+		responseBody, err := readResponse(resp.Header, rbody)
+		if err != nil {
+			return nil, nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
+		}
+
+		execResponse := ExecuteResponse{}
+		execResponse.Unmarshal(responseBody)
+
+		if execResponse.StatusCode == 0 {
+			bufPtr := 10
+
+			openFolder := RopOpenFolderResponse{}
+			p, er := openFolder.Unmarshal(execResponse.RopBuffer[bufPtr:])
+			if er != nil {
+				return nil, nil, err
+			}
+			bufPtr += p
+
+			ropContents := RopGetContentsTableResponse{}
+			p, er = ropContents.Unmarshal(execResponse.RopBuffer[bufPtr:])
+			if er != nil {
+				return nil, nil, err
+			}
+			bufPtr += p + 8
+			return &ropContents, execResponse.RopBuffer[bufPtr:], nil
+		}
+
+	}
+	return nil, nil, fmt.Errorf("[x] An Unspecified error occurred")
+}
+
+//GetFolderHierarchy function get's a folder from the folders id
+//and returns a handle to the hierarchy table
+func GetFolderHierarchy(folderid []byte) (*RopGetHierarchyTableResponse, []byte, error) {
+
+	execRequest := ExecuteRequest{}
+	execRequest.Init()
+	execRequest.MaxRopOut = 262144
+
+	getFolder := RopOpenFolderRequest{RopID: 0x02, LogonID: AuthSession.LogonID}
+	getFolder.InputHandle = 0x00
+	getFolder.OutputHandle = 0x01
+	getFolder.FolderID = folderid
+	getFolder.OpenModeFlags = 0x00
+	fullReq := getFolder.Marshal()
+
+	//set table flag as 0x04 | 0x40 (Depth and use unicode)
+	getFolderHierarchy := RopGetHierarchyTableRequest{RopID: 0x04, LogonID: AuthSession.LogonID, InputHandle: 0x01, OutputHandle: 0x02, TableFlags: 0x40}
+	fullReq = append(fullReq, getFolderHierarchy.Marshal()...)
+
+	execRequest.RopBuffer.ROP.RopsList = fullReq
+	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
+
+	//fetch folder
+	if AuthSession.Transport == HTTP { // HTTP
+		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Execute", execRequest.Marshal())
+		responseBody, err := readResponse(resp.Header, rbody)
+		if err != nil {
+			return nil, nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
+		}
+		execResponse := ExecuteResponse{}
+		execResponse.Unmarshal(responseBody)
+
+		if execResponse.ErrorCode == 0 {
+			bufPtr := 10
+			openFolder := RopOpenFolderResponse{}
+			p, err := openFolder.Unmarshal(execResponse.RopBuffer[bufPtr:])
+			if err != nil {
+				return nil, nil, err
+			}
+			bufPtr += p
+
+			hierarchyTableResponse := RopGetHierarchyTableResponse{}
+			p, err = hierarchyTableResponse.Unmarshal(execResponse.RopBuffer[bufPtr:])
+			if err != nil {
+				return nil, nil, err
+			}
+
+			bufPtr += p + 8 //the serverhandle is the 3rd set of 4 bytes - we need this handle to access the hierarchy table
+
+			return &hierarchyTableResponse, execResponse.RopBuffer[bufPtr:], nil
+		}
+	}
+	return nil, nil, fmt.Errorf("[x] An Unspecified error occurred")
+}
+
+//GetSubFolders returns all the subfolders available in a folder
+func GetSubFolders(folderid []byte) (*RopQueryRowsResponse, error) {
+	folderHeirarchy, svrhndl, err := GetFolderHierarchy(folderid)
+	if err != nil {
+		return nil, err
+	}
+
+	execRequest := ExecuteRequest{}
+	execRequest.Init()
+
+	setColumns := RopSetColumnsRequest{RopID: 0x12, LogonID: AuthSession.LogonID}
+	setColumns.InputHandle = 0x01
+	setColumns.PropertyTagCount = 2
+	setColumns.PropertyTags = make([]PropertyTag, 2)
+	setColumns.PropertyTags[0] = PidTagDisplayName
+	setColumns.PropertyTags[1] = PidTagFolderID
+
+	fullReq := setColumns.Marshal()
+	//fmt.Println(folderHeirarchy.RowCount)
+	queryRows := RopQueryRowsRequest{RopID: 0x15, LogonID: AuthSession.LogonID, InputHandle: 0x01, QueryRowsFlags: 0x00, ForwardRead: 0x01, RowCount: uint16(folderHeirarchy.RowCount)}
+	fullReq = append(fullReq, queryRows.Marshal()...)
+	execRequest.RopBuffer.ROP.RopsList = fullReq
+	execRequest.RopBuffer.ROP.ServerObjectHandleTable = append([]byte{0x01, 0x00, 0x00, AuthSession.LogonID}, svrhndl...)
+
+	if AuthSession.Transport == HTTP { // HTTP
+		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Execute", execRequest.Marshal())
+		responseBody, err := readResponse(resp.Header, rbody)
+		if err != nil {
+			return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
+		}
+		execResponse := ExecuteResponse{}
+		execResponse.Unmarshal(responseBody)
+
+		if execResponse.ErrorCode == 0 {
+			bufPtr := 10
+
+			setColumnsResp := RopSetColumnsResponse{}
+			p, err := setColumnsResp.Unmarshal(execResponse.RopBuffer[bufPtr:])
+			if err != nil {
+				return nil, err
+			}
+			bufPtr += p
+
+			rows := RopQueryRowsResponse{}
+
+			_, err = rows.Unmarshal(execResponse.RopBuffer[bufPtr:], setColumns.PropertyTags)
+			if err != nil {
+				return nil, err
+			}
+			return &rows, nil
+		}
+	}
+	return nil, fmt.Errorf("[x] An unexpected error occurred")
+}
+
+//CreateFolder function to create a folder on the exchange server
+func CreateFolder(folderName string, hidden bool) (*RopCreateFolderResponse, error) {
+	execRequest := ExecuteRequest{}
+	execRequest.Init()
+	execRequest.MaxRopOut = 262144
+
+	createFolder := RopCreateFolderRequest{RopID: 0x1C, LogonID: AuthSession.LogonID, InputHandle: 0x00, OutputHandle: 0x01, Reserved: 0x00}
+	createFolder.FolderType = 0x01
+	createFolder.UseUnicodeStrings = 0x01
+	createFolder.OpenExisting = 0x00
+	createFolder.DisplayName = UniString(folderName)
+	createFolder.Comment = UniString("some comment")
+	fullReq := createFolder.Marshal()
+
+	//if we want to create a hidden folder (so it doesn't show up in Outlook)
+	if hidden == true {
+		setProperties := RopSetPropertiesRequest{RopID: 0x0A, LogonID: AuthSession.LogonID}
+		setProperties.InputHandle = 0x01
+		setProperties.PropertValueCount = 1
+
+		propertyTags := make([]TaggedPropertyValue, setProperties.PropertValueCount)
+		propertyTags[0] = TaggedPropertyValue{PidTagHidden, []byte{0x01}}
+
+		setProperties.PropertyValues = propertyTags
+		propertySize := 0
+		for _, p := range propertyTags {
+			propertySize += len(BodyToBytes(p))
+		}
+
+		setProperties.PropertValueSize = uint16(propertySize + 2)
+
+		fullReq = append(fullReq, setProperties.Marshal()...)
+	}
+	execRequest.RopBuffer.ROP.RopsList = fullReq
+	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x01, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF}
+
+	//fetch folder
+	if AuthSession.Transport == HTTP { // HTTP
+		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Execute", execRequest.Marshal())
+		responseBody, err := readResponse(resp.Header, rbody)
+		if err != nil {
+			return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
+		}
+		execResponse := ExecuteResponse{}
+		execResponse.Unmarshal(responseBody)
+
+		if execResponse.ErrorCode == 0 {
+			bufPtr := 10
+			fmt.Printf("\n%x\n", execResponse.RopBuffer[bufPtr:])
+			createFolder := RopCreateFolderResponse{}
+			_, err = createFolder.Unmarshal(execResponse.RopBuffer[bufPtr:])
+			if err != nil {
+				return nil, err
+			}
+			return &createFolder, nil
+		}
+
+	}
+	return nil, fmt.Errorf("[x] An Unspecified error occurred")
+}
+
+func GetContacts(folderid []byte) (*RopQueryRowsResponse, error) {
+	contentsTable, svrhndl, err := GetContentsTable(folderid)
+	if err != nil {
+		return nil, err
+	}
+
+	execRequest := ExecuteRequest{}
+	execRequest.Init()
+	setColumns := RopSetColumnsRequest{RopID: 0x12, LogonID: AuthSession.LogonID, SetColumnFlags: 0x00}
+	setColumns.InputHandle = 0x01
+	setColumns.PropertyTagCount = 1
+	setColumns.PropertyTags = make([]PropertyTag, 1)
+	//setColumns.PropertyTags[0] = PidTagSubject
+	setColumns.PropertyTags[0] = PidTagInstanceNum
+	//setColumns.PropertyTags[1] = PidTagEmailAddress
+
+	fullReq := setColumns.Marshal()
+
+	queryRows := RopQueryRowsRequest{RopID: 0x15, LogonID: AuthSession.LogonID, InputHandle: 0x01, QueryRowsFlags: 0x00, ForwardRead: 0x01, RowCount: uint16(contentsTable.RowCount)}
+	fullReq = append(fullReq, queryRows.Marshal()...)
+	execRequest.RopBuffer.ROP.RopsList = fullReq
+	execRequest.RopBuffer.ROP.ServerObjectHandleTable = append([]byte{0x01, 0x00, 0x00, AuthSession.LogonID}, svrhndl...)
+
+	if AuthSession.Transport == HTTP { // HTTP
+		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Execute", execRequest.Marshal())
+		responseBody, err := readResponse(resp.Header, rbody)
+		if err != nil {
+			return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
+		}
+		execResponse := ExecuteResponse{}
+		execResponse.Unmarshal(responseBody)
+
+		if execResponse.ErrorCode == 0 {
+			bufPtr := 10
+
+			setColumnsResp := RopSetColumnsResponse{}
+			p, err := setColumnsResp.Unmarshal(execResponse.RopBuffer[bufPtr:])
+			if err != nil {
+				return nil, err
+			}
+			bufPtr += p
+
+			rows := RopQueryRowsResponse{}
+
+			_, err = rows.Unmarshal(execResponse.RopBuffer[bufPtr:], setColumns.PropertyTags)
+			if err != nil {
+				return nil, err
+			}
+			return &rows, nil
+		}
 	}
 	return nil, fmt.Errorf("[x] An Unspecified error occurred")
 }
@@ -624,7 +881,7 @@ func DisplayRules() ([]Rule, error) {
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
 
-	getRulesFolder := RopGetRulesRequest{RopID: 0x3f, LogonID: AuthSession.LogonID, InputHandleIndex: 0x00, OutputHandleIndex: 0x01, TableFlags: 0x40}
+	getRulesFolder := RopGetRulesTableRequest{RopID: 0x3f, LogonID: AuthSession.LogonID, InputHandleIndex: 0x00, OutputHandleIndex: 0x01, TableFlags: 0x40}
 	//RopSetColumns
 	setColumns := RopSetColumnsRequest{RopID: 0x12, LogonID: AuthSession.LogonID}
 	setColumns.InputHandle = 0x01

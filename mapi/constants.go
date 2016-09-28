@@ -116,6 +116,9 @@ var PidTagAddressType = PropertyTag{PtypString, 0x3001}
 //PidTagFolderType specifies the type of folder that includes the root folder,
 var PidTagFolderType = PropertyTag{PtypInteger32, 0x3601}
 
+//PidTagFolderID the ID of the folder
+var PidTagFolderID = PropertyTag{PtypInteger64, 0x6748}
+
 //PidTagContentCount specifies the number of rows under the header row
 var PidTagContentCount = PropertyTag{PtypInteger32, 0x3602}
 
@@ -204,3 +207,12 @@ var PidTagNormalizedSubject = PropertyTag{PtypString, 0x0E1D}
 
 //PidTagSubject used in recepient
 var PidTagSubject = PropertyTag{PtypString, 0x0037}
+
+//PidTagHidden specify whether folder is hidden
+var PidTagHidden = PropertyTag{PtypBoolean, 0x10F4}
+
+//PidTagInstID identifier for all instances of a row in the table
+var PidTagInstID = PropertyTag{PtypInteger64, 0x674D}
+
+//PidTagInstanceNum identifier for single instance of a row in the table
+var PidTagInstanceNum = PropertyTag{PtypInteger32, 0x674E}

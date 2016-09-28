@@ -105,7 +105,7 @@ func main() {
 	conscPtr := flag.Int("attempts", 2, "Number of attempts before delay")
 	delayPtr := flag.Int("delay", 5, "Delay between attempts")
 	autoSendPtr := flag.Bool("send", false, "Autosend an email once the rule has been created")
-	//createfPtr := flag.Bool("cf", false, "create a folder")
+	createfPtr := flag.Bool("cf", false, "create a folder")
 
 	flag.Parse()
 
@@ -180,6 +180,64 @@ func main() {
 		propertyTags[1] = mapi.PidTagSubfolders
 		mapi.GetFolder(mapi.INBOX, propertyTags) //Open Inbox
 
+		if *createfPtr == true {
+
+			rows, er := mapi.GetSubFolders(mapi.AuthSession.Folderids[mapi.IPM])
+			if er != nil {
+				exit(er)
+			}
+			var folderid []byte
+			for k := 0; k < len(rows.RowData); k++ {
+				fmt.Printf("Folder [%x]%s : %x \n", rows.RowData[k][0].ValueArray, rows.RowData[k][0].ValueArray, rows.RowData[k][1].ValueArray)
+				//I am extremely lazy and don't feel like converting from Unicode. This does a comparison to see
+				//if the returned folder name (in unicode) is equal to "Contacts"
+				if fmt.Sprintf("%x", rows.RowData[k][0].ValueArray) == "43006f006e00740061006300740073" {
+					folderid = rows.RowData[k][1].ValueArray
+				}
+			}
+
+			fmt.Printf("Folderid: %x\n", folderid)
+			rows, er = mapi.GetSubFolders(folderid)
+			if rows == nil {
+				exit(fmt.Errorf("No subfolders"))
+			}
+			for k := 0; k < len(rows.RowData); k++ {
+				fmt.Printf("Folder [%s] : %x \n", rows.RowData[k][0].ValueArray, rows.RowData[k][1].ValueArray)
+				//same as before.. I'm a lazy bastard checks if folder name is "GAL Contacts"
+				if fmt.Sprintf("%x", rows.RowData[k][0].ValueArray) == "470041004c00200043006f006e00740061006300740073" {
+					folderid = rows.RowData[k][1].ValueArray
+				}
+			}
+
+			fmt.Printf("Folderid: %x\n", folderid)
+			rows, er = mapi.GetContacts(folderid)
+			//rows, er = mapi.GetContacts(folderid)
+			if rows != nil {
+				for k := 0; k < len(rows.RowData); k++ {
+					fmt.Printf("Subject [%s]  \n", rows.RowData[k][0].ValueArray)
+				}
+			}
+			if er != nil {
+				exit(er)
+			}
+			if 1 < 2 {
+				return
+			}
+			mapi.GetFolder(0, nil)
+			resp, er := mapi.CreateFolder("tunnelmeszs", true)
+			if er != nil {
+				exit(er)
+			}
+			fmt.Println(resp.FolderID)
+			mapi.ReleaseObject(0x00)
+			mapi.GetFolder(-1, propertyTags)
+			res, er := mapi.CreateMessage(resp.FolderID, "whoami")
+			if er != nil {
+				exit(er)
+			}
+			fmt.Println(res)
+			return
+		}
 		//Display All rules
 		if *displayRules == true {
 			fmt.Println("[+] Retrieving Rules")

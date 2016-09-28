@@ -119,8 +119,8 @@ type RopLogonResponse struct {
 	StoreState        []byte
 }
 
-//RopGetRulesRequest struct
-type RopGetRulesRequest struct {
+//RopGetRulesTableRequest struct
+type RopGetRulesTableRequest struct {
 	RopID             uint8 //0x3f
 	LogonID           uint8
 	InputHandleIndex  uint8
@@ -153,7 +153,6 @@ type RopGetContentsTableResponse struct {
 	OutputHandle uint8
 	ReturnValue  uint32
 	RowCount     uint32
-	Rows         []byte
 }
 
 //RopGetPropertiesSpecific struct to get propertiesfor a folder
@@ -217,7 +216,50 @@ type RopOpenFolderResponse struct {
 	Servers          []byte //only if IsGhosted == true
 }
 
+//RopGetHierarchyTableRequest struct used to get folder hierarchy
+type RopGetHierarchyTableRequest struct {
+	RopID        uint8 //0x04
+	LogonID      uint8
+	InputHandle  uint8
+	OutputHandle uint8
+	TableFlags   uint8
+}
+
+//RopGetHierarchyTableResponse struct used to get folder hierarchy
+type RopGetHierarchyTableResponse struct {
+	RopID        uint8 //0x04
+	OutputHandle uint8
+	ReturnValue  uint32
+	RowCount     uint32
+}
+
 //RopCreateFolderRequest struct used to create a folder
+type RopCreateFolderRequest struct {
+	RopID             uint8 //0x1C
+	LogonID           uint8
+	InputHandle       uint8
+	OutputHandle      uint8
+	FolderType        uint8
+	UseUnicodeStrings uint8
+	OpenExisting      uint8
+	Reserved          uint8
+	DisplayName       []byte
+	Comment           []byte
+}
+
+//RopCreateFolderResponse struct used to create a folder
+type RopCreateFolderResponse struct {
+	RopID            uint8 //0x1C
+	OutputHandle     uint8
+	ReturnValue      uint32
+	FolderID         []byte
+	IsExisting       uint8
+	HasRules         byte   //bool
+	IsGhosted        byte   //bool
+	ServerCount      uint16 //only if IsGhosted == true
+	CheapServerCount uint16 //only if IsGhosted == true
+	Servers          []byte //only if IsGhosted == true
+}
 
 //RopCreateMessageRequest struct used to open handle to new email message
 type RopCreateMessageRequest struct {
@@ -750,6 +792,16 @@ func (openFolder RopOpenFolderRequest) Marshal() []byte {
 	return BodyToBytes(openFolder)
 }
 
+//Marshal turn RopCreateFolderRequest into Bytes
+func (createFolder RopCreateFolderRequest) Marshal() []byte {
+	return BodyToBytes(createFolder)
+}
+
+//Marshal turn RopGetHierarchyTableRequest into Bytes
+func (getHierarchy RopGetHierarchyTableRequest) Marshal() []byte {
+	return BodyToBytes(getHierarchy)
+}
+
 //Marshal turn RopGetPropertiesSpecific into Bytes
 func (getProps RopGetPropertiesSpecific) Marshal() []byte {
 	return BodyToBytes(getProps)
@@ -760,8 +812,8 @@ func (getContentsTable RopGetContentsTableRequest) Marshal() []byte {
 	return BodyToBytes(getContentsTable)
 }
 
-//Marshal turn RopGetRulesRequest into Bytes
-func (getRules RopGetRulesRequest) Marshal() []byte {
+//Marshal turn RopGetRulesTableRequest into Bytes
+func (getRules RopGetRulesTableRequest) Marshal() []byte {
 	return BodyToBytes(getRules)
 }
 
@@ -894,14 +946,29 @@ func (ropRelease *RopReleaseResponse) Unmarshal(resp []byte) (int, error) {
 }
 
 //Unmarshal func
-func (ropContents *RopGetContentsTableResponse) Unmarshal(resp []byte) error {
-	pos := 10
+func (ropContents *RopGetContentsTableResponse) Unmarshal(resp []byte) (int, error) {
+	pos := 0
 	ropContents.RopID, pos = readByte(pos, resp)
 	ropContents.OutputHandle, pos = readByte(pos, resp)
 	ropContents.ReturnValue, pos = readUint32(pos, resp)
+	if ropContents.ReturnValue != 0 {
+		return pos, fmt.Errorf("non-zero return code %d", ropContents.ReturnValue)
+	}
 	ropContents.RowCount, pos = readUint32(pos, resp)
-	ropContents.Rows = resp[pos:]
-	return nil
+	return pos, nil
+}
+
+//Unmarshal func for RopCreateFolderResponse
+func (createFolder *RopCreateFolderResponse) Unmarshal(resp []byte) (int, error) {
+	pos := 0
+	createFolder.RopID, pos = readByte(pos, resp)
+	createFolder.OutputHandle, pos = readByte(pos, resp)
+	createFolder.ReturnValue, pos = readUint32(pos, resp)
+	if createFolder.ReturnValue != 0 {
+		return pos, fmt.Errorf("non-zero return code %x", createFolder.ReturnValue)
+	}
+
+	return pos, nil
 }
 
 //Unmarshal function to produce RopCreateMessageResponse struct
@@ -1105,6 +1172,21 @@ func (ropOpenFolderResponse *RopOpenFolderResponse) Unmarshal(resp []byte) (int,
 		ropOpenFolderResponse.Servers, pos = readASCIIString(pos, resp)
 	}
 
+	return pos, nil
+}
+
+//Unmarshal func
+func (ropGetHierarchyResponse *RopGetHierarchyTableResponse) Unmarshal(resp []byte) (int, error) {
+	pos := 0
+	ropGetHierarchyResponse.RopID, pos = readByte(pos, resp)
+	ropGetHierarchyResponse.OutputHandle, pos = readByte(pos, resp)
+	ropGetHierarchyResponse.ReturnValue, pos = readUint32(pos, resp)
+
+	if ropGetHierarchyResponse.ReturnValue != 0x000000 {
+		return pos, fmt.Errorf("Non-zero reponse value %d", ropGetHierarchyResponse.ReturnValue)
+	}
+
+	ropGetHierarchyResponse.RowCount, pos = readUint32(pos, resp)
 	return pos, nil
 }
 
