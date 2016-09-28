@@ -44,7 +44,7 @@ func ExtractRPCURL(resp *utils.AutodiscoverResp) string {
 }
 
 //Init is used to start our mapi session
-func Init(config utils.Config, lid, URL string, transport int) {
+func Init(config utils.Config, lid, URL, ABKURL string, transport int) {
 	AuthSession.User = config.User
 	AuthSession.Pass = config.Pass
 	AuthSession.Email = config.Email
@@ -53,6 +53,7 @@ func Init(config utils.Config, lid, URL string, transport int) {
 	AuthSession.CookieJar, _ = cookiejar.New(nil)
 	if transport == HTTP {
 		AuthSession.URL, _ = url.Parse(URL)
+		AuthSession.ABKURL, _ = url.Parse(ABKURL)
 	} else {
 		AuthSession.Host = URL
 	}
@@ -821,7 +822,8 @@ func CreateFolder(folderName string, hidden bool) (*RopCreateFolderResponse, err
 	return nil, fmt.Errorf("[x] An Unspecified error occurred")
 }
 
-func GetContacts(folderid []byte) (*RopQueryRowsResponse, error) {
+//GetContents returns the rows of a folder's content table
+func GetContents(folderid []byte) (*RopQueryRowsResponse, error) {
 	contentsTable, svrhndl, err := GetContentsTable(folderid)
 	if err != nil {
 		return nil, err

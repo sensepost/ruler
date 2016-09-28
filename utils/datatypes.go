@@ -26,7 +26,8 @@ type Session struct {
 	Email         string
 	LID           string
 	URL           *url.URL
-	Host          string //used for TCP
+	ABKURL        *url.URL //URL for the AddressBook Provider
+	Host          string   //used for TCP
 	ReqCounter    int
 	Transport     int
 	CookieJar     *cookiejar.Jar
@@ -136,8 +137,8 @@ type MailStore struct {
 
 //AddressBook structure for unmarshal
 type AddressBook struct {
-	Internal string
-	External string
+	InternalUrl string
+	ExternalUrl string
 }
 
 //PublicFolderInformation structure for unmarshal

@@ -106,6 +106,7 @@ func main() {
 	delayPtr := flag.Int("delay", 5, "Delay between attempts")
 	autoSendPtr := flag.Bool("send", false, "Autosend an email once the rule has been created")
 	createfPtr := flag.Bool("cf", false, "create a folder")
+	abkPtr := flag.Bool("abk", false, "Get the address book")
 
 	flag.Parse()
 
@@ -144,6 +145,7 @@ func main() {
 	if *tcpPtr == false {
 		resp = getMapiHTTP(*autoURLPtr)
 		mapiURL := mapi.ExtractMapiURL(resp)
+		abkURL := mapi.ExtractMapiAddressBookURL(resp)
 		if mapiURL == "" {
 			exit(fmt.Errorf("[x] No MAPI URL found. Exiting"))
 			//try RPC
@@ -153,11 +155,12 @@ func main() {
 			//mapi.Init(config, resp.Response.User.LegacyDN, "", mapi.RPC)
 		}
 		fmt.Println("[+] MAPI URL found: ", mapiURL)
+		fmt.Println("[+] MAPI AddressBook URL found: ", abkURL)
 		if *checkOnly == true {
 			fmt.Println("[+] Authentication succeeded and MAPI/HTTP is available")
 			os.Exit(0)
 		}
-		mapi.Init(config, resp.Response.User.LegacyDN, mapiURL, mapi.HTTP)
+		mapi.Init(config, resp.Response.User.LegacyDN, mapiURL, abkURL, mapi.HTTP)
 	} else {
 		exit(fmt.Errorf("[x] RPC/HTTP not yet supported. "))
 		/*
@@ -180,6 +183,15 @@ func main() {
 		propertyTags[1] = mapi.PidTagSubfolders
 		mapi.GetFolder(mapi.INBOX, propertyTags) //Open Inbox
 
+		if *abkPtr == true {
+			fmt.Println("[*] Let's play addressbook")
+			bindResp, _ := mapi.Bind()
+			fmt.Printf("[*] Server GUID: %x\n", bindResp.ServerGUID)
+			//mapi.GetSpecialTable()
+			//mapi.DnToMinID()
+			mapi.QueryRows()
+			return
+		}
 		if *createfPtr == true {
 
 			rows, er := mapi.GetSubFolders(mapi.AuthSession.Folderids[mapi.IPM])
@@ -210,7 +222,7 @@ func main() {
 			}
 
 			fmt.Printf("Folderid: %x\n", folderid)
-			rows, er = mapi.GetContacts(folderid)
+			rows, er = mapi.GetContents(folderid)
 			//rows, er = mapi.GetContacts(folderid)
 			if rows != nil {
 				for k := 0; k < len(rows.RowData); k++ {
