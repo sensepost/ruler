@@ -43,7 +43,7 @@ func Bind() (*BindResponse, error) {
 
 //GetSpecialTable function to get special table from addressbook provider
 func GetSpecialTable() (*GetSpecialTableResponse, error) {
-	//byte[] arrOutput = , 0x00, 0x00, 0x00 };
+
 	gstReq := GetSpecialTableRequest{}
 	gstReq.Flags = 0x00000004
 	gstReq.HasState = 0xFF
@@ -117,20 +117,27 @@ func QueryRows() (*QueryRowsResponse, error) {
 	qRows.HasColumns = 0xFF
 	//[]byte{0x1F, 0x00, 0x01, 0x30, 0x1F, 0x00, 0x17, 0x3A, 0x1F, 0x00, 0x08, 0x3A, 0x1F, 0x00, 0x19, 0x3A, 0x1F, 0x00, 0x18, 0x3A, 0x1F, 0x00, 0xFE, 0x39, 0x1F, 0x00, 0x16, 0x3A, 0x1F, 0x00, 0x00, 0x3A, 0x1F, 0x00, 0x02, 0x30, 0x02, 0x01, 0xFF, 0x0F, 0x03, 0x00, 0xFE, 0x0F, 0x03, 0x00, 0x00, 0x39, 0x03, 0x00, 0x05, 0x39, 0x02, 0x01, 0xF6, 0x0F, 0x1F, 0x00, 0x03, 0x30}
 	qRows.Columns = LargePropertyTagArray{}
-	qRows.Columns.PropertyTagCount = 1
+	qRows.Columns.PropertyTagCount = 2
 	qRows.Columns.PropertyTags = make([]PropertyTag, qRows.Columns.PropertyTagCount)
-	qRows.Columns.PropertyTags[0] = PidTagEmailAddress
+	qRows.Columns.PropertyTags[0] = PidTagSMTPAddress
+	qRows.Columns.PropertyTags[1] = PidTagDisplayName
 
 	qRows.AuxiliaryBufferSize = 0x00
 
 	if AuthSession.Transport == HTTP {
 		resp, responseBody := mapiRequestHTTP(AuthSession.ABKURL.String(), "QueryRows", qRows.Marshal())
-		fmt.Println(string(responseBody))
+
 		responseBody, err := readResponse(resp.Header, responseBody)
-		fmt.Println(responseBody)
+
 		if err != nil {
 			return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
 		}
+		qrResp := QueryRowsResponse{}
+		_, err = qrResp.Unmarshal(responseBody)
+		if err != nil {
+			return nil, err
+		}
+		return &qrResp, nil
 	}
 	return nil, fmt.Errorf("[x] An Unexpected error occurred")
 }

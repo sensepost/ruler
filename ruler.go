@@ -188,8 +188,17 @@ func main() {
 			bindResp, _ := mapi.Bind()
 			fmt.Printf("[*] Server GUID: %x\n", bindResp.ServerGUID)
 			//mapi.GetSpecialTable()
+			//fmt.Println(string(k.Rows[1].PropertyValues[0].PropertyValue))
 			//mapi.DnToMinID()
-			mapi.QueryRows()
+			rows, _ := mapi.QueryRows()
+			fmt.Println("[*] Found the following entries: ")
+			for k := 0; k < int(rows.RowCount); k++ {
+				for v := 0; v < int(rows.Columns.PropertyTagCount); v++ {
+					//value, p = mapi.ReadPropertyValue(rows.RowData[k].ValueArray[p:], rows.Columns.PropertyTags[v].PropertyType)
+					fmt.Printf("%s ", rows.RowData[k].AddressBookPropertyValue[v].Value)
+				}
+				fmt.Println("")
+			}
 			return
 		}
 		if *createfPtr == true {

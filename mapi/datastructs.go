@@ -1246,3 +1246,11 @@ func (ropGetPropertiesSpecificResponse *RopGetPropertiesSpecificResponse) Unmars
 	ropGetPropertiesSpecificResponse.RowData = rows
 	return pos, nil
 }
+
+//Unmarshal func
+func (propTag *PropertyTag) Unmarshal(resp []byte) (int, error) {
+	pos := 0
+	propTag.PropertyType, pos = readUint16(pos, resp)
+	propTag.PropertyID, pos = readUint16(pos, resp)
+	return pos, nil
+}
