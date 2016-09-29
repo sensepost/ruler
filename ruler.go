@@ -190,7 +190,7 @@ func main() {
 			//mapi.GetSpecialTable()
 			//fmt.Println(string(k.Rows[1].PropertyValues[0].PropertyValue))
 			//mapi.DnToMinID()
-			rows, _ := mapi.QueryRows()
+			rows, _ := mapi.QueryRows(255) //pull first 255 entries
 			fmt.Println("[*] Found the following entries: ")
 			for k := 0; k < int(rows.RowCount); k++ {
 				for v := 0; v < int(rows.Columns.PropertyTagCount); v++ {
