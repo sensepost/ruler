@@ -107,6 +107,9 @@ var PidTagDefaultPostMessageClass = PropertyTag{PtypString, 0x36e5}
 //PidTagDisplayName display name of the folder
 var PidTagDisplayName = PropertyTag{PtypString, 0x3001}
 
+//PidTagEntryID display name of the folder
+var PidTagEntryID = PropertyTag{PtypBinary, 0x0FFF}
+
 //PidTagEmailAddress display name of the folder
 var PidTagEmailAddress = PropertyTag{PtypString, 0x3003}
 

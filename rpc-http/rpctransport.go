@@ -96,7 +96,31 @@ func RPCOpen(rpcType int, URL string) (err error) {
 	return err
 }
 
-func RPCSend(data []byte) {
+//Here we need to do MSRPC setup as per docs
+/**
+ *           Secure Connection-Oriented RPC Packet Sequence
+ *
+ *     Client                                              Server
+ *        |                                                   |
+ *        |-------------------SECURE_BIND-------------------->|
+ *        |                                                   |
+ *        |<----------------SECURE_BIND_ACK-------------------|
+ *        |                                                   |
+ *        |--------------------RPC_AUTH_3-------------------->|
+ *        |                                                   |
+ *        |                                                   |
+ *        |------------------REQUEST_PDU_#1------------------>|
+ *        |------------------REQUEST_PDU_#2------------------>|
+ *        |                                                   |
+ *        |                        ...                        |
+ *        |                                                   |
+ *        |<-----------------RESPONSE_PDU_#1------------------|
+ *        |<-----------------RESPONSE_PDU_#2------------------|
+ *        |                                                   |
+ *        |                        ...                        |
+ */
+
+func RPC_Bind() {
 
 }
 
