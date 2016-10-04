@@ -143,6 +143,7 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, error) {
 				autodiscoverStep++
 				return autodiscover(domain, mapi)
 			}
+			return nil, err
 		}
 	}
 
@@ -164,7 +165,9 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, error) {
 			}
 			return nil, fmt.Errorf("[x] Error in autodiscover response, %s", err)
 		}
-		//fmt.Println(string(body))
+		if SessionConfig.Verbose == true {
+			fmt.Println(string(body))
+		}
 		//check if we got a RedirectAddr ,
 		//if yes, get the new autodiscover url
 		if autodiscoverResp.Response.Account.Action == "redirectAddr" {
