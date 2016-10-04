@@ -30,16 +30,6 @@ func exit(err error) {
 	os.Exit(exitcode)
 }
 
-func sendMail() {
-	//msg := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/plain\r\nContent-Transfer-Encoding:8bit\r\n\r\nsome text\r\n", from, to, subject)
-
-	/*	err := smtp.SendMail(smtp, auth, from, []string{to}, msg)
-		if err != nil {
-			log.Fatal(err)
-		}
-	*/
-}
-
 func getMapiHTTP(autoURLPtr string) *utils.AutodiscoverResp {
 	var resp *utils.AutodiscoverResp
 	var err error
@@ -105,7 +95,8 @@ func main() {
 	conscPtr := flag.Int("attempts", 2, "Number of attempts before delay")
 	delayPtr := flag.Int("delay", 5, "Delay between attempts")
 	autoSendPtr := flag.Bool("send", false, "Autosend an email once the rule has been created")
-	//createfPtr := flag.Bool("cf", false, "create a folder")
+	mapiUrlPtr := flag.String("mapiUrl", "", "Specify the MAPI URL (bypass autodiscover)")
+	userDNPtr := flag.String("userDN", "", "User DN required when MAPI URL is specified directly")
 
 	flag.Parse()
 
@@ -142,22 +133,32 @@ func main() {
 	}
 
 	if *tcpPtr == false {
-		resp = getMapiHTTP(*autoURLPtr)
-		mapiURL := mapi.ExtractMapiURL(resp)
-		if mapiURL == "" {
-			exit(fmt.Errorf("[x] No MAPI URL found. Exiting"))
-			//try RPC
-			//fmt.Println("[x] No MAPI URL found. Trying RPC/HTTP")
-			//resp = getRPCHTTP(*autoURLPtr)
-			//fmt.Println(resp.Response.Account.Protocol[0].Server)
-			//mapi.Init(config, resp.Response.User.LegacyDN, "", mapi.RPC)
+		var mapiURL, userDN string
+		if *mapiUrlPtr != "" {
+			if *userDNPtr == "" {
+				exit(fmt.Errorf("[x] UserDN required when specifying MAPI URL directly"))
+			}
+			mapiURL = *mapiUrlPtr
+			userDN = *userDNPtr
+		} else {
+			resp = getMapiHTTP(*autoURLPtr)
+			mapiURL = mapi.ExtractMapiURL(resp)
+			userDN = resp.Response.User.LegacyDN
+			if mapiURL == "" {
+				exit(fmt.Errorf("[x] No MAPI URL found. Exiting"))
+				//try RPC
+				//fmt.Println("[x] No MAPI URL found. Trying RPC/HTTP")
+				//resp = getRPCHTTP(*autoURLPtr)
+				//fmt.Println(resp.Response.Account.Protocol[0].Server)
+				//mapi.Init(config, resp.Response.User.LegacyDN, "", mapi.RPC)
+			}
 		}
 		fmt.Println("[+] MAPI URL found: ", mapiURL)
 		if *checkOnly == true {
 			fmt.Println("[+] Authentication succeeded and MAPI/HTTP is available")
 			os.Exit(0)
 		}
-		mapi.Init(config, resp.Response.User.LegacyDN, mapiURL, mapi.HTTP)
+		mapi.Init(config, userDN, mapiURL, mapi.HTTP)
 	} else {
 		exit(fmt.Errorf("[x] RPC/HTTP not yet supported. "))
 		/*
