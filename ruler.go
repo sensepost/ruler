@@ -101,7 +101,7 @@ func main() {
 	stopSuccessPtr := flag.Bool("stop", false, "Stop on successfully finding a username/password")
 	userList := flag.String("usernames", "", "Filename for a List of usernames")
 	passList := flag.String("passwords", "", "Filename for a List of passwords")
-        userpassList := flag.String("userpass", "", "Filename for a List of username:password combinations separated by a colon, one pair per line")
+	userpassList := flag.String("userpass", "", "Filename for a List of username:password combinations separated by a colon, one pair per line")
 	verbosePtr := flag.Bool("v", false, "Be verbose, show failures")
 	conscPtr := flag.Int("attempts", 2, "Number of attempts before delay")
 	delayPtr := flag.Int("delay", 5, "Delay between attempts")
