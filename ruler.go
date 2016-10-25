@@ -215,7 +215,7 @@ func main() {
 
 			fmt.Printf("Folderid: %x\n", folderid)
 
-			res, er := mapi.CreateMessage(folderid)
+			res, er := mapi.CreateMessage(folderid, nil)
 
 			if er != nil {
 				exit(er)
