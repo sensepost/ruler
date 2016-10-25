@@ -121,7 +121,14 @@ func RPCOpen(rpcType int, URL string) (err error) {
  */
 
 func RPC_Bind() {
-
+	header := RTSHeader{Version: 0x5, VersionMinor: 0x0}
+	header.PTYPE = DCERPC_PKT_BIND
+	header.PfcFlags = PFC_FIRST_FRAG | PFC_LAST_FRAG | PFC_SUPPORT_HEADER_SIGN
+	header.PackedDREP = (1 << 4) | 0
+	header.FragLength = 0
+	header.AuthLength = 0
+	header.CallID = 1
+	fmt.Println(header)
 }
 
 //RPCAUTH allows us to do the NTLM auth inside the RPC message

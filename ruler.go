@@ -30,16 +30,6 @@ func exit(err error) {
 	os.Exit(exitcode)
 }
 
-func sendMail() {
-	//msg := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/plain\r\nContent-Transfer-Encoding:8bit\r\n\r\nsome text\r\n", from, to, subject)
-
-	/*	err := smtp.SendMail(smtp, auth, from, []string{to}, msg)
-		if err != nil {
-			log.Fatal(err)
-		}
-	*/
-}
-
 func getMapiHTTP(autoURLPtr string) *utils.AutodiscoverResp {
 	var resp *utils.AutodiscoverResp
 	var err error
@@ -143,9 +133,12 @@ func main() {
 	}
 
 	if *tcpPtr == false {
+		var mapiURL, abkURL, userDN string
+
 		resp = getMapiHTTP(*autoURLPtr)
-		mapiURL := mapi.ExtractMapiURL(resp)
-		abkURL := mapi.ExtractMapiAddressBookURL(resp)
+		mapiURL = mapi.ExtractMapiURL(resp)
+		abkURL = mapi.ExtractMapiAddressBookURL(resp)
+		userDN = resp.Response.User.LegacyDN
 		if mapiURL == "" {
 			exit(fmt.Errorf("[x] No MAPI URL found. Exiting"))
 			//try RPC
@@ -154,13 +147,15 @@ func main() {
 			//fmt.Println(resp.Response.Account.Protocol[0].Server)
 			//mapi.Init(config, resp.Response.User.LegacyDN, "", mapi.RPC)
 		}
+
 		fmt.Println("[+] MAPI URL found: ", mapiURL)
 		fmt.Println("[+] MAPI AddressBook URL found: ", abkURL)
 		if *checkOnly == true {
 			fmt.Println("[+] Authentication succeeded and MAPI/HTTP is available")
 			os.Exit(0)
 		}
-		mapi.Init(config, resp.Response.User.LegacyDN, mapiURL, abkURL, mapi.HTTP)
+
+		mapi.Init(config, userDN, mapiURL, abkURL, mapi.HTTP)
 	} else {
 		exit(fmt.Errorf("[x] RPC/HTTP not yet supported. "))
 		/*
@@ -187,14 +182,11 @@ func main() {
 			fmt.Println("[*] Let's play addressbook")
 			bindResp, _ := mapi.Bind()
 			fmt.Printf("[*] Server GUID: %x\n", bindResp.ServerGUID)
-			//mapi.GetSpecialTable()
-			//fmt.Println(string(k.Rows[1].PropertyValues[0].PropertyValue))
-			//mapi.DnToMinID()
-			columns := make([]mapi.PropertyTag, 3)
+			columns := make([]mapi.PropertyTag, 2)
 			columns[0] = mapi.PidTagSMTPAddress
 			columns[1] = mapi.PidTagDisplayName
-			columns[2] = mapi.PidTagEntryID
-			rows, _ := mapi.QueryRows(255, columns) //pull first 255 entries
+			//columns[2] = mapi.PidTagEntryID
+			rows, _ := mapi.QueryRows(1600, columns) //pull first 255 entries
 			fmt.Println("[*] Found the following entries: ")
 			for k := 0; k < int(rows.RowCount); k++ {
 				for v := 0; v < int(rows.Columns.PropertyTagCount); v++ {
@@ -207,7 +199,7 @@ func main() {
 		}
 		if *createfPtr == true {
 
-			rows, er := mapi.GetSubFolders(mapi.AuthSession.Folderids[mapi.IPM])
+			rows, er := mapi.GetSubFolders(mapi.AuthSession.Folderids[mapi.INBOX])
 			if er != nil {
 				exit(er)
 			}
@@ -216,51 +208,24 @@ func main() {
 				fmt.Printf("Folder [%x]%s : %x \n", rows.RowData[k][0].ValueArray, rows.RowData[k][0].ValueArray, rows.RowData[k][1].ValueArray)
 				//I am extremely lazy and don't feel like converting from Unicode. This does a comparison to see
 				//if the returned folder name (in unicode) is equal to "Contacts"
-				if fmt.Sprintf("%x", rows.RowData[k][0].ValueArray) == "43006f006e00740061006300740073" {
+				if fmt.Sprintf("%x", rows.RowData[k][0].ValueArray) == "740075006e006e0065006c006d00650073007a0073" { //"49006e0062006f0078" {
 					folderid = rows.RowData[k][1].ValueArray
 				}
 			}
 
 			fmt.Printf("Folderid: %x\n", folderid)
-			rows, er = mapi.GetSubFolders(folderid)
-			if rows == nil {
-				exit(fmt.Errorf("No subfolders"))
-			}
-			for k := 0; k < len(rows.RowData); k++ {
-				fmt.Printf("Folder [%s] : %x \n", rows.RowData[k][0].ValueArray, rows.RowData[k][1].ValueArray)
-				//same as before.. I'm a lazy bastard checks if folder name is "GAL Contacts"
-				if fmt.Sprintf("%x", rows.RowData[k][0].ValueArray) == "470041004c00200043006f006e00740061006300740073" {
-					folderid = rows.RowData[k][1].ValueArray
-				}
-			}
 
-			fmt.Printf("Folderid: %x\n", folderid)
-			rows, er = mapi.GetContents(folderid)
-			//rows, er = mapi.GetContacts(folderid)
-			if rows != nil {
-				for k := 0; k < len(rows.RowData); k++ {
-					fmt.Printf("Subject [%s]  \n", rows.RowData[k][0].ValueArray)
-				}
-			}
+			res, er := mapi.CreateMessage(folderid)
+
 			if er != nil {
 				exit(er)
 			}
+			fmt.Println(res.MessageID)
+
 			if 1 < 2 {
 				return
 			}
-			mapi.GetFolder(0, nil)
-			resp, er := mapi.CreateFolder("tunnelmeszs", true)
-			if er != nil {
-				exit(er)
-			}
-			fmt.Println(resp.FolderID)
-			mapi.ReleaseObject(0x00)
-			mapi.GetFolder(-1, propertyTags)
-			res, er := mapi.CreateMessage(resp.FolderID, "whoami")
-			if er != nil {
-				exit(er)
-			}
-			fmt.Println(res)
+
 			return
 		}
 		//Display All rules
