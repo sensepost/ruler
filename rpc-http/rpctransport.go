@@ -96,76 +96,20 @@ func RPCOpen(rpcType int, URL string) (err error) {
 	return err
 }
 
-//Here we need to do MSRPC setup as per docs
-/**
- *           Secure Connection-Oriented RPC Packet Sequence
- *
- *     Client                                              Server
- *        |                                                   |
- *        |-------------------SECURE_BIND-------------------->|
- *        |                                                   |
- *        |<----------------SECURE_BIND_ACK-------------------|
- *        |                                                   |
- *        |--------------------RPC_AUTH_3-------------------->|
- *        |                                                   |
- *        |                                                   |
- *        |------------------REQUEST_PDU_#1------------------>|
- *        |------------------REQUEST_PDU_#2------------------>|
- *        |                                                   |
- *        |                        ...                        |
- *        |                                                   |
- *        |<-----------------RESPONSE_PDU_#1------------------|
- *        |<-----------------RESPONSE_PDU_#2------------------|
- *        |                                                   |
- *        |                        ...                        |
- */
-
+//RPC_Bind function establishes our session
 func RPC_Bind() {
 	header := RTSHeader{Version: 0x5, VersionMinor: 0x0}
-	header.PTYPE = DCERPC_PKT_BIND
-	header.PfcFlags = PFC_FIRST_FRAG | PFC_LAST_FRAG | PFC_SUPPORT_HEADER_SIGN
-	header.PackedDREP = (1 << 4) | 0
-	header.FragLength = 0
-	header.AuthLength = 0
+	header.Type = DCERPC_PKT_BIND
+	header.PFCFlags = PFC_FIRST_FRAG | PFC_LAST_FRAG
+	header.PackedDrep = (1 << 4) | 0
+	header.FragLen = 0x00
+	header.AuthLen = 0
 	header.CallID = 1
 	fmt.Println(header)
 }
 
-//RPCAUTH allows us to do the NTLM auth inside the RPC message
-func RPCAuth() (err error) {
-
-	//resp, err = client.Do()
-	//session, err := ntlm.CreateClientSession(ntlm.Version1, ntlm.ConnectionlessMode)
-	//if err != nil {
-	//	return nil, err
-	//}
-	/*
-		session.SetUserInfo(t.User, t.Password, t.Domain)
-
-		// parse NTLM challenge
-		challenge, err := ntlm.ParseChallengeMessage(challengeBytes)
-
-		if err != nil {
-			return nil, err
-		}
-
-		err = session.ProcessChallengeMessage(challenge)
-		if err != nil {
-			return nil, err
-		}
-
-		// authenticate user
-		authenticate, err := session.GenerateAuthenticateMessage()
-
-		if err != nil {
-			return nil, err
-		}
-
-		// set NTLM Authorization header
-		//req.Header.Set("Authorization", "NTLM "+encBase64(authenticate.Bytes()))
-		resp, err = client.Do(req)
-
-		return resp, err
-	*/
+//RPCRequest does our actual RPC request
+//returns the mapi data
+func RPCRequest(mapi []byte) []byte {
 	return nil
 }

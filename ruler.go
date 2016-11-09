@@ -91,6 +91,7 @@ func main() {
 	stopSuccessPtr := flag.Bool("stop", false, "Stop on successfully finding a username/password")
 	userList := flag.String("usernames", "", "Filename for a List of usernames")
 	passList := flag.String("passwords", "", "Filename for a List of passwords")
+	userpassList := flag.String("userpass", "", "Filename for a List of username:password combinations separated by a colon, one pair per line")
 	verbosePtr := flag.Bool("v", false, "Be verbose, show failures")
 	conscPtr := flag.Int("attempts", 2, "Number of attempts before delay")
 	delayPtr := flag.Int("delay", 5, "Delay between attempts")
@@ -106,7 +107,11 @@ func main() {
 
 	if *brutePtr == true {
 		fmt.Println("[*] Starting bruteforce")
-		autodiscover.BruteForce(*domainPtr, *userList, *passList, *basicPtr, *insecurePtr, *stopSuccessPtr, *verbosePtr, *conscPtr, *delayPtr)
+		if *userpassList == "" {
+			autodiscover.BruteForce(*domainPtr, *userList, *passList, *basicPtr, *insecurePtr, *stopSuccessPtr, *verbosePtr, *conscPtr, *delayPtr)
+			return
+		}
+		autodiscover.UserPassBruteForce(*domainPtr, *userpassList, *basicPtr, *insecurePtr, *stopSuccessPtr, *verbosePtr, *conscPtr, *delayPtr)
 		return
 	}
 
@@ -125,7 +130,6 @@ func main() {
 	var err error
 
 	if *autodiscoverOnly == true {
-
 		resp = getRPCHTTP(*autoURLPtr)
 		fmt.Printf("[*] Autodiscover enabled and we could Authenticate.\nAutodiscover returned: %s", resp.Response.User)
 		os.Exit(0)
@@ -195,7 +199,8 @@ func main() {
 				}
 				fmt.Println("")
 			}
-			return
+			exit(nil)
+
 		}
 		if *createfPtr == true {
 

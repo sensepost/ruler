@@ -43,6 +43,7 @@ type Session struct {
 	RPCIn         http.Client
 	RPCOut        http.Client
 	RPCSet        bool
+	RPCCookie     []byte //16-byte cookie for the RPC session
 	UserDN        []byte
 	Trigger       string
 }
