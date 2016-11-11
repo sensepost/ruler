@@ -14,7 +14,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/ThomsonReutersEikon/go-ntlm/ntlm"
 	"github.com/sensepost/ruler/utils"
@@ -37,7 +36,8 @@ func (t NtlmTransport) RoundTrip(req *http.Request) (res *http.Response, err err
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: t.Insecure},
 	}
-	client := http.Client{Transport: tr, Timeout: time.Minute * 2}
+
+	client := http.Client{Transport: tr, Timeout: 0} //time.Minute * 2}
 	resp, err := client.Do(r)
 
 	if err != nil {
@@ -99,8 +99,6 @@ func (t NtlmTransport) RoundTrip(req *http.Request) (res *http.Response, err err
 		// set NTLM Authorization header
 		req.Header.Set("Authorization", "NTLM "+utils.EncBase64(authenticate.Bytes()))
 		resp, err = client.Do(req)
-
 	}
-
 	return resp, err
 }

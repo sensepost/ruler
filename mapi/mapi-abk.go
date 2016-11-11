@@ -26,8 +26,8 @@ func Bind() (*BindResponse, error) {
 	bindReq.AuxiliaryBufferSize = 0x00
 
 	if AuthSession.Transport == HTTP {
-		resp, responseBody := mapiRequestHTTP(AuthSession.ABKURL.String(), "BIND", bindReq.Marshal())
-		responseBody, err := readResponse(resp.Header, responseBody)
+		responseBody, err := mapiRequestHTTP(AuthSession.ABKURL.String(), "BIND", bindReq.Marshal())
+
 		if err != nil {
 			return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
 		}
@@ -53,8 +53,8 @@ func GetSpecialTable() (*GetSpecialTableResponse, error) {
 	gstReq.AuxiliaryBufferSize = 0x00
 
 	if AuthSession.Transport == HTTP {
-		resp, responseBody := mapiRequestHTTP(AuthSession.ABKURL.String(), "GetSpecialTable", gstReq.Marshal())
-		responseBody, err := readResponse(resp.Header, responseBody)
+		responseBody, err := mapiRequestHTTP(AuthSession.ABKURL.String(), "GetSpecialTable", gstReq.Marshal())
+
 		if err != nil {
 			return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
 		}
@@ -77,8 +77,8 @@ func DnToMinID() (*DnToMinIDResponse, error) {
 	dntominid.NameCount = 1
 	dntominid.NameValues = []byte{0x2F, 0x4F, 0x3D, 0x45, 0x56, 0x49, 0x4C, 0x43, 0x4F, 0x52, 0x50, 0x00}
 	if AuthSession.Transport == HTTP {
-		resp, responseBody := mapiRequestHTTP(AuthSession.ABKURL.String(), "DNToMId", dntominid.Marshal())
-		responseBody, err := readResponse(resp.Header, responseBody)
+		responseBody, err := mapiRequestHTTP(AuthSession.ABKURL.String(), "DNToMId", dntominid.Marshal())
+
 		if err != nil {
 			fmt.Println(err)
 			return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
@@ -98,9 +98,9 @@ func GetProps() {
 	isAuthenticated() //check if we actually have a session
 
 	if AuthSession.Transport == HTTP {
-		resp, rbody := mapiRequestHTTP(AuthSession.ABKURL.String(), "GetProps", []byte{})
+		resp, _ := mapiRequestHTTP(AuthSession.ABKURL.String(), "GetProps", []byte{})
 		fmt.Println(resp)
-		fmt.Println(string(rbody))
+		//fmt.Println(string(rbody))
 		fmt.Println(AuthSession.CookieJar)
 	}
 }
@@ -115,7 +115,7 @@ func QueryRows(rowCount int, columns []PropertyTag) (*QueryRowsResponse, error) 
 	qRows.ExplicitTableCount = 0x00
 	qRows.RowCount = uint32(rowCount)
 	qRows.HasColumns = 0xFF
-	//[]byte{0x1F, 0x00, 0x01, 0x30, 0x1F, 0x00, 0x17, 0x3A, 0x1F, 0x00, 0x08, 0x3A, 0x1F, 0x00, 0x19, 0x3A, 0x1F, 0x00, 0x18, 0x3A, 0x1F, 0x00, 0xFE, 0x39, 0x1F, 0x00, 0x16, 0x3A, 0x1F, 0x00, 0x00, 0x3A, 0x1F, 0x00, 0x02, 0x30, 0x02, 0x01, 0xFF, 0x0F, 0x03, 0x00, 0xFE, 0x0F, 0x03, 0x00, 0x00, 0x39, 0x03, 0x00, 0x05, 0x39, 0x02, 0x01, 0xF6, 0x0F, 0x1F, 0x00, 0x03, 0x30}
+
 	qRows.Columns = LargePropertyTagArray{}
 	qRows.Columns.PropertyTagCount = uint32(len(columns))
 	qRows.Columns.PropertyTags = columns //
@@ -123,9 +123,7 @@ func QueryRows(rowCount int, columns []PropertyTag) (*QueryRowsResponse, error) 
 	qRows.AuxiliaryBufferSize = 0x00
 
 	if AuthSession.Transport == HTTP {
-		resp, responseBody := mapiRequestHTTP(AuthSession.ABKURL.String(), "QueryRows", qRows.Marshal())
-
-		responseBody, err := readResponse(resp.Header, responseBody)
+		responseBody, err := mapiRequestHTTP(AuthSession.ABKURL.String(), "QueryRows", qRows.Marshal())
 
 		if err != nil {
 			return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)

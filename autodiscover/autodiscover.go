@@ -17,7 +17,7 @@ import (
 //globals
 
 //SessionConfig holds the configuration for this autodiscover session
-var SessionConfig *utils.Config
+var SessionConfig *utils.Session
 var autodiscoverStep int
 
 //the xml for the autodiscover service
@@ -124,6 +124,7 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, error) {
 	//if we have been redirected to outlook, change the auth header to basic auth
 	if SessionConfig.Basic == false {
 		req.SetBasicAuth(SessionConfig.Email, SessionConfig.Pass)
+		SessionConfig.BasicAuth = req.Header.Get("WWW-Authenticate")
 	} else {
 		req.SetBasicAuth(SessionConfig.User, SessionConfig.Pass)
 	}
@@ -166,7 +167,9 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, error) {
 			}
 			return nil, fmt.Errorf("[x] Error in autodiscover response, %s", err)
 		}
+		SessionConfig.NTLMAuth = req.Header.Get("Authorization")
 		if SessionConfig.Verbose == true {
+
 			fmt.Println(string(body))
 		}
 		//check if we got a RedirectAddr ,

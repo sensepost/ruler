@@ -1,6 +1,10 @@
 package mapi
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/sensepost/ruler/utils"
+)
 
 //BindRequest struct used in bind request to bind to addressbook
 type BindRequest struct {
@@ -128,33 +132,33 @@ type AddressBookPropertyValue struct {
 
 //Marshal turn BindRequest into Bytes
 func (bindRequest BindRequest) Marshal() []byte {
-	return BodyToBytes(bindRequest)
+	return utils.BodyToBytes(bindRequest)
 }
 
 //Marshal turn GetSpecialTableRequest into Bytes
 func (specialTableRequest GetSpecialTableRequest) Marshal() []byte {
-	return BodyToBytes(specialTableRequest)
+	return utils.BodyToBytes(specialTableRequest)
 }
 
 //Marshal turn DnToMinIDRequest into Bytes
 func (dntominid DnToMinIDRequest) Marshal() []byte {
-	return BodyToBytes(dntominid)
+	return utils.BodyToBytes(dntominid)
 }
 
 //Marshal turn QueryRowsRequest into Bytes
 func (qrows QueryRowsRequest) Marshal() []byte {
-	return BodyToBytes(qrows)
+	return utils.BodyToBytes(qrows)
 }
 
 //Marshal turn AddressBookPropertyValue into Bytes
 func (abpv AddressBookPropertyValue) Marshal() []byte {
-	return BodyToBytes(abpv)
+	return utils.BodyToBytes(abpv)
 }
 
 //Unmarshal func
 func (abt *AddressBookPropertyValueList) Unmarshal(resp []byte) (int, error) {
 	pos := 0
-	abt.PropertyValueCount, pos = readUint32(pos, resp)
+	abt.PropertyValueCount, pos = utils.ReadUint32(pos, resp)
 	abt.PropertyValues = make([]AddressBookTaggedPropertyValue, int(abt.PropertyValueCount))
 
 	for k := 0; k < len(abt.PropertyValues); k++ {
@@ -168,7 +172,7 @@ func (abt *AddressBookPropertyValueList) Unmarshal(resp []byte) (int, error) {
 //Unmarshal func
 func (lpta *LargePropertyTagArray) Unmarshal(resp []byte) (int, error) {
 	pos := 0
-	lpta.PropertyTagCount, pos = readUint32(pos, resp)
+	lpta.PropertyTagCount, pos = utils.ReadUint32(pos, resp)
 	lpta.PropertyTags = make([]PropertyTag, int(lpta.PropertyTagCount))
 
 	for k := 0; k < len(lpta.PropertyTags); k++ {
@@ -182,7 +186,7 @@ func (lpta *LargePropertyTagArray) Unmarshal(resp []byte) (int, error) {
 //Unmarshal func
 func (abpr *AddressBookPropertyRow) Unmarshal(resp []byte, columns LargePropertyTagArray) (int, error) {
 	pos := 0
-	abpr.Flags, pos = readByte(pos, resp)
+	abpr.Flags, pos = utils.ReadByte(pos, resp)
 
 	if abpr.Flags == 0x0 { //AddressBookPropertyValue
 		abpr.AddressBookPropertyValue = make([]AddressBookPropertyValue, int(columns.PropertyTagCount))
@@ -208,25 +212,25 @@ func ReadPropertyValue(resp []byte, propType uint16) ([]byte, int) {
 	pos := 0
 	var propertyValue []byte
 	if propType == PtypInteger32 {
-		propertyValue, pos = readBytes(pos, 4, resp)
+		propertyValue, pos = utils.ReadBytes(pos, 4, resp)
 	} else if propType == PtypInteger64 {
-		propertyValue, pos = readBytes(pos, 8, resp)
+		propertyValue, pos = utils.ReadBytes(pos, 8, resp)
 	} else if propType == PtypString {
-		t, p := readByte(pos, resp) // check HasValue
+		t, p := utils.ReadByte(pos, resp) // check HasValue
 		pos = p
 		if t == 0xFF { // check if hasValue
-			propertyValue, pos = readUnicodeString(pos, resp)
+			propertyValue, pos = utils.ReadUnicodeString(pos, resp)
 			pos++
 		}
 	} else if propType == PtypBoolean {
-		propertyValue, pos = readBytes(pos, 1, resp)
+		propertyValue, pos = utils.ReadBytes(pos, 1, resp)
 	} else if propType == PtypBinary {
-		t, p := readByte(pos, resp) // check HasValue
+		t, p := utils.ReadByte(pos, resp) // check HasValue
 		pos = p
 		if t == 0xFF {
-			cnt, p := readUint32(pos, resp) // check cnt
+			cnt, p := utils.ReadUint32(pos, resp) // check cnt
 			pos = p
-			propertyValue, pos = readBytes(pos, int(cnt), resp)
+			propertyValue, pos = utils.ReadBytes(pos, int(cnt), resp)
 
 		}
 	}
@@ -236,8 +240,8 @@ func ReadPropertyValue(resp []byte, propType uint16) ([]byte, int) {
 //Unmarshal func for the AddressBookTaggedPropertyValue structure
 func (abt *AddressBookTaggedPropertyValue) Unmarshal(resp []byte) (int, error) {
 	pos, p := 0, 0
-	abt.PropertyType, pos = readUint16(pos, resp)
-	abt.PropertyID, pos = readUint16(pos, resp)
+	abt.PropertyType, pos = utils.ReadUint16(pos, resp)
+	abt.PropertyID, pos = utils.ReadUint16(pos, resp)
 	abt.PropertyValue, p = ReadPropertyValue(resp[pos:], abt.PropertyType)
 	pos += p
 	return pos, nil
@@ -246,15 +250,15 @@ func (abt *AddressBookTaggedPropertyValue) Unmarshal(resp []byte) (int, error) {
 //Unmarshal func
 func (bindResponse *BindResponse) Unmarshal(resp []byte) (int, error) {
 	pos := 0
-	bindResponse.StatusCode, pos = readUint32(pos, resp)
-	bindResponse.ErrorCode, pos = readUint32(pos, resp)
+	bindResponse.StatusCode, pos = utils.ReadUint32(pos, resp)
+	bindResponse.ErrorCode, pos = utils.ReadUint32(pos, resp)
 	if bindResponse.ErrorCode != 0 {
 		return pos, fmt.Errorf("Non-zero return value %d", bindResponse.ErrorCode)
 	}
-	bindResponse.ServerGUID, pos = readBytes(pos, 16, resp)
-	bindResponse.AuxiliaryBufferSize, pos = readUint32(pos, resp)
+	bindResponse.ServerGUID, pos = utils.ReadBytes(pos, 16, resp)
+	bindResponse.AuxiliaryBufferSize, pos = utils.ReadUint32(pos, resp)
 	if bindResponse.AuxiliaryBufferSize != 0 {
-		bindResponse.AuxiliaryBuffer, pos = readBytes(pos, int(bindResponse.AuxiliaryBufferSize), resp)
+		bindResponse.AuxiliaryBuffer, pos = utils.ReadBytes(pos, int(bindResponse.AuxiliaryBufferSize), resp)
 	}
 	return pos, nil
 }
@@ -262,19 +266,19 @@ func (bindResponse *BindResponse) Unmarshal(resp []byte) (int, error) {
 //Unmarshal func
 func (gstResponse *GetSpecialTableResponse) Unmarshal(resp []byte) (int, error) {
 	pos := 0
-	gstResponse.StatusCode, pos = readUint32(pos, resp)
-	gstResponse.ErrorCode, pos = readUint32(pos, resp)
+	gstResponse.StatusCode, pos = utils.ReadUint32(pos, resp)
+	gstResponse.ErrorCode, pos = utils.ReadUint32(pos, resp)
 	if gstResponse.ErrorCode != 0 {
 		return pos, fmt.Errorf("Non-zero return value %d", gstResponse.ErrorCode)
 	}
-	gstResponse.CodePage, pos = readUint32(pos, resp)
-	gstResponse.HasVersion, pos = readByte(pos, resp)
+	gstResponse.CodePage, pos = utils.ReadUint32(pos, resp)
+	gstResponse.HasVersion, pos = utils.ReadByte(pos, resp)
 	if gstResponse.HasVersion == 0xFF {
-		gstResponse.Version, pos = readUint32(pos, resp)
+		gstResponse.Version, pos = utils.ReadUint32(pos, resp)
 	}
-	gstResponse.HasRows, pos = readByte(pos, resp)
+	gstResponse.HasRows, pos = utils.ReadByte(pos, resp)
 	if gstResponse.HasRows == 0xFF {
-		gstResponse.RowsCount, pos = readUint32(pos, resp)
+		gstResponse.RowsCount, pos = utils.ReadUint32(pos, resp)
 		fmt.Println(gstResponse.RowsCount)
 		gstResponse.Rows = make([]AddressBookPropertyValueList, gstResponse.RowsCount)
 		for k := 0; k < int(gstResponse.RowsCount); k++ {
@@ -283,9 +287,9 @@ func (gstResponse *GetSpecialTableResponse) Unmarshal(resp []byte) (int, error) 
 			pos += p
 		}
 	}
-	gstResponse.AuxiliaryBufferSize, pos = readUint32(pos, resp)
+	gstResponse.AuxiliaryBufferSize, pos = utils.ReadUint32(pos, resp)
 	if gstResponse.AuxiliaryBufferSize != 0 {
-		gstResponse.AuxiliaryBuffer, pos = readBytes(pos, int(gstResponse.AuxiliaryBufferSize), resp)
+		gstResponse.AuxiliaryBuffer, pos = utils.ReadBytes(pos, int(gstResponse.AuxiliaryBufferSize), resp)
 	}
 	return pos, nil
 }
@@ -293,18 +297,18 @@ func (gstResponse *GetSpecialTableResponse) Unmarshal(resp []byte) (int, error) 
 //Unmarshal func
 func (dnResponse *DnToMinIDResponse) Unmarshal(resp []byte) (int, error) {
 	pos := 0
-	dnResponse.StatusCode, pos = readUint32(pos, resp)
-	dnResponse.ErrorCode, pos = readUint32(pos, resp)
+	dnResponse.StatusCode, pos = utils.ReadUint32(pos, resp)
+	dnResponse.ErrorCode, pos = utils.ReadUint32(pos, resp)
 	if dnResponse.ErrorCode != 0 {
 		return pos, fmt.Errorf("Non-zero return value %d", dnResponse.ErrorCode)
 	}
 	if dnResponse.HasMinimalIds == 0xFF {
-		dnResponse.MinimalIDCount, pos = readUint32(pos, resp)
-		//dnResponse.MinimalIds, pos = read
+		dnResponse.MinimalIDCount, pos = utils.ReadUint32(pos, resp)
+		//dnResponse.MinimalIds, pos = utils.Read
 	}
-	dnResponse.AuxiliaryBufferSize, pos = readUint32(pos, resp)
+	dnResponse.AuxiliaryBufferSize, pos = utils.ReadUint32(pos, resp)
 	if dnResponse.AuxiliaryBufferSize != 0 {
-		dnResponse.AuxiliaryBuffer, pos = readBytes(pos, int(dnResponse.AuxiliaryBufferSize), resp)
+		dnResponse.AuxiliaryBuffer, pos = utils.ReadBytes(pos, int(dnResponse.AuxiliaryBufferSize), resp)
 	}
 	return pos, nil
 }
@@ -312,22 +316,22 @@ func (dnResponse *DnToMinIDResponse) Unmarshal(resp []byte) (int, error) {
 //Unmarshal func
 func (qrResponse *QueryRowsResponse) Unmarshal(resp []byte) (int, error) {
 	pos := 0
-	qrResponse.StatusCode, pos = readUint32(pos, resp)
-	qrResponse.ErrorCode, pos = readUint32(pos, resp)
+	qrResponse.StatusCode, pos = utils.ReadUint32(pos, resp)
+	qrResponse.ErrorCode, pos = utils.ReadUint32(pos, resp)
 	if qrResponse.ErrorCode != 0 {
 		return pos, fmt.Errorf("Non-zero return value %d", qrResponse.ErrorCode)
 	}
-	qrResponse.HasState, pos = readByte(pos, resp)
+	qrResponse.HasState, pos = utils.ReadByte(pos, resp)
 	if qrResponse.HasState == 0xFF {
-		qrResponse.State, pos = readBytes(pos, 36, resp)
+		qrResponse.State, pos = utils.ReadBytes(pos, 36, resp)
 	}
-	qrResponse.HasColsAndRows, pos = readByte(pos, resp)
+	qrResponse.HasColsAndRows, pos = utils.ReadByte(pos, resp)
 	if qrResponse.HasColsAndRows == 0xFF {
 		columns := LargePropertyTagArray{}
 		p, _ := columns.Unmarshal(resp[pos:])
 		pos += p
 		qrResponse.Columns = columns
-		qrResponse.RowCount, pos = readUint32(pos, resp)
+		qrResponse.RowCount, pos = utils.ReadUint32(pos, resp)
 		qrResponse.RowData = make([]AddressBookPropertyRow, int(qrResponse.RowCount))
 		for k := 0; k < int(qrResponse.RowCount); k++ {
 			qrResponse.RowData[k] = AddressBookPropertyRow{}
@@ -335,9 +339,9 @@ func (qrResponse *QueryRowsResponse) Unmarshal(resp []byte) (int, error) {
 			pos += p
 		}
 	}
-	qrResponse.AuxiliaryBufferSize, pos = readUint32(pos, resp)
+	qrResponse.AuxiliaryBufferSize, pos = utils.ReadUint32(pos, resp)
 	if qrResponse.AuxiliaryBufferSize != 0 {
-		qrResponse.AuxiliaryBuffer, pos = readBytes(pos, int(qrResponse.AuxiliaryBufferSize), resp)
+		qrResponse.AuxiliaryBuffer, pos = utils.ReadBytes(pos, int(qrResponse.AuxiliaryBufferSize), resp)
 	}
 	return pos, nil
 }

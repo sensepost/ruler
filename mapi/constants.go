@@ -1,5 +1,7 @@
 package mapi
 
+import "github.com/sensepost/ruler/utils"
+
 const (
 	uFlagsUser         = 0x00000000
 	uFlagsAdmin        = 0x00000001
@@ -149,7 +151,7 @@ var PidTagSentMailSvrEID = PropertyTag{0x00FB, 0x6740}
 //PidTagBody a
 var PidTagBody = PropertyTag{PtypString, 0x1000}
 
-//PidTagBodyContentId a
+//PidTagBodyContentID a
 var PidTagBodyContentID = PropertyTag{PtypString, 0x1015}
 
 //PidTagConversationTopic a
@@ -158,8 +160,8 @@ var PidTagConversationTopic = PropertyTag{PtypString, 0x0070}
 //PidTagMessageClass this will always be IPM.Note
 var PidTagMessageClass = PropertyTag{PtypString, 0x001A}
 
-//PidTagMessageClass this will always be IPM.Note
-var PidTagMessageClassIPMNote = TaggedPropertyValue{PropertyTag{PtypString, 0x001A}, UniString("IPM.Note")}
+//PidTagMessageClassIPMNote this will always be IPM.Note
+var PidTagMessageClassIPMNote = TaggedPropertyValue{PropertyTag{PtypString, 0x001A}, utils.UniString("IPM.Note")}
 
 //PidTagMessageFlags setting this to unsent
 var PidTagMessageFlags = PropertyTag{PtypInteger32, 0x0E07} //0x00000008

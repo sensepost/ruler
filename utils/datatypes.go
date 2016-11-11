@@ -24,6 +24,11 @@ type Session struct {
 	User          string
 	Pass          string
 	Email         string
+	Domain        string
+	Basic         bool
+	Insecure      bool
+	Verbose       bool
+	Admin         bool
 	LID           string
 	URL           *url.URL
 	ABKURL        *url.URL //URL for the AddressBook Provider
@@ -37,15 +42,16 @@ type Session struct {
 	Authenticated bool
 	Folderids     [][]byte
 	RulesHandle   []byte
-	Insecure      bool
-	NTLMAuth      string
-	Admin         bool
-	RPCIn         http.Client
-	RPCOut        http.Client
-	RPCSet        bool
-	RPCCookie     []byte //16-byte cookie for the RPC session
-	UserDN        []byte
-	Trigger       string
+
+	NTLMAuth  string
+	BasicAuth string
+
+	RPCIn     http.Client
+	RPCOut    http.Client
+	RPCSet    bool
+	RPCCookie []byte //16-byte cookie for the RPC session
+	UserDN    []byte
+	Trigger   string
 }
 
 //AutodiscoverResp structure for unmarshal

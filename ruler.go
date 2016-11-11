@@ -13,7 +13,7 @@ import (
 )
 
 //globals
-var config utils.Config
+var config utils.Session
 
 //doRequest to a target domain
 func exit(err error) {
@@ -143,6 +143,7 @@ func main() {
 		mapiURL = mapi.ExtractMapiURL(resp)
 		abkURL = mapi.ExtractMapiAddressBookURL(resp)
 		userDN = resp.Response.User.LegacyDN
+
 		if mapiURL == "" {
 			exit(fmt.Errorf("[x] No MAPI URL found. Exiting"))
 			//try RPC
@@ -159,14 +160,13 @@ func main() {
 			os.Exit(0)
 		}
 
-		mapi.Init(config, userDN, mapiURL, abkURL, mapi.HTTP)
+		mapi.Init(&config, userDN, mapiURL, abkURL, mapi.HTTP)
 	} else {
-		exit(fmt.Errorf("[x] RPC/HTTP not yet supported. "))
-		/*
-			resp = getRPCHTTP(*autoURLPtr)
-			fmt.Println(resp.Response.Account.Protocol[0].Server)
-			mapi.Init(config, resp.Response.User.LegacyDN, "", mapi.RPC)
-		*/
+		//exit(fmt.Errorf("[x] RPC/HTTP not yet supported. "))
+
+		resp = getRPCHTTP(*autoURLPtr)
+		fmt.Println(resp.Response.Account.Protocol[0].Server)
+		mapi.Init(&config, resp.Response.User.LegacyDN, "", "", mapi.RPC)
 	}
 
 	logon, err := mapi.Authenticate()
