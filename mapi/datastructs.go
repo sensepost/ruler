@@ -32,20 +32,20 @@ type ConnectRequest struct {
 	DefaultCodePage   uint32
 	LcidSort          uint32
 	LcidString        uint32
-	RPCStuff          []byte
 	AuxilliaryBufSize uint32
 	AuxilliaryBuf     []byte
 }
 
 type ConnectRequestRPC struct {
-	UserDN            []byte
-	Flags             uint32
-	DNHash            []byte
-	DefaultCodePage   uint32
-	LcidSort          uint32
-	LcidString        uint32
-	AuxilliaryBufSize uint32
-	AuxilliaryBuf     []byte
+	UserDN          []byte
+	Flags           uint32
+	DNHash          []byte
+	DefaultCodePage uint32
+	LcidSort        uint32
+	LcidString      uint32
+	RPCStuff        []byte
+	//AuxilliaryBufSize uint32
+	//AuxilliaryBuf     []byte
 }
 
 //DisconnectRequest structure
@@ -745,6 +745,11 @@ func (execRequest ExecuteRequest) Marshal() []byte {
 
 //Marshal turn ConnectRequest into Bytes
 func (connRequest ConnectRequest) Marshal() []byte {
+	return utils.BodyToBytes(connRequest)
+}
+
+//Marshal turn ConnectRequest into Bytes
+func (connRequest ConnectRequestRPC) Marshal() []byte {
 	return utils.BodyToBytes(connRequest)
 }
 

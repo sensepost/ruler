@@ -44,7 +44,7 @@ const (
 	RPCOUT = 2
 )
 
-func SetupHTTPNTLM(rpctype string, URL string, dataout []byte) (net.Conn, error) {
+func SetupHTTPNTLM(rpctype string, URL string) (net.Conn, error) {
 	u, err := url.Parse(URL)
 	var connection net.Conn
 	if u.Scheme == "http" {
@@ -115,15 +115,11 @@ func SetupHTTPNTLM(rpctype string, URL string, dataout []byte) (net.Conn, error)
 	if rpctype == "RPC_IN_DATA" {
 		request = fmt.Sprintf("%sContent-Length: 1073741824\r\n", request)
 	} else if rpctype == "RPC_OUT_DATA" {
-		request = fmt.Sprintf("%sContent-Length: %d\r\n", request, len(dataout))
+		request = fmt.Sprintf("%sContent-Length: 76\r\n", request)
 	}
 	request = fmt.Sprintf("%sAuthorization: NTLM %s\r\n\r\n", request, utils.EncBase64(authenticate.Bytes()))
 
 	connection.Write([]byte(request))
-
-	if rpctype == "RPC_OUT_DATA" {
-		//connection.Write(dataout)
-	}
 
 	return connection, nil
 }
@@ -134,7 +130,7 @@ func RPCOpen(URL string) (err error) {
 	//can't find a way to keep the write channel open (other than going over to http/2, which isn't valid here)
 	//so this is some damn messy code, but screw it
 	//dataout := []byte{0x05, 0x00, 0x14, 0x03, 0x10, 0x00, 0x00, 0x00, 0x68, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x06, 0x00, 0x06, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x38, 0xd8, 0xff, 0xfc, 0x95, 0xb4, 0x6f, 0x7c, 0x40, 0xa5, 0xbe, 0xf2, 0x4d, 0xe2, 0x12, 0x13, 0x03, 0x00, 0x00, 0x00, 0x4b, 0x4b, 0x78, 0x90, 0x04, 0xb8, 0xb6, 0xe3, 0x8a, 0x05, 0x7f, 0x3f, 0x07, 0xe0, 0x5d, 0xb7, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x05, 0x00, 0x00, 0x00, 0xe0, 0x93, 0x04, 0x00, 0x0c, 0x00, 0x00, 0x00, 0xa5, 0xbb, 0x0f, 0xac, 0x97, 0x69, 0xf5, 0x47, 0x8b, 0x97, 0x5f, 0x9a, 0x08, 0xcd, 0x70, 0x02}
-	rpcInConn, _ = SetupHTTPNTLM("RPC_IN_DATA", URL, nil)
+	rpcInConn, _ = SetupHTTPNTLM("RPC_IN_DATA", URL)
 
 	go RPCOpenOut(URL)
 
@@ -142,9 +138,8 @@ func RPCOpen(URL string) (err error) {
 		data := make([]byte, 2048)
 		n, err := rpcInR.Read(data)
 		if n > 0 {
-			fmt.Printf("sending some data: %x\n", data[:n])
+			//fmt.Printf("sending some data: %x\n", data[:n])
 			_, err = rpcInConn.Write(data[:n])
-
 		}
 		if err != nil && err != io.EOF {
 			fmt.Println(err)
@@ -156,15 +151,33 @@ func RPCOpen(URL string) (err error) {
 }
 
 func RPCOpenOut(URL string) error {
+	rpcOutConn, _ = SetupHTTPNTLM("RPC_OUT_DATA", URL)
 
-	dataout := make([]byte, 76)
-	rpcOutConn, _ = SetupHTTPNTLM("RPC_OUT_DATA", URL, dataout)
+	//Generate out-channel cookie
+	//20 byte channel cookie for out-channel
+	connB1 := ConnB1()
+	//Send CONN/A1
+	connA1 := ConnA1(connB1.VirtualConnectCookie.Cookie)
+	RPCOutWrite(connA1.Marshal())
 
+	//send CONN/B1
+	RPCWrite(connB1.Marshal())
+	data := make([]byte, 1024)
+
+	n, _ := rpcOutConn.Read(data) //read the 200 response
+	//check we don't have part of an RPC message in here
+	for k := range data {
+		if len(data) > k+3 {
+			if data[k] == 0x0d && data[k+1] == 0x0a && data[k+2] == 0x0d && data[k+3] == 0x0a {
+				rpcOutW.Write(data[k+4 : n])
+			}
+		}
+	}
 	for {
 		data := make([]byte, 1024)
 		n, err := rpcOutConn.Read(data)
 		if n > 0 {
-			fmt.Printf("Receving some data: %x\n", data)
+			//fmt.Printf("Receving some data: %x\n", data)
 			rpcOutW.Write(data[:n])
 		}
 		if err != nil && err != io.EOF {
@@ -191,16 +204,39 @@ func RPCPing() []byte {
 //returns the mapi data
 func RPCRequest(mapi []byte) ([]byte, error) {
 	header := RTSHeader{Version: 0x05, VersionMinor: 0, Type: DCERPC_PKT_REQUEST, PFCFlags: 0x03, AuthLen: 0, CallID: 2}
+	header.PackedDrep = 16
+	header.Flags = 784 //132
+	header.NumberOfCommands = 0x0000
 	req := RTSRequest{}
 	req.Header = header
-	req.Flags = 0x84
-	req.NumberOfCommands = 0x01
-	req.DontKnow = []byte{0x00, 0x00, 0x0a, 0x00, 0x7b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x7b, 0x00, 0x00, 0x00}
+	req.DontKnow = []byte{0x00, 0x00, 0x0b, 0x00, 0x00, 0x00, 0x00, 0x00}
+	req.Cookie = AuthSession.RPCCookie
 	req.Data = mapi
-	//req.Sec = RTSSec{0x1008}
+	req.Sec = 4104
 	req.Header.FragLen = uint16(len(req.Marshal()))
 	RPCWrite(req.Marshal())
 	return RPCRead()
+}
+
+func RPCConnectRequest(mapi []byte) ([]byte, error) {
+
+	header := RTSHeader{Version: 0x05, VersionMinor: 0, Type: DCERPC_PKT_REQUEST, PFCFlags: 0x03, AuthLen: 0, CallID: 2}
+	header.PackedDrep = 16
+	header.Flags = 388 //132
+	header.NumberOfCommands = 0x00
+	req := RTSRequest{}
+	req.Header = header
+	req.Cookie = []byte{}
+	req.DontKnow = []byte{0x00, 0x00, 0x0a, 0x00, 0x7b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x7b, 0x00, 0x00, 0x00}
+	req.Data = mapi
+	req.Sec = 4104
+	req.Header.FragLen = uint16(len(req.Marshal()))
+	RPCWrite(req.Marshal())
+
+	resp, err := RPCRead()
+	fmt.Printf("\n\n%x\n%x\n\n", resp[28:44], resp)
+	AuthSession.RPCCookie = resp[28:44]
+	return resp, err
 }
 
 func RPCWrite(data []byte) {
@@ -213,10 +249,31 @@ func RPCOutWrite(data []byte) {
 
 func RPCRead() ([]byte, error) {
 	buf := make([]byte, 2048)
-	n, err := rpcOutR.Read(buf)
-	if err != nil {
-		return nil, err
+	//var tmp []byte
+	//read full request here
+	response := make([]byte, 0)
+
+	for {
+		n, err := rpcOutR.Read(buf)
+		if err != nil {
+			return nil, err
+		}
+		//fmt.Printf("\nRPC READ: %x\n Resp: %x\n Buf: %x\n %d \n", buf[:n], response, buf, n)
+		response = append(response, buf[:n]...)
+		if n > 20 {
+			break
+		}
 	}
-	fmt.Printf("\nThis was read here\n%x\n%s", buf[:n], err)
-	return buf[:n], nil
+
+	if response[3] == 0x05 {
+		for k := 3; k < len(response); k++ {
+			if response[k] == 0x00 {
+				response = append([]byte{0x05}, response[k:len(response)-2]...)
+				break
+			}
+		}
+
+	}
+	fmt.Printf("\nRPC READ RESPONSE: %x\n", response)
+	return response, nil
 }

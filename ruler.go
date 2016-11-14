@@ -67,6 +67,25 @@ func getRPCHTTP(autoURLPtr string) *utils.AutodiscoverResp {
 	if resp.Response.Error != (utils.AutoError{}) {
 		exit(fmt.Errorf("[x] The autodiscover service responded with an error.\n%s", resp.Response.Error.Message))
 	}
+
+	url := ""
+	user := ""
+	for _, v := range resp.Response.Account.Protocol {
+		if v.Type == "EXPR" {
+			if v.SSL == "Off" {
+				url = "http://" + v.Server
+			} else {
+				url = "https://" + v.Server
+			}
+
+		}
+		if v.Type == "EXCH" {
+			user = v.Server
+		}
+	}
+
+	config.RPCURL = fmt.Sprintf("%s/rpc/rpcproxy.dll?%s:6001", url, user)
+	fmt.Printf("[+] RPC URL set: %s\n", config.RPCURL)
 	return resp
 }
 
@@ -165,7 +184,7 @@ func main() {
 		//exit(fmt.Errorf("[x] RPC/HTTP not yet supported. "))
 
 		resp = getRPCHTTP(*autoURLPtr)
-		fmt.Println(resp.Response.Account.Protocol[0].Server)
+		//os.Exit(0)
 		mapi.Init(&config, resp.Response.User.LegacyDN, "", "", mapi.RPC)
 	}
 
