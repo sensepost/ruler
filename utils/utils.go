@@ -3,6 +3,7 @@ package utils
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"reflect"
 )
 
@@ -78,7 +79,7 @@ func BodyToBytes(DataStruct interface{}) []byte {
 				binary.Write(byteNum, binary.LittleEndian, v.Index(i).Interface())
 				dumped = append(dumped, byteNum.Bytes()...)
 			} else {
-				if v.Index(i).Kind() == reflect.Struct || v.Index(i).Kind() == reflect.Slice {
+				if v.Index(i).Kind() == reflect.Struct || v.Index(i).Kind() == reflect.Slice || v.Index(i).Kind() == reflect.Interface {
 					value = BodyToBytes(v.Index(i).Interface())
 				} else {
 					value = v.Index(i).Bytes()
@@ -93,9 +94,10 @@ func BodyToBytes(DataStruct interface{}) []byte {
 				binary.Write(byteNum, binary.LittleEndian, v.Field(i).Interface())
 				dumped = append(dumped, byteNum.Bytes()...)
 			} else {
-				if v.Field(i).Kind() == reflect.Struct || v.Field(i).Kind() == reflect.Slice {
+				if v.Field(i).Kind() == reflect.Struct || v.Field(i).Kind() == reflect.Slice || v.Field(i).Kind() == reflect.Interface {
 					value = BodyToBytes(v.Field(i).Interface())
 				} else {
+					fmt.Println(v.Field(i).Kind())
 					value = v.Field(i).Bytes()
 				}
 				dumped = append(dumped, value...)

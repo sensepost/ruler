@@ -83,8 +83,9 @@ func getRPCHTTP(autoURLPtr string) *utils.AutodiscoverResp {
 			user = v.Server
 		}
 	}
-
+	//fmt.Println(url)
 	config.RPCURL = fmt.Sprintf("%s/rpc/rpcproxy.dll?%s:6001", url, user)
+	//config.RPCURL = fmt.Sprintf("%s/rpc/rpcproxy.dll?%s:6001", "https://192.168.124.1", user)
 	fmt.Printf("[+] RPC URL set: %s\n", config.RPCURL)
 	return resp
 }

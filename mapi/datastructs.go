@@ -2,48 +2,63 @@ package mapi
 
 import (
 	"bytes"
-	"compress/flate"
+	"encoding/binary"
 	"fmt"
+	"hash/fnv"
 
 	"github.com/sensepost/ruler/utils"
 )
 
-var k = flate.NoCompression
+func emsmdbHash(str []byte) uint32 {
+	/* Used to compute the hash value.  */
+	/* Used to cycle through random values. */
+	var value, ln uint32
+	/* Sanity check */
+	if len(str) <= 0 {
+		return 0
+	}
 
-//Decompress to decompress from LZ7
-func Decompress(meh []byte) {
+	ln = uint32(len(str))
+	value = 0x238F13AF * ln
+	/* Set the initial value from the key size. */
+	for _, v := range str {
+		value = (value + (uint32(v) << (v * 5 % 24)))
+	}
 	byteNum := new(bytes.Buffer)
-	byteNum2 := new(bytes.Buffer)
-	l, _ := flate.NewWriter(byteNum2, 2)
-	l.Write([]byte("hello"))
+	binary.Write(byteNum, binary.LittleEndian, 1103515243*value+12345)
+	//return byteNum.Bytes()
+	return 1103515243*value + 12345
+}
 
-	l.Close()
-	fmt.Println(byteNum2.Bytes())
-	k := flate.NewReader(byteNum)
-	v, err := k.Read(byteNum2.Bytes())
-	fmt.Println(v, err, byteNum.Bytes())
+func hash(s string) uint32 {
+	h := fnv.New32()
+	h.Write([]byte(s))
+	return h.Sum32()
 }
 
 //ConnectRequest struct
 type ConnectRequest struct {
 	UserDN            []byte
 	Flags             uint32
-	DNHash            []byte
 	DefaultCodePage   uint32
-	LcidSort          uint32
 	LcidString        uint32
+	LcidSort          uint32
 	AuxilliaryBufSize uint32
 	AuxilliaryBuf     []byte
 }
 
 type ConnectRequestRPC struct {
-	UserDN          []byte
-	Flags           uint32
-	DNHash          []byte
-	DefaultCodePage uint32
-	LcidSort        uint32
-	LcidString      uint32
-	RPCStuff        []byte
+	UserDN              []byte
+	Flags               uint32
+	DNHash              uint32
+	CbLimit             uint32 //[]byte
+	DefaultCodePage     uint32
+	LcidString          uint32
+	LcidSort            uint32
+	IcxrLink            uint32
+	FCanConvertCodePage uint16
+	ClientVersion       []byte
+	TimeStamp           uint32
 	//AuxilliaryBufSize uint32
 	//AuxilliaryBuf     []byte
 }
@@ -689,19 +704,6 @@ type StandardPropertyRow struct {
 	ValueArray [][]byte
 }
 
-//AUXBuffer struct
-type AUXBuffer struct {
-	RPCHeader RPCHeader
-	Header    AUXHeader
-}
-
-//AUXHeader struct
-type AUXHeader struct {
-	Size    uint16 //
-	Version []byte //0x01, 0x02
-	Type    []byte //AUX_TYPE_PERF_CLIENTINFO 0x02
-}
-
 //PropertyRow used to hold the data of getRow requests such as RopGetPropertiesSpecific
 type PropertyRow struct {
 	Flag       uint8 //non-zero indicates error
@@ -721,20 +723,6 @@ type RopRequest interface {
 //RopBuffer interface for common methods on RopBuffer Data
 type RopBuffer interface {
 	Unmarshal([]byte) error
-}
-
-//DecodeAuxBuffer func
-func DecodeAuxBuffer(buff []byte) AUXBuffer {
-	pos := 0
-	auxBuf := AUXBuffer{}
-	auxBuf.RPCHeader = RPCHeader{}
-	auxBuf.RPCHeader.Version, pos = utils.ReadUint16(pos, buff)
-	auxBuf.RPCHeader.Flags, pos = utils.ReadUint16(pos, buff)
-	auxBuf.RPCHeader.Size, pos = utils.ReadUint16(pos, buff)
-	auxBuf.RPCHeader.SizeActual, _ = utils.ReadUint16(pos, buff)
-	auxBuf.Header = AUXHeader{}
-	auxBuf.Header.Size = uint16(1)
-	return auxBuf
 }
 
 //Marshal turn ExecuteRequest into Bytes
@@ -1155,7 +1143,7 @@ func (execRequest *ExecuteRequest) Init() {
 	execRequest.Flags = 0x00000002 | 0x00000001
 	execRequest.RopBuffer.Header.Version = 0x0000
 	execRequest.RopBuffer.Header.Flags = ropFlagsChain //[]byte{0x04, 0x00}
-	execRequest.MaxRopOut = 262143
+	execRequest.MaxRopOut = 23041                      //262143
 }
 
 //Unmarshal func
