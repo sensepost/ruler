@@ -203,36 +203,53 @@ func RPCPing() []byte {
 //RPCRequest does our actual RPC request
 //returns the mapi data
 func EcDoRpcExt2(mapi []byte) ([]byte, error) {
-	header := RTSHeader{Version: 0x05, VersionMinor: 0, Type: DCERPC_PKT_REQUEST, PFCFlags: 0x03, AuthLen: 0, CallID: 3}
+	header := RTSHeader{Version: 0x05, VersionMinor: 0, Type: DCERPC_PKT_REQUEST, PFCFlags: 0x03, AuthLen: 0, CallID: 4}
 	header.PackedDrep = 16
 	req := RTSRequest{}
-	req.MaxFrag = 300 //784 //132
+	req.MaxFrag = 0x0134 //784 //132
 	req.MaxRecv = 0x0000
 	req.Header = header
 	req.Version = []byte{0x00, 0x00, 0x0b, 0x00, 0x00, 0x00, 0x00, 0x00}
 	req.ContextHandle = AuthSession.ContextHandle
 	req.Data = mapi
-	req.RgbAuxIn = []byte{0x07, 0x80, 0x00, 0x00, 0x30, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00, 0x28, 0x00, 0x28, 0x00, 0x08, 0x00, 0x01, 0x01, 0x01, 0x00, 0x75, 0x00, 0x10, 0x00, 0x01, 0x0c, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x74, 0x00, 0x00, 0x00, 0x10, 0x00, 0x01, 0x0c, 0x10, 0x00, 0x00, 0x00, 0x10}
+	//fmt.Printf("%x\n", mapi)
+	//req.Data = append(req.Data, []byte{0x07, 0x80, 0x00, 0x00}...)
+
+	//req.RgbAuxIn = auxbuf.Marshal() //[]byte{0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00}
+	req.CbAuxIn = 0x00 //uint32(len(req.RgbAuxIn) - 2)
+	req.AuxOut = 0x000001008
+
+	//req.RgbAuxIn = []byte{0x07, 0x80, 0x00, 0x00, 0x30, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00, 0x28, 0x00, 0x28, 0x00, 0x08, 0x00, 0x01, 0x01, 0x01, 0x00, 0x75, 0x00, 0x10, 0x00, 0x01, 0x0c, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x74, 0x00, 0x00, 0x00, 0x10, 0x00, 0x01, 0x0c, 0x10, 0x00, 0x00, 0x00, 0x10}
+
 	/*req.RgbOut = 0x74000000
 	req.PcbOut = 0x30000000
 	req.RgbAuxOut = 0x0000
-	req.PcbAuxOut = 0x000001008
+
 	*/
 	req.Header.FragLen = uint16(len(req.Marshal()))
 	RPCWrite(req.Marshal())
 	return RPCRead()
 }
+func obfuscate(data []byte) []byte {
+	bnew := make([]byte, len(data))
+	for k := range data {
+		bnew[k] = data[k] ^ 0xA5
+	}
+	return bnew
+}
 
 func DoConnectExRequest(MAPI []byte) ([]byte, error) {
 	//RPCRead()
-	header := RTSHeader{Version: 0x05, VersionMinor: 0, Type: DCERPC_PKT_REQUEST, PFCFlags: 0x03, AuthLen: 0, CallID: 0}
+	header := RTSHeader{Version: 0x05, VersionMinor: 0, Type: DCERPC_PKT_REQUEST, PFCFlags: 0x03, AuthLen: 0, CallID: 3}
 	header.PackedDrep = 16
 	req := ConnectExRequest{}
 	req.Header = header
-	req.MaxFrag = 0x0184
+	req.MaxFrag = 0xffff
 	req.MaxRecv = 0x0000
-	req.ContextHandle = []byte{0x00, 0x00, 0x0a, 0x00, 0x7b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x7b, 0x00, 0x00, 0x00}
-	req.Data = append(MAPI, []byte{0xc6, 0x00, 0x00, 0x00}...)
+	req.ContextHandle = []byte{0x00, 0x00, 0x0a, 0x00} // 0x84, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x84, 0x00, 0x00, 0x00}
+
+	req.Data = MAPI
+	//fmt.Printf("Len: %x\n", len(MAPI))
 	//AUXBuffer here
 	auxbuf := AUXBuffer{}
 	auxbuf.RPCHeader = RPCHeader{Version: 0x0000, Flags: 0x04}
@@ -249,17 +266,24 @@ func DoConnectExRequest(MAPI []byte) ([]byte, error) {
 	sessionInfo.Header = AUXHeader{Version: 0x02, Type: 0x04}
 	sessionInfo.Header.Size = uint16(len(sessionInfo.Marshal()))
 
-	auxbuf.Buff = []AuxInfo{clientInfo, accountInfo, sessionInfo} //clientInfo.Marshal()
+	processInfo := AUXTypePerfProcessInfo{ProcessID: 0x01, ProcessGUID: CookieGen(), ProcessNameOffset: 0x004f, ProcessName: utils.UniString("OUTLOOK.EXE")}
+	processInfo.Header = AUXHeader{Version: 0x02, Type: 0x0b}
+	processInfo.Header.Size = uint16(len(processInfo.Marshal()))
 
-	auxbuf.RPCHeader.Size = uint16(len(auxbuf.Marshal()))
+	clientConnInfo := AUXClientConnectionInfo{ConnectionGUID: CookieGen(), ConnectionAttempts: 0x05, ConnectionFlags: 0x01, ConnectionContextInfo: utils.UniString("")}
+	clientConnInfo.Header = AUXHeader{Version: 0x01, Type: 0x4a}
+	clientConnInfo.Header.Size = uint16(len(clientConnInfo.Marshal()))
+
+	auxbuf.Buff = []AuxInfo{clientInfo, accountInfo, sessionInfo, processInfo, clientConnInfo}
+	auxbuf.RPCHeader.Size = uint16(len(auxbuf.Marshal()) - 10) //account for header size
 	auxbuf.RPCHeader.SizeActual = auxbuf.RPCHeader.Size
 	req.RgbAuxIn = auxbuf.Marshal() //[]byte{0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00}
-	req.CbAuxIn = uint32(len(req.RgbAuxIn))
+	req.CbAuxIn = uint32(len(req.RgbAuxIn) - 2)
+	req.AuxBufLen = req.CbAuxIn
 	req.AuxOut = 0x000001008
 	req.Header.FragLen = uint16(len(req.Marshal()))
 
 	RPCWrite(req.Marshal())
-
 	resp, err := RPCRead()
 	fmt.Printf("\n\n%x\n%x\n\n", resp[28:44], resp)
 	AuthSession.ContextHandle = resp[28:44]
@@ -285,7 +309,7 @@ func RPCRead() ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		fmt.Printf("\nRPC READ: %x\n Resp: %x\n Buf: %x\n %d \n", buf[:n], response, buf, n)
+		//fmt.Printf("\nRPC READ: %x\n Resp: %x\n Buf: %x\n %d \n", buf[:n], response, buf, n)
 		response = append(response, buf[:n]...)
 		if n > 20 {
 			break
@@ -301,6 +325,6 @@ func RPCRead() ([]byte, error) {
 		}
 
 	}
-	fmt.Printf("\nRPC READ RESPONSE: %x\n", response)
+	//fmt.Printf("\nRPC READ RESPONSE: %x\n", response)
 	return response, nil
 }

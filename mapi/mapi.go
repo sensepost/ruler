@@ -81,13 +81,25 @@ func addRPCHeaders(req *http.Request) {
 
 }
 
-func sendMapiRequest(mapiType string, mapi []byte) ([]byte, error) {
+func sendMapiRequest(mapiType string, mapi ExecuteRequest) ([]byte, error) {
 	if AuthSession.Transport == HTTP {
-		return mapiRequestHTTP(AuthSession.URL.String(), mapiType, mapi)
+		return mapiRequestHTTP(AuthSession.URL.String(), mapiType, mapi.Marshal())
 	}
 	return mapiRequestRPC(mapi)
 }
 
+func sendMapiConnectRequestHTTP(mapi ConnectRequest) ([]byte, error) {
+	return mapiRequestHTTP(AuthSession.URL.String(), "Connect", mapi.Marshal())
+}
+
+func sendMapiDisconnect(mapi DisconnectRequest) ([]byte, error) {
+
+	return mapiRequestHTTP(AuthSession.URL.String(), "Disconnect", mapi.Marshal())
+
+	//return mapiRequestRPC(mapi)
+}
+
+//func sendMapiConnectHTTP(mapi Conn)
 //mapiAuthRequest connects and authenticates using NTLM or basic auth.
 //After the authentication is complete, we can simply use the mapiRequest
 //and the session cookies.
@@ -130,34 +142,47 @@ func mapiRequestHTTP(URL, mapiType string, body []byte) ([]byte, error) {
 	return responseBody, err
 }
 
+func mapiConnectRPC(body ConnectRequestRPC) ([]byte, error) {
+	rpchttp.AuthSession = AuthSession
+
+	go rpchttp.RPCOpen(AuthSession.RPCURL)
+	time.Sleep(time.Second * 2)
+	rpchttp.RPCRead() //get the 200 response
+	dataout := []byte{0x05, 0x00, 0x0b, 0x13, 0x10, 0x00, 0x00, 0x00, 0x74, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0xf8, 0x0f, 0xf8, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0xdb, 0xf1, 0xa4, 0x47, 0xca, 0x67, 0x10, 0xb3, 0x1f, 0x00, 0xdd, 0x01, 0x06, 0x62, 0xda, 0x00, 0x00, 0x51, 0x00, 0x04, 0x5d, 0x88, 0x8a, 0xeb, 0x1c, 0xc9, 0x11, 0x9f, 0xe8, 0x08, 0x00, 0x2b, 0x10, 0x48, 0x60, 0x02, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0xdb, 0xf1, 0xa4, 0x47, 0xca, 0x67, 0x10, 0xb3, 0x1f, 0x00, 0xdd, 0x01, 0x06, 0x62, 0xda, 0x00, 0x00, 0x51, 0x00, 0x2c, 0x1c, 0xb7, 0x6c, 0x12, 0x98, 0x40, 0x45, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00}
+	rpchttp.RPCWrite(dataout)
+	rpchttp.RPCRead()
+
+	//rpchttp.RPCWrite([]byte{0x05, 0x00, 0x14, 0x03, 0x10, 0x00, 0x00, 0x00, 0x1c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x01, 0x00, 0x05, 0x00, 0x00, 0x00, 0x30, 0x75, 0x00, 0x00})
+	//rpchttp.RPCRead()
+	resp, err := rpchttp.DoConnectExRequest(body.Marshal())
+	AuthSession.RPCSet = true
+	return resp, err
+}
+
 //mapiRequestRPC to our target. Takes the mapiType (Connect, Execute) to determine the
 //action performed on the server side
-func mapiRequestRPC(body []byte) ([]byte, error) {
+func mapiRequestRPC(body ExecuteRequest) ([]byte, error) {
 
 	var resp []byte
 	var err error
 
-	if AuthSession.RPCSet == false {
-		//	var err error
-		rpchttp.AuthSession = AuthSession
+	auxbuf := rpchttp.AUXBuffer{}
+	auxbuf.RPCHeader = rpchttp.RPCHeader{Version: 0x0000, Flags: 0x04}
 
-		go rpchttp.RPCOpen(AuthSession.RPCURL)
-		time.Sleep(time.Second * 2)
-		rpchttp.RPCRead() //get the 200 response
-		dataout := []byte{0x05, 0x00, 0x0b, 0x13, 0x10, 0x00, 0x00, 0x00, 0x74, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0xf8, 0x0f, 0xf8, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0xdb, 0xf1, 0xa4, 0x47, 0xca, 0x67, 0x10, 0xb3, 0x1f, 0x00, 0xdd, 0x01, 0x06, 0x62, 0xda, 0x00, 0x00, 0x51, 0x00, 0x04, 0x5d, 0x88, 0x8a, 0xeb, 0x1c, 0xc9, 0x11, 0x9f, 0xe8, 0x08, 0x00, 0x2b, 0x10, 0x48, 0x60, 0x02, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0xdb, 0xf1, 0xa4, 0x47, 0xca, 0x67, 0x10, 0xb3, 0x1f, 0x00, 0xdd, 0x01, 0x06, 0x62, 0xda, 0x00, 0x00, 0x51, 0x00, 0x2c, 0x1c, 0xb7, 0x6c, 0x12, 0x98, 0x41, 0x45, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00}
-		rpchttp.RPCWrite(dataout)
-		rpchttp.RPCRead()
+	gcSuccess := rpchttp.AUXPerfGCSuccess{ClientID: 0x0001, ServerID: 0x0002, TimeSinceRequest: 0x00, TimeToCompleteRequest: 0x01, RequestOperation: 0x01, Reserved2: []byte{0x00, 0x00, 0x00}}
+	gcSuccess.Header = rpchttp.AUXHeader{Version: 0x01, Type: 0x08}
+	gcSuccess.Header.Size = uint16(len(gcSuccess.Marshal()))
 
-		//rpchttp.RPCWrite([]byte{0x05, 0x00, 0x14, 0x03, 0x10, 0x00, 0x00, 0x00, 0x1c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x01, 0x00, 0x05, 0x00, 0x00, 0x00, 0x30, 0x75, 0x00, 0x00})
-		//rpchttp.RPCRead()
-		time.Sleep(time.Second * 2)
-		resp, err = rpchttp.DoConnectExRequest(body)
-		AuthSession.RPCSet = true
+	auxbuf.Buff = []rpchttp.AuxInfo{gcSuccess}
+	auxbuf.RPCHeader.Size = uint16(len(auxbuf.Marshal()) - 10) //account for header size
+	auxbuf.RPCHeader.SizeActual = auxbuf.RPCHeader.Size
 
-	} else {
-		resp, err = rpchttp.EcDoRpcExt2(body)
-		time.Sleep(time.Second * 5)
-	}
+	body.AuxilliaryBuf = auxbuf.Marshal()
+	fmt.Printf("%x\n", uint32(len(body.AuxilliaryBuf)))
+	body.AuxilliaryBufSize = uint32(len(body.AuxilliaryBuf))
+
+	resp, err = rpchttp.EcDoRpcExt2(body.Marshal())
+
 	return resp, err
 }
 
@@ -211,14 +236,17 @@ func AuthenticateRPC() (*RopLogonResponse, error) {
 	connRequest := ConnectRequestRPC{}
 
 	connRequest.UserDN = []byte(AuthSession.LID)
-	connRequest.UserDN = append(connRequest.UserDN, []byte{0x00, 0x00}...) //append nullbyte
+	connRequest.UserDN = append(connRequest.UserDN, []byte{0x00, 0x00, 0x00, 0x00}...) //append nullbyte
+	//fmt.Println(AuthSession.LID, len(connRequest.UserDN))
+	connRequest.DNLen = uint32(len(connRequest.UserDN))
+	connRequest.DNLenActual = connRequest.DNLen
 	if AuthSession.Admin == true {
 		connRequest.Flags = uFlagsAdmin
 	} else {
 		connRequest.Flags = uFlagsUser
 	}
 
-	connRequest.DNHash = hash(AuthSession.LID) //[]byte{0x32, 0x02, 0x03, 0x77}
+	connRequest.DNHash = hash(AuthSession.LID) //[]byte{0x32, 0x02, 0x03, 0x77} //7f 6f 24 b0
 	//fmt.Printf("%x\n%x\n%x\n", hash(AuthSession.LID), hash(string(connRequest.UserDN)), []byte{0x32, 0x02, 0x03, 0x77})
 	connRequest.CbLimit = 0x00
 	connRequest.DefaultCodePage = 1252
@@ -230,7 +258,7 @@ func AuthenticateRPC() (*RopLogonResponse, error) {
 	connRequest.TimeStamp = 0x00
 	//connRequest.RPCStuff = []byte{0xc6, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00, 0xbe, 0x00, 0xbe, 0x00, 0x36, 0x00, 0x01, 0x02, 0xa0, 0x86, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x45, 0x00, 0x74, 0x00, 0x68, 0x00, 0x65, 0x00, 0x72, 0x00, 0x6e, 0x00, 0x65, 0x00, 0x74, 0x00, 0x20, 0x00, 0x32, 0x00, 0x00, 0x00, 0x18, 0x00, 0x01, 0x18, 0x01, 0x00, 0x00, 0x00, 0x78, 0x39, 0x37, 0x11, 0x45, 0x26, 0x06, 0x47, 0xad, 0x40, 0x54, 0x9b, 0x14, 0x89, 0x66, 0x9f, 0x1c, 0x00, 0x02, 0x04, 0x01, 0x00, 0x00, 0x00, 0xdf, 0xdd, 0x21, 0xf6, 0x96, 0xd7, 0x5a, 0x4c, 0x84, 0xca, 0xe5, 0x79, 0x81, 0x28, 0x1a, 0xb2, 0x1b, 0x00, 0x00, 0x00, 0x34, 0x00, 0x02, 0x0b, 0x01, 0x00, 0x00, 0x00, 0x54, 0x9e, 0x74, 0x23, 0xbe, 0xd1, 0xf4, 0x4f, 0x81, 0xbc, 0xb7, 0x68, 0xa6, 0xdf, 0xc4, 0x7f, 0x1c, 0x00, 0x00, 0x00, 0x4f, 0x00, 0x55, 0x00, 0x54, 0x00, 0x4c, 0x00, 0x4f, 0x00, 0x4f, 0x00, 0x4b, 0x00, 0x2e, 0x00, 0x45, 0x00, 0x58, 0x00, 0x45, 0x00, 0x00, 0x00, 0x20, 0x00, 0x01, 0x4a, 0x0d, 0x65, 0x1b, 0xa8, 0x59, 0xde, 0xc6, 0x4f, 0xa3, 0x6a, 0xe0, 0x46, 0x04, 0x61, 0xf9, 0x81, 0x00, 0x00, 0x00, 0x00, 0x05, 0x00, 0x00, 0x00} //, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0xc6, 0x00, 0x00, 0x00
 
-	sendMapiRequest("Connect", connRequest.Marshal())
+	mapiConnectRPC(connRequest)
 	/*
 		if err != nil {
 			return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
@@ -242,8 +270,8 @@ func AuthenticateRPC() (*RopLogonResponse, error) {
 	fmt.Println("[+] User DN: ", string(connRequest.UserDN))
 	fmt.Println("[*] Got Context, Doing ROPLogin")
 
-	AuthSession.UserDN = connRequest.UserDN
-	return AuthenticateFetchMailbox(connRequest.UserDN)
+	AuthSession.UserDN = append([]byte(AuthSession.LID), []byte{0x00}...)
+	return AuthenticateFetchMailbox(AuthSession.UserDN) //connRequest.UserDN)
 	//}
 
 	//return nil, fmt.Errorf("[x] An Unspecified error occurred")
@@ -265,8 +293,8 @@ func AuthenticateHTTP() (*RopLogonResponse, error) {
 	connRequest.LcidSort = 1033
 	connRequest.LcidString = 1033
 
-	responseBody, err := sendMapiRequest("Connect", connRequest.Marshal())
-	fmt.Println(responseBody)
+	responseBody, err := sendMapiConnectRequestHTTP(connRequest)
+
 	if err != nil {
 		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
 	}
@@ -289,7 +317,7 @@ func AuthenticateFetchMailbox(essdn []byte) (*RopLogonResponse, error) {
 
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
-	execRequest.MaxRopOut = 38656
+	execRequest.MaxRopOut = 0x9d000000
 	logonBody := RopLogonRequest{RopID: 0xFE, LogonID: AuthSession.LogonID}
 	logonBody.OutputHandleIndex = 0x00
 	logonBody.LogonFlags = 0x01
@@ -303,8 +331,8 @@ func AuthenticateFetchMailbox(essdn []byte) (*RopLogonResponse, error) {
 	logonBody.EssdnSize = uint16(len(logonBody.Essdn))
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0xFF, 0xFF, 0xFF, 0xFF}
 	execRequest.RopBuffer.ROP.RopsList = logonBody.Marshal()
-	fmt.Printf("\n\nLogon: %x \n%x\n", logonBody.Marshal(), execRequest.Marshal())
-	responseBody, err := sendMapiRequest("Execute", execRequest.Marshal())
+	//fmt.Printf("\n\nLogon: %x \n%x\n", logonBody.Marshal(), execRequest.Marshal())
+	responseBody, err := sendMapiRequest("Execute", execRequest)
 
 	if err != nil {
 		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
@@ -330,12 +358,11 @@ func AuthenticateFetchMailbox(essdn []byte) (*RopLogonResponse, error) {
 //This is strictly necessary but hey... lets follow protocol
 func Disconnect() (int, error) {
 	fmt.Println("[*] And disconnecting from server")
-	execRequest := ExecuteRequest{}
-	execRequest.Init()
+
 	disconnectBody := DisconnectRequest{}
 	disconnectBody.AuxilliaryBufSize = 0
 
-	_, err := sendMapiRequest("Disconnect", disconnectBody.Marshal())
+	_, err := sendMapiDisconnect(disconnectBody)
 
 	if err != nil {
 		return -1, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
@@ -353,7 +380,7 @@ func ReleaseObject(inputHandle byte) (*RopReleaseResponse, error) {
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF}
 	execRequest.RopBuffer.ROP.RopsList = fullReq
 
-	responseBody, err := sendMapiRequest("Execute", execRequest.Marshal())
+	responseBody, err := sendMapiRequest("Execute", execRequest)
 
 	if err != nil {
 		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
@@ -464,7 +491,7 @@ func SendMessage(triggerWord string) (*RopSubmitMessageResponse, error) {
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
 	execRequest.RopBuffer.ROP.RopsList = fullReq
 
-	responseBody, err := sendMapiRequest("Execute", execRequest.Marshal())
+	responseBody, err := sendMapiRequest("Execute", execRequest)
 
 	if err != nil {
 		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
@@ -537,7 +564,7 @@ func SetMessageStatus(folderid, messageid []byte) (*RopSetMessageStatusResponse,
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
 	execRequest.RopBuffer.ROP.RopsList = fullReq
 
-	responseBody, err := sendMapiRequest("Execute", execRequest.Marshal())
+	responseBody, err := sendMapiRequest("Execute", execRequest)
 
 	if err != nil {
 		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
@@ -604,7 +631,7 @@ func CreateMessage(folderID []byte, properties []TaggedPropertyValue) (*RopSaveC
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
 	execRequest.RopBuffer.ROP.RopsList = fullReq
 
-	responseBody, err := sendMapiRequest("Execute", execRequest.Marshal())
+	responseBody, err := sendMapiRequest("Execute", execRequest)
 
 	if err != nil {
 		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
@@ -671,7 +698,7 @@ func DeleteMessages(folderid []byte, messageIDCount int, messageIDs []byte) (*Ro
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
 	execRequest.RopBuffer.ROP.RopsList = fullReq
 
-	responseBody, err := sendMapiRequest("Execute", execRequest.Marshal())
+	responseBody, err := sendMapiRequest("Execute", execRequest)
 
 	if err != nil {
 		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
@@ -737,7 +764,7 @@ func GetFolder(folderid int, columns []PropertyTag) (*RopOpenFolderResponse, err
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF}
 
 	//fetch folder
-	responseBody, err := sendMapiRequest("Execute", execRequest.Marshal())
+	responseBody, err := sendMapiRequest("Execute", execRequest)
 
 	if err != nil {
 		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
@@ -799,7 +826,7 @@ func GetMessage(folderid, messageid []byte, columns []PropertyTag) (*RopGetPrope
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF}
 
 	//fetch folder
-	responseBody, err := sendMapiRequest("Execute", execRequest.Marshal())
+	responseBody, err := sendMapiRequest("Execute", execRequest)
 
 	if err != nil {
 		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
@@ -890,7 +917,7 @@ func GetMessageFast(folderid, messageid []byte, columns []PropertyTag) (*RopFast
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
 
 	//fetch folder
-	responseBody, err := sendMapiRequest("Execute", execRequest.Marshal())
+	responseBody, err := sendMapiRequest("Execute", execRequest)
 
 	if err != nil {
 		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
@@ -975,7 +1002,7 @@ func FastTransferFetchStep(handles []byte) ([]byte, error) {
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = append([]byte{0x00, 0x00, 0x00, AuthSession.LogonID}, handles...) //append(handles, []byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}...) //[]byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF} //append([]byte{0x00, 0x00, 0x00, AuthSession.LogonID}, handles...)
 
 	//fetch folder
-	responseBody, err := sendMapiRequest("Execute", execRequest.Marshal())
+	responseBody, err := sendMapiRequest("Execute", execRequest)
 
 	if err != nil {
 		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
@@ -1041,7 +1068,7 @@ func GetContentsTable(folderid []byte) (*RopGetContentsTableResponse, []byte, er
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
 
 	//fetch contents
-	responseBody, err := sendMapiRequest("Execute", execRequest.Marshal())
+	responseBody, err := sendMapiRequest("Execute", execRequest)
 
 	if err != nil {
 		return nil, nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
@@ -1095,7 +1122,7 @@ func GetFolderHierarchy(folderid []byte) (*RopGetHierarchyTableResponse, []byte,
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
 
 	//fetch folder
-	responseBody, err := sendMapiRequest("Execute", execRequest.Marshal())
+	responseBody, err := sendMapiRequest("Execute", execRequest)
 
 	if err != nil {
 		return nil, nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
@@ -1150,7 +1177,7 @@ func GetSubFolders(folderid []byte) (*RopQueryRowsResponse, error) {
 	execRequest.RopBuffer.ROP.RopsList = fullReq
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = append([]byte{0x01, 0x00, 0x00, AuthSession.LogonID}, svrhndl...)
 
-	responseBody, err := sendMapiRequest("Execute", execRequest.Marshal())
+	responseBody, err := sendMapiRequest("Execute", execRequest)
 
 	if err != nil {
 		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
@@ -1217,7 +1244,7 @@ func CreateFolder(folderName string, hidden bool) (*RopCreateFolderResponse, err
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x01, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF}
 
 	//fetch folder
-	responseBody, err := sendMapiRequest("Execute", execRequest.Marshal())
+	responseBody, err := sendMapiRequest("Execute", execRequest)
 
 	if err != nil {
 		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
@@ -1276,7 +1303,7 @@ func GetContents(folderid []byte) (*RopQueryRowsResponse, error) {
 	execRequest.RopBuffer.ROP.RopsList = fullReq
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = append([]byte{0x01, 0x00, 0x00, AuthSession.LogonID}, svrhndl...)
 
-	responseBody, err := sendMapiRequest("Execute", execRequest.Marshal())
+	responseBody, err := sendMapiRequest("Execute", execRequest)
 
 	if err != nil {
 		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
@@ -1335,7 +1362,7 @@ func DisplayRules() ([]Rule, error) {
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x01, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF}
 
 	//fetch folder
-	responseBody, err := sendMapiRequest("Execute", execRequest.Marshal())
+	responseBody, err := sendMapiRequest("Execute", execRequest)
 
 	if err != nil {
 		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
@@ -1405,7 +1432,7 @@ func ExecuteMailRuleAdd(rulename, triggerword, triggerlocation string, delete bo
 	execRequest.RopBuffer.ROP.RopsList = ruleBytes
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x01, 0x00, 0x00, AuthSession.LogonID} //append(AuthSession.RulesHandle, []byte{0xFF, 0xFF, 0xFF, 0xFF}...)
 
-	responseBody, err := sendMapiRequest("Execute", execRequest.Marshal())
+	responseBody, err := sendMapiRequest("Execute", execRequest)
 
 	if err != nil {
 		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
@@ -1433,7 +1460,7 @@ func ExecuteMailRuleDelete(ruleid []byte) error {
 	execRequest.RopBuffer.ROP.RopsList = ruleBytes
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x01, 0x00, 0x00, AuthSession.LogonID} //append(AuthSession.RulesHandle, []byte{0xFF, 0xFF, 0xFF, 0xFF}...)
 
-	responseBody, err := sendMapiRequest("Execute", execRequest.Marshal())
+	responseBody, err := sendMapiRequest("Execute", execRequest)
 
 	if err != nil {
 		return fmt.Errorf("[x] A HTTP server side error occurred while deleting the rule.\n %s", err)
@@ -1451,8 +1478,8 @@ func ExecuteMailRuleDelete(ruleid []byte) error {
 //Ping send a PING message to the server
 func Ping() {
 	isAuthenticated() //check if we actually have a session
-	responseBody, _ := sendMapiRequest("PING", []byte{})
-	fmt.Println(responseBody)
+	//responseBody, _ := sendMapiRequest("PING", []byte{})
+	//fmt.Println(responseBody)
 	fmt.Println(AuthSession.CookieJar)
 
 }

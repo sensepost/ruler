@@ -72,12 +72,8 @@ type RTSRequest struct {
 	ContextHandle []byte //16-byte cookie
 	Data          []byte //our MAPI request goes here
 	//RPC Parts
-	RgbAuxIn  []byte
-	RgbOut    uint32 //[]byte
-	PcbOut    uint32 //[]byte
-	RgbAuxOut uint16 //[]byte
-	PcbAuxOut uint32 //[]byte
-	//AuxOut        uint32 //always going to be 0x00001008
+	CbAuxIn uint16
+	AuxOut  uint32
 }
 
 type ConnectExRequest struct {
@@ -87,6 +83,7 @@ type ConnectExRequest struct {
 	Version       []byte //8-byte
 	ContextHandle []byte //16-byte cookie
 	Data          []byte //our MAPI request goes here
+	AuxBufLen     uint32
 	RgbAuxIn      []byte
 	CbAuxIn       uint32
 	AuxOut        uint32
@@ -127,6 +124,16 @@ type AUXTypePerfSessionInfo struct {
 	ConnectionID uint32
 }
 
+type AUXTypePerfProcessInfo struct {
+	Header            AUXHeader
+	ProcessID         uint16
+	Reserved          uint16
+	ProcessGUID       []byte
+	ProcessNameOffset uint16
+	Reserved2         uint16
+	ProcessName       []byte
+}
+
 type AUXPerfClientInfo struct {
 	Header             AUXHeader
 	AdapterSpeed       uint32
@@ -148,6 +155,27 @@ type AUXPerfClientInfo struct {
 	ClientIPMask       []byte
 	AdapterName        []byte
 	MacAddress         []byte
+}
+
+type AUXClientConnectionInfo struct {
+	Header                      AUXHeader
+	ConnectionGUID              []byte
+	OffsetConnectionContextInfo uint16
+	Reserved                    uint16
+	ConnectionAttempts          uint32
+	ConnectionFlags             uint32
+	ConnectionContextInfo       []byte
+}
+
+type AUXPerfGCSuccess struct {
+	Header                AUXHeader
+	ClientID              uint16
+	ServerID              uint16
+	Reserved              uint16
+	TimeSinceRequest      uint32
+	TimeToCompleteRequest uint32
+	RequestOperation      uint8
+	Reserved2             []byte
 }
 
 //RTSPing an RTSPing message keeping the channel alive
@@ -289,5 +317,17 @@ func (auxbuf AUXPerfAccountInfo) Marshal() []byte {
 }
 
 func (auxbuf AUXTypePerfSessionInfo) Marshal() []byte {
+	return utils.BodyToBytes(auxbuf)
+}
+
+func (auxbuf AUXTypePerfProcessInfo) Marshal() []byte {
+	return utils.BodyToBytes(auxbuf)
+}
+
+func (auxbuf AUXClientConnectionInfo) Marshal() []byte {
+	return utils.BodyToBytes(auxbuf)
+}
+
+func (auxbuf AUXPerfGCSuccess) Marshal() []byte {
 	return utils.BodyToBytes(auxbuf)
 }

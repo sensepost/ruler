@@ -1,34 +1,11 @@
 package mapi
 
 import (
-	"bytes"
-	"encoding/binary"
 	"fmt"
 	"hash/fnv"
 
 	"github.com/sensepost/ruler/utils"
 )
-
-func emsmdbHash(str []byte) uint32 {
-	/* Used to compute the hash value.  */
-	/* Used to cycle through random values. */
-	var value, ln uint32
-	/* Sanity check */
-	if len(str) <= 0 {
-		return 0
-	}
-
-	ln = uint32(len(str))
-	value = 0x238F13AF * ln
-	/* Set the initial value from the key size. */
-	for _, v := range str {
-		value = (value + (uint32(v) << (v * 5 % 24)))
-	}
-	byteNum := new(bytes.Buffer)
-	binary.Write(byteNum, binary.LittleEndian, 1103515243*value+12345)
-	//return byteNum.Bytes()
-	return 1103515243*value + 12345
-}
 
 func hash(s string) uint32 {
 	h := fnv.New32()
@@ -48,6 +25,9 @@ type ConnectRequest struct {
 }
 
 type ConnectRequestRPC struct {
+	DNLen               uint32
+	Reserved            uint32
+	DNLenActual         uint32
 	UserDN              []byte
 	Flags               uint32
 	DNHash              uint32
@@ -77,6 +57,13 @@ type ExecuteRequest struct {
 	MaxRopOut         uint32
 	AuxilliaryBufSize uint32
 	AuxilliaryBuf     []byte
+}
+
+type ExecuteRequestRPC struct {
+	Flags         uint32 //[]byte //lets stick to ropFlagsNoXorMagic
+	RopBufferSize uint32
+	RopBuffer     ROPBuffer
+	MaxRopOut     uint32
 }
 
 //ExecuteResponse struct
@@ -725,9 +712,19 @@ type RopBuffer interface {
 	Unmarshal([]byte) error
 }
 
+type Request interface {
+	Marshal() []byte
+}
+
 //Marshal turn ExecuteRequest into Bytes
 func (execRequest ExecuteRequest) Marshal() []byte {
 	execRequest.CalcSizes()
+	return utils.BodyToBytes(execRequest)
+}
+
+//Marshal turn ExecuteRequest into Bytes
+func (execRequest ExecuteRequestRPC) Marshal() []byte {
+	//execRequest.CalcSizes()
 	return utils.BodyToBytes(execRequest)
 }
 
@@ -1143,7 +1140,7 @@ func (execRequest *ExecuteRequest) Init() {
 	execRequest.Flags = 0x00000002 | 0x00000001
 	execRequest.RopBuffer.Header.Version = 0x0000
 	execRequest.RopBuffer.Header.Flags = ropFlagsChain //[]byte{0x04, 0x00}
-	execRequest.MaxRopOut = 23041                      //262143
+	execRequest.MaxRopOut = 23041                      //2634022912                 //23041                      //262143
 }
 
 //Unmarshal func
