@@ -72,7 +72,7 @@ type RTSRequest struct {
 	ContextHandle []byte //16-byte cookie
 	Data          []byte //our MAPI request goes here
 	//RPC Parts
-	CbAuxIn uint16
+	CbAuxIn uint32
 	AuxOut  uint32
 }
 
@@ -94,6 +94,11 @@ type RPCHeader struct {
 	Flags      uint16 //0x0001 Compressed, 0x0002 XorMagic, 0x0004 Last
 	Size       uint16
 	SizeActual uint16 //Compressed size (if 0x0001 set)
+}
+
+type RPCResponse struct {
+	CallID uint16
+	Body   []byte
 }
 
 //AUXBuffer struct
@@ -122,6 +127,20 @@ type AUXTypePerfSessionInfo struct {
 	Reserved     uint16
 	SessionGUID  []byte
 	ConnectionID uint32
+}
+type AUXTPerfMDBSuccess struct {
+	Header                AUXHeader
+	ClientID              uint16
+	ServerID              uint16
+	SessionID             uint16
+	RequestID             uint16
+	TimeSinceRequest      uint32
+	TimeToCompleteRequest uint32
+}
+type AUXTypePerfRequestID struct {
+	Header    AUXHeader
+	SessionID uint16
+	RequestID uint16
 }
 
 type AUXTypePerfProcessInfo struct {
@@ -223,7 +242,7 @@ func CookieGen() []byte {
 //Bind function Creates a Bind Packet
 func Bind() BindPDU {
 	bind := BindPDU{}
-	header := RTSHeader{Version: 0x05, VersionMinor: 0, Type: DCERPC_PKT_BIND, PFCFlags: 0x13, AuthLen: 0, CallID: 0}
+	header := RTSHeader{Version: 0x05, VersionMinor: 0, Type: DCERPC_PKT_BIND, PFCFlags: 0x13, AuthLen: 0, CallID: 1}
 	header.PackedDrep = 16
 	bind.Header = header
 	//Generate session cookie
@@ -321,6 +340,14 @@ func (auxbuf AUXTypePerfSessionInfo) Marshal() []byte {
 }
 
 func (auxbuf AUXTypePerfProcessInfo) Marshal() []byte {
+	return utils.BodyToBytes(auxbuf)
+}
+
+func (auxbuf AUXTypePerfRequestID) Marshal() []byte {
+	return utils.BodyToBytes(auxbuf)
+}
+
+func (auxbuf AUXTPerfMDBSuccess) Marshal() []byte {
 	return utils.BodyToBytes(auxbuf)
 }
 

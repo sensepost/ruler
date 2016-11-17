@@ -55,6 +55,7 @@ type ExecuteRequest struct {
 	RopBufferSize     uint32
 	RopBuffer         ROPBuffer
 	MaxRopOut         uint32
+	RPCPtr            []byte
 	AuxilliaryBufSize uint32
 	AuxilliaryBuf     []byte
 }
@@ -925,7 +926,7 @@ func (execResponse *ExecuteResponse) Unmarshal(resp []byte) error {
 		buf, pos = utils.ReadBytes(pos, int(execResponse.RopBufferSize), resp)
 		execResponse.RopBuffer = buf //decodeLogonRopResponse(buf)
 		execResponse.AuxilliaryBufSize, pos = utils.ReadUint32(pos, resp)
-		execResponse.AuxilliaryBuf, _ = utils.ReadBytes(pos, int(execResponse.AuxilliaryBufSize), resp)
+		//execResponse.AuxilliaryBuf, _ = utils.ReadBytes(pos, int(execResponse.AuxilliaryBufSize), resp)
 	}
 	return nil
 }

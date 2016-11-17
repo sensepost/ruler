@@ -2,13 +2,13 @@ package mapi
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
 	"regexp"
-	"time"
 
 	"github.com/sensepost/ruler/http-ntlm"
 	"github.com/sensepost/ruler/rpc-http"
@@ -93,10 +93,11 @@ func sendMapiConnectRequestHTTP(mapi ConnectRequest) ([]byte, error) {
 }
 
 func sendMapiDisconnect(mapi DisconnectRequest) ([]byte, error) {
-
-	return mapiRequestHTTP(AuthSession.URL.String(), "Disconnect", mapi.Marshal())
-
+	if AuthSession.Transport == HTTP {
+		return mapiRequestHTTP(AuthSession.URL.String(), "Disconnect", mapi.Marshal())
+	}
 	//return mapiRequestRPC(mapi)
+	return []byte{}, nil
 }
 
 //func sendMapiConnectHTTP(mapi Conn)
@@ -116,7 +117,7 @@ func mapiRequestHTTP(URL, mapiType string, body []byte) ([]byte, error) {
 		}
 		AuthSession.ClientSet = true
 	}
-
+	//fmt.Printf("%x\n", body)
 	req, err := http.NewRequest("POST", URL, bytes.NewReader(body))
 	addMapiHeaders(req, mapiType)
 	req.SetBasicAuth(AuthSession.Email, AuthSession.Pass)
@@ -144,18 +145,26 @@ func mapiRequestHTTP(URL, mapiType string, body []byte) ([]byte, error) {
 
 func mapiConnectRPC(body ConnectRequestRPC) ([]byte, error) {
 	rpchttp.AuthSession = AuthSession
+	ready := make(chan bool)
+	go rpchttp.RPCOpen(AuthSession.RPCURL, ready)
 
-	go rpchttp.RPCOpen(AuthSession.RPCURL)
-	time.Sleep(time.Second * 2)
-	rpchttp.RPCRead() //get the 200 response
-	dataout := []byte{0x05, 0x00, 0x0b, 0x13, 0x10, 0x00, 0x00, 0x00, 0x74, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0xf8, 0x0f, 0xf8, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0xdb, 0xf1, 0xa4, 0x47, 0xca, 0x67, 0x10, 0xb3, 0x1f, 0x00, 0xdd, 0x01, 0x06, 0x62, 0xda, 0x00, 0x00, 0x51, 0x00, 0x04, 0x5d, 0x88, 0x8a, 0xeb, 0x1c, 0xc9, 0x11, 0x9f, 0xe8, 0x08, 0x00, 0x2b, 0x10, 0x48, 0x60, 0x02, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0xdb, 0xf1, 0xa4, 0x47, 0xca, 0x67, 0x10, 0xb3, 0x1f, 0x00, 0xdd, 0x01, 0x06, 0x62, 0xda, 0x00, 0x00, 0x51, 0x00, 0x2c, 0x1c, 0xb7, 0x6c, 0x12, 0x98, 0x40, 0x45, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00}
-	rpchttp.RPCWrite(dataout)
-	rpchttp.RPCRead()
+	//wait for channels to be setup
+	<-ready
+	fmt.Println("[+] Binding to RPC")
+	//bind to RPC
+	rpchttp.RPCBind()
+	//rpchttp.RPCRead() //get the 200 response
+	//go rpchttp.RPCReader()
+	//dataout := []byte{0x05, 0x00, 0x0b, 0x13, 0x10, 0x00, 0x00, 0x00, 0x74, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0xf8, 0x0f, 0xf8, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0xdb, 0xf1, 0xa4, 0x47, 0xca, 0x67, 0x10, 0xb3, 0x1f, 0x00, 0xdd, 0x01, 0x06, 0x62, 0xda, 0x00, 0x00, 0x51, 0x00, 0x04, 0x5d, 0x88, 0x8a, 0xeb, 0x1c, 0xc9, 0x11, 0x9f, 0xe8, 0x08, 0x00, 0x2b, 0x10, 0x48, 0x60, 0x02, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0xdb, 0xf1, 0xa4, 0x47, 0xca, 0x67, 0x10, 0xb3, 0x1f, 0x00, 0xdd, 0x01, 0x06, 0x62, 0xda, 0x00, 0x00, 0x51, 0x00, 0x2c, 0x1c, 0xb7, 0x6c, 0x12, 0x98, 0x40, 0x45, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00}
+	//rpchttp.RPCWrite(dataout)
+	//rpchttp.RPCRead(2)
 
 	//rpchttp.RPCWrite([]byte{0x05, 0x00, 0x14, 0x03, 0x10, 0x00, 0x00, 0x00, 0x1c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x01, 0x00, 0x05, 0x00, 0x00, 0x00, 0x30, 0x75, 0x00, 0x00})
 	//rpchttp.RPCRead()
+
 	resp, err := rpchttp.DoConnectExRequest(body.Marshal())
 	AuthSession.RPCSet = true
+
 	return resp, err
 }
 
@@ -173,17 +182,45 @@ func mapiRequestRPC(body ExecuteRequest) ([]byte, error) {
 	gcSuccess.Header = rpchttp.AUXHeader{Version: 0x01, Type: 0x08}
 	gcSuccess.Header.Size = uint16(len(gcSuccess.Marshal()))
 
-	auxbuf.Buff = []rpchttp.AuxInfo{gcSuccess}
+	requestID := rpchttp.AUXTypePerfRequestID{SessionID: 0x01, RequestID: 0x0b}
+	requestID.Header = rpchttp.AUXHeader{Version: 0x01, Type: 0x01}
+	requestID.Header.Size = uint16(len(requestID.Marshal()))
+
+	auxbuf.Buff = []rpchttp.AuxInfo{requestID}
+
 	auxbuf.RPCHeader.Size = uint16(len(auxbuf.Marshal()) - 10) //account for header size
 	auxbuf.RPCHeader.SizeActual = auxbuf.RPCHeader.Size
+	//fmt.Println("Len of body: ", uint32(len(utils.BodyToBytes(body.RopBuffer))))
+	//byte align here again
+	length := uint32(len(utils.BodyToBytes(body.RopBuffer)))
+	if length%4 != 0 {
+		if (length+1)%4 == 0 {
+			body.RPCPtr = []byte{0x00, 0x70, 0x80, 0x00, 0x00}
+		} else if (length+2)%4 == 0 {
+			body.RPCPtr = []byte{0x00, 0x00, 0x70, 0x80, 0x00, 0x00}
+		} else if (length+3)%4 == 0 {
+			body.RPCPtr = []byte{0x00, 0x00, 0x00, 0x70, 0x80, 0x00, 0x00}
+		}
+		body.MaxRopOut = switchEndian(length)
+	} else {
+		body.RPCPtr = []byte{0x70, 0x80, 0x00, 0x00}
+		body.MaxRopOut = length
+	}
 
 	body.AuxilliaryBuf = auxbuf.Marshal()
-	fmt.Printf("%x\n", uint32(len(body.AuxilliaryBuf)))
-	body.AuxilliaryBufSize = uint32(len(body.AuxilliaryBuf))
+	body.AuxilliaryBufSize = uint32(len(body.AuxilliaryBuf) - 2)
 
-	resp, err = rpchttp.EcDoRpcExt2(body.Marshal())
+	resp, err = rpchttp.EcDoRpcExt2(body.Marshal(), body.AuxilliaryBufSize)
+	//fmt.Printf("HEre %x\n", resp[52:])
+	return resp[44:], err
+}
 
-	return resp, err
+func switchEndian(val uint32) uint32 {
+	byteNum := new(bytes.Buffer)
+	var num uint32
+	binary.Write(byteNum, binary.BigEndian, val)
+	binary.Read(byteNum, binary.LittleEndian, &num)
+	return num
 }
 
 //isAuthenticated checks if we have a session
@@ -219,7 +256,7 @@ func readResponse(headers http.Header, body []byte) ([]byte, error) {
 	//DONE means we don't need to fetch more data
 
 	start := bytes.Index(body, []byte{0x0D, 0x0A, 0x0D, 0x0A})
-	//fmt.Println(string(body[:start]))
+	//fmt.Printf("Resp: %x\n", (body[start:]))
 	return body[start+4:], nil
 }
 
@@ -236,8 +273,17 @@ func AuthenticateRPC() (*RopLogonResponse, error) {
 	connRequest := ConnectRequestRPC{}
 
 	connRequest.UserDN = []byte(AuthSession.LID)
-	connRequest.UserDN = append(connRequest.UserDN, []byte{0x00, 0x00, 0x00, 0x00}...) //append nullbyte
-	//fmt.Println(AuthSession.LID, len(connRequest.UserDN))
+	//check that UserDN aligns to 4 byte boundary
+	if (len(connRequest.UserDN)+1)%4 == 0 { //append single null-byte
+		connRequest.UserDN = append(connRequest.UserDN, []byte{0x00}...) //append nullbyte
+	} else if (len(connRequest.UserDN)+2)%4 == 0 {
+		connRequest.UserDN = append(connRequest.UserDN, []byte{0x00, 0x00}...) //, 0x00, 0x00}...) //append nullbyte
+	} else if (len(connRequest.UserDN)+3)%4 == 0 {
+		connRequest.UserDN = append(connRequest.UserDN, []byte{0x00, 0x00, 0x00}...) //, 0x00, 0x00}...) //append nullbyte
+	} else {
+		connRequest.UserDN = append(connRequest.UserDN, []byte{0x00, 0x00, 0x00, 0x00}...) //, 0x00, 0x00}...) //append nullbyte
+	}
+
 	connRequest.DNLen = uint32(len(connRequest.UserDN))
 	connRequest.DNLenActual = connRequest.DNLen
 	if AuthSession.Admin == true {
@@ -317,7 +363,7 @@ func AuthenticateFetchMailbox(essdn []byte) (*RopLogonResponse, error) {
 
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
-	execRequest.MaxRopOut = 0x9d000000
+
 	logonBody := RopLogonRequest{RopID: 0xFE, LogonID: AuthSession.LogonID}
 	logonBody.OutputHandleIndex = 0x00
 	logonBody.LogonFlags = 0x01
@@ -337,9 +383,11 @@ func AuthenticateFetchMailbox(essdn []byte) (*RopLogonResponse, error) {
 	if err != nil {
 		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
 	}
+	//fmt.Printf("\nRESP: %x\n\n", responseBody[8:])
 	execResponse := ExecuteResponse{}
 	execResponse.Unmarshal(responseBody)
-	if execResponse.ErrorCode == 0 && len(execResponse.RopBuffer) > 0 {
+	//fmt.Println(execResponse.RopBuffer, execResponse.ErrorCode)
+	if (execResponse.ErrorCode == 0 || execResponse.ErrorCode == 180) && len(execResponse.RopBuffer) > 0 {
 		AuthSession.Authenticated = true
 
 		logonResponse := RopLogonResponse{}

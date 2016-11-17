@@ -83,7 +83,7 @@ func getRPCHTTP(autoURLPtr string) *utils.AutodiscoverResp {
 			user = v.Server
 		}
 	}
-	//fmt.Println(url)
+	fmt.Println(url)
 	config.RPCURL = fmt.Sprintf("%s/rpc/rpcproxy.dll?%s:6001", url, user)
 	//config.RPCURL = fmt.Sprintf("%s/rpc/rpcproxy.dll?%s:6001", "https://192.168.124.1", user)
 	fmt.Printf("[+] RPC URL set: %s\n", config.RPCURL)
@@ -104,7 +104,7 @@ func main() {
 	autoURLPtr := flag.String("url", "", "If you know the Autodiscover URL, supply it here. Default behaviour is to try and find it via the domain")
 	autodiscoverOnly := flag.Bool("autodiscover", false, "Only does the autodiscover, useful for checking if you can actually interact with the domain")
 	displayRules := flag.Bool("display", false, "Display the current rules")
-	tcpPtr := flag.Bool("tcp", false, "If set, we'll use TCP for the MAPI requests. Otherwise, we stick to MAPI over HTTP")
+	rpcPtr := flag.Bool("rpc", false, "If set, we'll use RPC for the MAPI requests. Otherwise, we stick to MAPI over HTTP")
 	basicPtr := flag.Bool("basic", false, "Don't try NTLM, just do straight Basic")
 	insecurePtr := flag.Bool("insecure", false, "Don't verify SSL/TLS cerificate")
 	brutePtr := flag.Bool("brute", false, "Try bruteforce usernames/passwords")
@@ -156,7 +156,7 @@ func main() {
 
 	}
 
-	if *tcpPtr == false {
+	if *rpcPtr == false {
 		var mapiURL, abkURL, userDN string
 
 		resp = getMapiHTTP(*autoURLPtr)
