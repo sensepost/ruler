@@ -115,12 +115,7 @@ func main() {
 	conscPtr := flag.Int("attempts", 2, "Number of attempts before delay")
 	delayPtr := flag.Int("delay", 5, "Delay between attempts")
 	autoSendPtr := flag.Bool("send", false, "Autosend an email once the rule has been created")
-<<<<<<< HEAD
 	abkPtr := flag.Bool("abk", false, "Get the address book")
-=======
-	mapiUrlPtr := flag.String("mapiUrl", "", "Specify the MAPI URL (bypass autodiscover)")
-	userDNPtr := flag.String("userDN", "", "User DN required when MAPI URL is specified directly")
->>>>>>> 6243526814001efe3168c4f4467963dcd944640b
 
 	flag.Parse()
 
@@ -157,7 +152,6 @@ func main() {
 		fmt.Printf("[*] Autodiscover enabled and we could Authenticate.\nAutodiscover returned: %s", resp.Response.User)
 		os.Exit(0)
 	}
-<<<<<<< HEAD
 	if *checkOnly == true {
 		resp = getMapiHTTP(*autoURLPtr)
 		mapiURL := mapi.ExtractMapiURL(resp)
@@ -178,51 +172,21 @@ func main() {
 		userDN = resp.Response.User.LegacyDN
 
 		if mapiURL == "" {
-
+			//exit(fmt.Errorf("[x] No MAPI URL found. Exiting"))
 			//try RPC
 			fmt.Println("[x] No MAPI URL found. Trying RPC/HTTP")
 			resp = getRPCHTTP(*autoURLPtr)
 			if resp.Response.User.LegacyDN == "" {
 
 			}
-			mapi.Init(&config, resp.Response.User.LegacyDN, "", "", mapi.RPC)
-=======
 
-	if *tcpPtr == false {
-		var mapiURL, userDN string
-		if *mapiUrlPtr != "" {
-			if *userDNPtr == "" {
-				exit(fmt.Errorf("[x] UserDN required when specifying MAPI URL directly"))
-			}
-			mapiURL = *mapiUrlPtr
-			userDN = *userDNPtr
-		} else {
-			resp = getMapiHTTP(*autoURLPtr)
-			mapiURL = mapi.ExtractMapiURL(resp)
-			userDN = resp.Response.User.LegacyDN
-			if mapiURL == "" {
-				exit(fmt.Errorf("[x] No MAPI URL found. Exiting"))
-				//try RPC
-				//fmt.Println("[x] No MAPI URL found. Trying RPC/HTTP")
-				//resp = getRPCHTTP(*autoURLPtr)
-				//fmt.Println(resp.Response.Account.Protocol[0].Server)
-				//mapi.Init(config, resp.Response.User.LegacyDN, "", mapi.RPC)
-			}
->>>>>>> 6243526814001efe3168c4f4467963dcd944640b
+			mapi.Init(&config, resp.Response.User.LegacyDN, "", "", mapi.RPC)
 		}
 
 		fmt.Println("[+] MAPI URL found: ", mapiURL)
-<<<<<<< HEAD
 		fmt.Println("[+] MAPI AddressBook URL found: ", abkURL)
 
 		mapi.Init(&config, userDN, mapiURL, abkURL, mapi.HTTP)
-=======
-		if *checkOnly == true {
-			fmt.Println("[+] Authentication succeeded and MAPI/HTTP is available")
-			os.Exit(0)
-		}
-		mapi.Init(config, userDN, mapiURL, mapi.HTTP)
->>>>>>> 6243526814001efe3168c4f4467963dcd944640b
 	} else {
 		resp = getRPCHTTP(*autoURLPtr)
 		mapi.Init(&config, resp.Response.User.LegacyDN, "", "", mapi.RPC)
