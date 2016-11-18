@@ -15,20 +15,6 @@ import (
 	"github.com/sensepost/ruler/utils"
 )
 
-type NtlmTransport struct {
-	Domain   string
-	User     string
-	Password string
-	Insecure bool
-}
-
-func addRPCHeaders(req *http.Request) {
-	req.Header.Set("User-Agent", "MSRPC")
-	req.Header.Add("Cache-Control", "no-cache")
-	req.Header.Add("Accept", "application/rpc")
-	req.Header.Add("Connection", "keep-alive")
-}
-
 var rpcInData *http.Response
 var rpcOutData *http.Response
 var rpcInConn net.Conn
@@ -42,12 +28,7 @@ var responses = make([]RPCResponse, 0)
 //AuthSession Keep track of session data
 var AuthSession *utils.Session
 
-const (
-	RPCIN  = 1
-	RPCOUT = 2
-)
-
-func SetupHTTPNTLM(rpctype string, URL string) (net.Conn, error) {
+func setupHTTPNTLM(rpctype string, URL string) (net.Conn, error) {
 	u, err := url.Parse(URL)
 	var connection net.Conn
 	if u.Scheme == "http" {
@@ -128,14 +109,16 @@ func SetupHTTPNTLM(rpctype string, URL string) (net.Conn, error) {
 }
 
 //RPCOpen opens HTTP for RPC_IN_DATA and RPC_OUT_DATA
-func RPCOpen(URL string, c chan bool) (err error) {
+func RPCOpen(URL string, readySignal chan bool) (err error) {
 	//I'm so damn frustrated at not being able to use the http client here
 	//can't find a way to keep the write channel open (other than going over to http/2, which isn't valid here)
 	//so this is some damn messy code, but screw it
-	//dataout := []byte{0x05, 0x00, 0x14, 0x03, 0x10, 0x00, 0x00, 0x00, 0x68, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x06, 0x00, 0x06, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x38, 0xd8, 0xff, 0xfc, 0x95, 0xb4, 0x6f, 0x7c, 0x40, 0xa5, 0xbe, 0xf2, 0x4d, 0xe2, 0x12, 0x13, 0x03, 0x00, 0x00, 0x00, 0x4b, 0x4b, 0x78, 0x90, 0x04, 0xb8, 0xb6, 0xe3, 0x8a, 0x05, 0x7f, 0x3f, 0x07, 0xe0, 0x5d, 0xb7, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x05, 0x00, 0x00, 0x00, 0xe0, 0x93, 0x04, 0x00, 0x0c, 0x00, 0x00, 0x00, 0xa5, 0xbb, 0x0f, 0xac, 0x97, 0x69, 0xf5, 0x47, 0x8b, 0x97, 0x5f, 0x9a, 0x08, 0xcd, 0x70, 0x02}
-	rpcInConn, _ = SetupHTTPNTLM("RPC_IN_DATA", URL)
 
-	go RPCOpenOut(URL, c)
+	rpcInConn, _ = setupHTTPNTLM("RPC_IN_DATA", URL)
+
+	//open the RPC_OUT_DATA channel, receive a "ready" signal when this is setup
+	//this will be sent back to the caller through "c", whi
+	go RPCOpenOut(URL, readySignal)
 
 	for {
 		data := make([]byte, 2048)
@@ -153,17 +136,20 @@ func RPCOpen(URL string, c chan bool) (err error) {
 	return nil
 }
 
-func RPCOpenOut(URL string, c chan bool) error {
-	rpcOutConn, _ = SetupHTTPNTLM("RPC_OUT_DATA", URL)
+//RPCOpenOut function opens the RPC_OUT_DATA channel
+//starts our listening "loop" which scans for new responses and pushes
+//these to our list of recieved responses
+func RPCOpenOut(URL string, readySignal chan bool) error {
+	rpcOutConn, _ = setupHTTPNTLM("RPC_OUT_DATA", URL)
 
-	c <- true
+	//signal that the RPC_OUT_DATA channel has been setup. This means both channels should be ready to go
+	readySignal <- true
 
 	scanner := bufio.NewScanner(rpcOutConn)
 	scanner.Split(SplitData)
 
 	for scanner.Scan() {
 		if b := scanner.Bytes(); b != nil {
-			//fmt.Printf("%x\n", b)
 			//add to list of responses
 			r := RPCResponse{}
 			r.CallID = utils.DecodeUint16(b[12:14])
@@ -186,11 +172,12 @@ func RPCBind() {
 	//send CONN/B1
 	RPCWrite(connB1.Marshal())
 
+	//I should change this to an object, but it never changes, so I guess it's ok for now to leave it hardcoded
 	dataout := []byte{0x05, 0x00, 0x0b, 0x13, 0x10, 0x00, 0x00, 0x00, 0x74, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0xf8, 0x0f, 0xf8, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0xdb, 0xf1, 0xa4, 0x47, 0xca, 0x67, 0x10, 0xb3, 0x1f, 0x00, 0xdd, 0x01, 0x06, 0x62, 0xda, 0x00, 0x00, 0x51, 0x00, 0x04, 0x5d, 0x88, 0x8a, 0xeb, 0x1c, 0xc9, 0x11, 0x9f, 0xe8, 0x08, 0x00, 0x2b, 0x10, 0x48, 0x60, 0x02, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0xdb, 0xf1, 0xa4, 0x47, 0xca, 0x67, 0x10, 0xb3, 0x1f, 0x00, 0xdd, 0x01, 0x06, 0x62, 0xda, 0x00, 0x00, 0x51, 0x00, 0x2c, 0x1c, 0xb7, 0x6c, 0x12, 0x98, 0x40, 0x45, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00}
 	RPCWrite(dataout)
 	RPCRead(0)
 	RPCRead(0)
-	//RPCRead(1)
+
 }
 
 //RPCPing fucntion
@@ -199,13 +186,11 @@ func RPCPing() {
 		time.Sleep(time.Second * 5)
 		pkt := Ping()
 		RPCWrite(pkt.Marshal())
-
 	}
 }
 
-//RPCRequest does our actual RPC request
-//returns the mapi data
-func EcDoRpcExt2(mapi []byte, auxLen uint32) ([]byte, error) {
+//EcDoRPCExt2 does our actual RPC request returns the mapi data
+func EcDoRPCExt2(mapi []byte, auxLen uint32) ([]byte, error) {
 	header := RTSHeader{Version: 0x05, VersionMinor: 0, Type: DCERPC_PKT_REQUEST, PFCFlags: 0x03, AuthLen: 0, CallID: uint32(callcounter)}
 	header.PackedDrep = 16
 	req := RTSRequest{}
@@ -215,7 +200,7 @@ func EcDoRpcExt2(mapi []byte, auxLen uint32) ([]byte, error) {
 	req.Version = []byte{0x00, 0x00, 0x0b, 0x00, 0x00, 0x00, 0x00, 0x00}
 	req.ContextHandle = AuthSession.ContextHandle
 	req.Data = mapi
-	req.CbAuxIn = auxLen //uint32(len(req.RgbAuxIn) - 2)
+	req.CbAuxIn = auxLen
 	req.AuxOut = 0x000001008
 
 	req.Header.FragLen = uint16(len(req.Marshal()))
@@ -231,8 +216,10 @@ func obfuscate(data []byte) []byte {
 	return bnew
 }
 
+//DoConnectExRequest makes our connection request. After this we can use
+//EcDoRPCExt2 to make our MAPI requests
 func DoConnectExRequest(MAPI []byte) ([]byte, error) {
-	//RPCRead()
+
 	callcounter += 2
 	header := RTSHeader{Version: 0x05, VersionMinor: 0, Type: DCERPC_PKT_REQUEST, PFCFlags: 0x03, AuthLen: 0, CallID: uint32(callcounter)}
 	header.PackedDrep = 16
@@ -243,7 +230,7 @@ func DoConnectExRequest(MAPI []byte) ([]byte, error) {
 	req.ContextHandle = []byte{0x00, 0x00, 0x0a, 0x00} // 0x84, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x84, 0x00, 0x00, 0x00}
 
 	req.Data = MAPI
-	//fmt.Printf("Len: %x\n", len(MAPI))
+
 	//AUXBuffer here
 	auxbuf := AUXBuffer{}
 	auxbuf.RPCHeader = RPCHeader{Version: 0x0000, Flags: 0x04}
@@ -271,7 +258,7 @@ func DoConnectExRequest(MAPI []byte) ([]byte, error) {
 	auxbuf.Buff = []AuxInfo{clientInfo, accountInfo, sessionInfo, processInfo, clientConnInfo}
 	auxbuf.RPCHeader.Size = uint16(len(auxbuf.Marshal()) - 10) //account for header size
 	auxbuf.RPCHeader.SizeActual = auxbuf.RPCHeader.Size
-	req.RgbAuxIn = auxbuf.Marshal() //[]byte{0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00}
+	req.RgbAuxIn = auxbuf.Marshal()
 	req.CbAuxIn = uint32(len(req.RgbAuxIn) - 2)
 	req.AuxBufLen = req.CbAuxIn
 	req.AuxOut = 0x000001008
@@ -287,19 +274,24 @@ func DoConnectExRequest(MAPI []byte) ([]byte, error) {
 	return resp, err
 }
 
+//RPCWrite function writes to our RPC_IN_DATA channel
 func RPCWrite(data []byte) {
 	callcounter++
 	rpcInW.Write(data)
 }
 
+//RPCOutWrite function writes to the RPC_OUT_DATA channel,
+//this should only happen once, for ConnA1
 func RPCOutWrite(data []byte) {
 	rpcOutConn.Write(data)
 }
 
-func RPCRead(callId int) ([]byte, error) {
+//RPCRead function takes a call ID and searches for the response in
+//our list of received responses. Blocks until it finds a response
+func RPCRead(callID int) ([]byte, error) {
 	for {
 		for k, v := range responses {
-			if v.CallID == uint16(callId) {
+			if v.CallID == uint16(callID) {
 				responses = append(responses[:k], responses[k+1:]...)
 				return v.Body, nil
 			}
@@ -307,6 +299,7 @@ func RPCRead(callId int) ([]byte, error) {
 	}
 }
 
+//SplitData is used to scan through the input stream and split data into individual responses
 func SplitData(data []byte, atEOF bool) (advance int, token []byte, err error) {
 	if atEOF && len(data) == 0 {
 		return 0, nil, nil
@@ -319,13 +312,14 @@ func SplitData(data []byte, atEOF bool) (advance int, token []byte, err error) {
 			}
 		}
 	}
-	if data[0] != 0x0d {
+	//proud of this bit, not 100% sure why it works but it works a charm
+	if data[0] != 0x0d { //check if we've hit the start of a new sequence
 		start := -1
 		end := -1
-		dbuf := make([]byte, 0)
+		var dbuf []byte
+
 		for k := range data {
 			if data[k] == 0x0d && data[k+1] == 0x0a {
-
 				if start == -1 {
 					start = k + 2
 				} else {
@@ -339,8 +333,8 @@ func SplitData(data []byte, atEOF bool) (advance int, token []byte, err error) {
 				}
 			}
 		}
-		if start == -1 {
-			//fmt.Printf("weird %x\n", data)
+
+		if start == -1 { //we didn't find the start of the string, reset the head of the scanner and try again
 			return 0, nil, nil
 		}
 		return end + 2, append(dbuf, data[start:end]...), nil

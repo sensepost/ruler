@@ -72,15 +72,6 @@ func addMapiHeaders(req *http.Request, mapiType string) {
 	req.Header.Add("X-ClientApplication", "Outlook/15.0.4815.1002")
 }
 
-func addRPCHeaders(req *http.Request) {
-	AuthSession.ReqCounter++
-	req.Header.Set("User-Agent", "MSRPC")
-	req.Header.Add("Cache-Control", "no-cache")
-	req.Header.Add("Accept", "application/rpc")
-	req.Header.Add("Content-length", "0")
-
-}
-
 func sendMapiRequest(mapiType string, mapi ExecuteRequest) ([]byte, error) {
 	if AuthSession.Transport == HTTP {
 		return mapiRequestHTTP(AuthSession.URL.String(), mapiType, mapi.Marshal())
@@ -117,10 +108,11 @@ func mapiRequestHTTP(URL, mapiType string, body []byte) ([]byte, error) {
 		}
 		AuthSession.ClientSet = true
 	}
-	//fmt.Printf("%x\n", body)
+
 	req, err := http.NewRequest("POST", URL, bytes.NewReader(body))
 	addMapiHeaders(req, mapiType)
 	req.SetBasicAuth(AuthSession.Email, AuthSession.Pass)
+
 	//request the auth url
 	resp, err := AuthSession.Client.Do(req)
 
@@ -145,7 +137,9 @@ func mapiRequestHTTP(URL, mapiType string, body []byte) ([]byte, error) {
 
 func mapiConnectRPC(body ConnectRequestRPC) ([]byte, error) {
 	rpchttp.AuthSession = AuthSession
-	ready := make(chan bool)
+	ready := make(chan bool) //this is our ready channel,
+	//we should add a channel to check if there was an error setting up the channels
+	//there will currently be a deadlock here if something goes wrong
 	go rpchttp.RPCOpen(AuthSession.RPCURL, ready)
 
 	//wait for channels to be setup
@@ -153,14 +147,6 @@ func mapiConnectRPC(body ConnectRequestRPC) ([]byte, error) {
 	fmt.Println("[+] Binding to RPC")
 	//bind to RPC
 	rpchttp.RPCBind()
-	//rpchttp.RPCRead() //get the 200 response
-	//go rpchttp.RPCReader()
-	//dataout := []byte{0x05, 0x00, 0x0b, 0x13, 0x10, 0x00, 0x00, 0x00, 0x74, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0xf8, 0x0f, 0xf8, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0xdb, 0xf1, 0xa4, 0x47, 0xca, 0x67, 0x10, 0xb3, 0x1f, 0x00, 0xdd, 0x01, 0x06, 0x62, 0xda, 0x00, 0x00, 0x51, 0x00, 0x04, 0x5d, 0x88, 0x8a, 0xeb, 0x1c, 0xc9, 0x11, 0x9f, 0xe8, 0x08, 0x00, 0x2b, 0x10, 0x48, 0x60, 0x02, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0xdb, 0xf1, 0xa4, 0x47, 0xca, 0x67, 0x10, 0xb3, 0x1f, 0x00, 0xdd, 0x01, 0x06, 0x62, 0xda, 0x00, 0x00, 0x51, 0x00, 0x2c, 0x1c, 0xb7, 0x6c, 0x12, 0x98, 0x40, 0x45, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00}
-	//rpchttp.RPCWrite(dataout)
-	//rpchttp.RPCRead(2)
-
-	//rpchttp.RPCWrite([]byte{0x05, 0x00, 0x14, 0x03, 0x10, 0x00, 0x00, 0x00, 0x1c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x01, 0x00, 0x05, 0x00, 0x00, 0x00, 0x30, 0x75, 0x00, 0x00})
-	//rpchttp.RPCRead()
 
 	resp, err := rpchttp.DoConnectExRequest(body.Marshal())
 	AuthSession.RPCSet = true
@@ -175,12 +161,9 @@ func mapiRequestRPC(body ExecuteRequest) ([]byte, error) {
 	var resp []byte
 	var err error
 
+	//Don't really need the auxbuffer but it works if it's here and not if I take it out
 	auxbuf := rpchttp.AUXBuffer{}
 	auxbuf.RPCHeader = rpchttp.RPCHeader{Version: 0x0000, Flags: 0x04}
-
-	gcSuccess := rpchttp.AUXPerfGCSuccess{ClientID: 0x0001, ServerID: 0x0002, TimeSinceRequest: 0x00, TimeToCompleteRequest: 0x01, RequestOperation: 0x01, Reserved2: []byte{0x00, 0x00, 0x00}}
-	gcSuccess.Header = rpchttp.AUXHeader{Version: 0x01, Type: 0x08}
-	gcSuccess.Header.Size = uint16(len(gcSuccess.Marshal()))
 
 	requestID := rpchttp.AUXTypePerfRequestID{SessionID: 0x01, RequestID: 0x0b}
 	requestID.Header = rpchttp.AUXHeader{Version: 0x01, Type: 0x01}
@@ -210,11 +193,14 @@ func mapiRequestRPC(body ExecuteRequest) ([]byte, error) {
 	body.AuxilliaryBuf = auxbuf.Marshal()
 	body.AuxilliaryBufSize = uint32(len(body.AuxilliaryBuf) - 2)
 
-	resp, err = rpchttp.EcDoRpcExt2(body.Marshal(), body.AuxilliaryBufSize)
-	//fmt.Printf("HEre %x\n", resp[52:])
+	resp, err = rpchttp.EcDoRPCExt2(body.Marshal(), body.AuxilliaryBufSize)
+
+	//we should do some proper responses here, rather than simply skipping 44 bytes ahead
 	return resp[44:], err
 }
 
+//switchEndian is used to change from BigEndian to LittleEndian when we need to
+//pad out the RPCPtr to ensure 4-byte alignment
 func switchEndian(val uint32) uint32 {
 	byteNum := new(bytes.Buffer)
 	var num uint32
@@ -237,7 +223,6 @@ func specialFolders(folderResponse []byte) {
 	cnt := 0
 	for k := 0; k < 13; k++ {
 		AuthSession.Folderids[k] = folderResponse[cnt : cnt+8]
-		//fmt.Printf("%d : %x\n", k, AuthSession.Folderids[k])
 		cnt += 8
 	}
 }
@@ -245,7 +230,6 @@ func specialFolders(folderResponse []byte) {
 func readResponse(headers http.Header, body []byte) ([]byte, error) {
 	//check to see that the response code was 0, which indicates protocol success
 	if headers.Get("X-ResponseCode") != "0" {
-		//fmt.Println(string(body))
 		return nil, fmt.Errorf("Got a protocol error response: %s", headers.Get("X-ResponseCode"))
 	}
 	//We need to parse out the body to get rid of the meta-tags and additional headers (if any)
@@ -256,7 +240,6 @@ func readResponse(headers http.Header, body []byte) ([]byte, error) {
 	//DONE means we don't need to fetch more data
 
 	start := bytes.Index(body, []byte{0x0D, 0x0A, 0x0D, 0x0A})
-	//fmt.Printf("Resp: %x\n", (body[start:]))
 	return body[start+4:], nil
 }
 
@@ -293,7 +276,6 @@ func AuthenticateRPC() (*RopLogonResponse, error) {
 	}
 
 	connRequest.DNHash = hash(AuthSession.LID) //[]byte{0x32, 0x02, 0x03, 0x77} //7f 6f 24 b0
-	//fmt.Printf("%x\n%x\n%x\n", hash(AuthSession.LID), hash(string(connRequest.UserDN)), []byte{0x32, 0x02, 0x03, 0x77})
 	connRequest.CbLimit = 0x00
 	connRequest.DefaultCodePage = 1252
 	connRequest.LcidSort = 1033
@@ -302,25 +284,19 @@ func AuthenticateRPC() (*RopLogonResponse, error) {
 	connRequest.FCanConvertCodePage = 0x1
 	connRequest.ClientVersion = []byte{0x0f, 0x00, 0x03, 0x13, 0xe8, 0x03}
 	connRequest.TimeStamp = 0x00
-	//connRequest.RPCStuff = []byte{0xc6, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00, 0xbe, 0x00, 0xbe, 0x00, 0x36, 0x00, 0x01, 0x02, 0xa0, 0x86, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x45, 0x00, 0x74, 0x00, 0x68, 0x00, 0x65, 0x00, 0x72, 0x00, 0x6e, 0x00, 0x65, 0x00, 0x74, 0x00, 0x20, 0x00, 0x32, 0x00, 0x00, 0x00, 0x18, 0x00, 0x01, 0x18, 0x01, 0x00, 0x00, 0x00, 0x78, 0x39, 0x37, 0x11, 0x45, 0x26, 0x06, 0x47, 0xad, 0x40, 0x54, 0x9b, 0x14, 0x89, 0x66, 0x9f, 0x1c, 0x00, 0x02, 0x04, 0x01, 0x00, 0x00, 0x00, 0xdf, 0xdd, 0x21, 0xf6, 0x96, 0xd7, 0x5a, 0x4c, 0x84, 0xca, 0xe5, 0x79, 0x81, 0x28, 0x1a, 0xb2, 0x1b, 0x00, 0x00, 0x00, 0x34, 0x00, 0x02, 0x0b, 0x01, 0x00, 0x00, 0x00, 0x54, 0x9e, 0x74, 0x23, 0xbe, 0xd1, 0xf4, 0x4f, 0x81, 0xbc, 0xb7, 0x68, 0xa6, 0xdf, 0xc4, 0x7f, 0x1c, 0x00, 0x00, 0x00, 0x4f, 0x00, 0x55, 0x00, 0x54, 0x00, 0x4c, 0x00, 0x4f, 0x00, 0x4f, 0x00, 0x4b, 0x00, 0x2e, 0x00, 0x45, 0x00, 0x58, 0x00, 0x45, 0x00, 0x00, 0x00, 0x20, 0x00, 0x01, 0x4a, 0x0d, 0x65, 0x1b, 0xa8, 0x59, 0xde, 0xc6, 0x4f, 0xa3, 0x6a, 0xe0, 0x46, 0x04, 0x61, 0xf9, 0x81, 0x00, 0x00, 0x00, 0x00, 0x05, 0x00, 0x00, 0x00} //, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0xc6, 0x00, 0x00, 0x00
 
-	mapiConnectRPC(connRequest)
-	/*
-		if err != nil {
-			return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
-		}*/
-	//connResponse := ConnectResponse{}
-	//connResponse.Unmarshal(responseBody)
+	_, err := mapiConnectRPC(connRequest)
 
-	//if connResponse.StatusCode == 0 {
+	if err != nil {
+		return nil, fmt.Errorf("[x] An error occurred setting up RPC.\n %s", err)
+	}
+
 	fmt.Println("[+] User DN: ", string(connRequest.UserDN))
 	fmt.Println("[*] Got Context, Doing ROPLogin")
 
 	AuthSession.UserDN = append([]byte(AuthSession.LID), []byte{0x00}...)
 	return AuthenticateFetchMailbox(AuthSession.UserDN) //connRequest.UserDN)
-	//}
 
-	//return nil, fmt.Errorf("[x] An Unspecified error occurred")
 }
 
 //AuthenticateHTTP does the authenctication, seems like RPC/HTTP and MAPI/HTTP has slightly different auths
@@ -383,10 +359,10 @@ func AuthenticateFetchMailbox(essdn []byte) (*RopLogonResponse, error) {
 	if err != nil {
 		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
 	}
-	//fmt.Printf("\nRESP: %x\n\n", responseBody[8:])
+
 	execResponse := ExecuteResponse{}
 	execResponse.Unmarshal(responseBody)
-	//fmt.Println(execResponse.RopBuffer, execResponse.ErrorCode)
+
 	if (execResponse.ErrorCode == 0 || execResponse.ErrorCode == 180) && len(execResponse.RopBuffer) > 0 {
 		AuthSession.Authenticated = true
 
@@ -904,19 +880,8 @@ func GetMessage(folderid, messageid []byte, columns []PropertyTag) (*RopGetPrope
 		if err != nil {
 			return nil, err
 		}
-		//bufPtr += p
-		return &props, nil
-		/*
-			fmt.Println(execResponse.RopBuffer[bufPtr:])
-			rows := RopQueryRowsResponse{}
 
-			_, err = rows.Unmarshal(execResponse.RopBuffer[bufPtr:], columns)
-			if err != nil {
-				return nil, err
-			}
-			fmt.Println(rows)
-			return &rows, nil
-		*/
+		return &props, nil
 	}
 
 	return nil, fmt.Errorf("[x] An Unspecified error occurred")
@@ -1006,31 +971,18 @@ func GetMessageFast(folderid, messageid []byte, columns []PropertyTag) (*RopFast
 		fmt.Println("TotalStepCount: ", pprops.TotalStepCount)
 		fmt.Println("InProgressCount: ", pprops.InProgressCount)
 
+		//Rop release if we are done.. otherwise get rest of stream
 		if pprops.TransferStatus == 0x0001 {
 			buff, _ := FastTransferFetchStep(execResponse.RopBuffer[bufPtr+p:])
-			//fmt.Println(string(buff), err)
+
 			if buff != nil {
 				pprops.TransferBuffer = append(pprops.TransferBuffer, buff...)
-				//fmt.Printf("%s\n", pprops.TransferBuffer)
 			}
 		}
+
 		ReleaseObject(0x01)
 
-		//Rop release if we are done.. otherwise get rest of stream
-
 		return &pprops, nil
-		/*
-			fmt.Println(execResponse.RopBuffer[bufPtr:])
-			rows := RopQueryRowsResponse{}
-
-			_, err = rows.Unmarshal(execResponse.RopBuffer[bufPtr:], columns)
-			if err != nil {
-				return nil, err
-			}
-			fmt.Println(rows)
-			return &rows, nil
-		*/
-
 	}
 	return nil, fmt.Errorf("[x] An Unspecified error occurred")
 }
@@ -1442,14 +1394,10 @@ func ExecuteMailRuleAdd(rulename, triggerword, triggerlocation string, delete bo
 
 	propertyValues := make([]TaggedPropertyValue, 8)
 	//RUle Name
-	propertyValues[0] = TaggedPropertyValue{PidTagRuleName, utils.UniString(rulename)}
-	//PidTagRuleSequence
-	propertyValues[1] = TaggedPropertyValue{PidTagRuleSequence, []byte{0x0A, 0x00, 0x00, 0x00}}
-	//PidTagRuleState (Enabled)
-	propertyValues[2] = TaggedPropertyValue{PidTagRuleState, []byte{0x01, 0x00, 0x00, 0x00}}
-	//PidTagRuleCondition
-	propertyValues[3] = TaggedPropertyValue{PidTagRuleCondition, utils.BodyToBytes(RuleCondition{0x03, []byte{0x01, 0x00, 0x01, 0x00}, []byte{0x1F, 0x00, 0x37, 0x00, 0x1f, 0x00, 0x37, 0x00}, utils.UniString(triggerword)})}
-	//PidTagRuleActions
+	propertyValues[0] = TaggedPropertyValue{PidTagRuleName, utils.UniString(rulename)}                                                                                                                                         //PidTagRuleSequence
+	propertyValues[1] = TaggedPropertyValue{PidTagRuleSequence, []byte{0x0A, 0x00, 0x00, 0x00}}                                                                                                                                //PidTagRuleState (Enabled)
+	propertyValues[2] = TaggedPropertyValue{PidTagRuleState, []byte{0x01, 0x00, 0x00, 0x00}}                                                                                                                                   //PidTagRuleCondition
+	propertyValues[3] = TaggedPropertyValue{PidTagRuleCondition, utils.BodyToBytes(RuleCondition{0x03, []byte{0x01, 0x00, 0x01, 0x00}, []byte{0x1F, 0x00, 0x37, 0x00, 0x1f, 0x00, 0x37, 0x00}, utils.UniString(triggerword)})} //PidTagRuleActions
 
 	actionData := ActionData{}
 	actionData.ActionElem = []byte{0x00, 0x00, 0x14}
@@ -1465,12 +1413,9 @@ func ExecuteMailRuleAdd(rulename, triggerword, triggerlocation string, delete bo
 
 	pdat := ruleAction.Marshal()
 
-	propertyValues[4] = TaggedPropertyValue{PidTagRuleActions, pdat}
-	//PidTagRuleProvider
-	propertyValues[5] = TaggedPropertyValue{PidTagRuleProvider, utils.UniString("RuleOrganizer")}
-	//PidTagRuleLevel
-	propertyValues[6] = TaggedPropertyValue{PidTagRuleLevel, []byte{0x00, 0x00, 0x00, 0x00}}
-	//PidTagRuleProviderData
+	propertyValues[4] = TaggedPropertyValue{PidTagRuleActions, pdat}                              //PidTagRuleProvider
+	propertyValues[5] = TaggedPropertyValue{PidTagRuleProvider, utils.UniString("RuleOrganizer")} //PidTagRuleLevel
+	propertyValues[6] = TaggedPropertyValue{PidTagRuleLevel, []byte{0x00, 0x00, 0x00, 0x00}}      //PidTagRuleProviderData
 	propertyValues[7] = TaggedPropertyValue{PidTagRuleProviderData, []byte{0x10, 0x00, 0x00, 0x00, 0x14, 0x00, 0x01, 0x00, 0x00, 0x00, 0x28, 0x7d, 0xd2, 0x27, 0x14, 0xc4, 0xe4, 0x40}}
 
 	addRule.RuleData.PropertyValues = propertyValues
@@ -1599,13 +1544,14 @@ func DecodeRulesResponse(resp []byte, properties []PropertyTag) ([]Rule, []byte)
 	return rules, ruleshandle
 }
 
+//DecodeBufferToRows returns the property rows contained in the buffer, takes a list
+//of propertytags. These are needed to figure out how to split the columns in the rows
 func DecodeBufferToRows(buff []byte, cols []PropertyTag) []PropertyRow {
 
 	var pos = 0
 	var rows []PropertyRow
 	for _, property := range cols {
 		trow := PropertyRow{}
-		//trow.Flag, pos = readByte(pos, buff)
 		if property.PropertyType == PtypInteger32 {
 			trow.ValueArray, pos = utils.ReadBytes(pos, 2, buff)
 			rows = append(rows, trow)

@@ -83,9 +83,8 @@ func getRPCHTTP(autoURLPtr string) *utils.AutodiscoverResp {
 			user = v.Server
 		}
 	}
-	fmt.Println(url)
+
 	config.RPCURL = fmt.Sprintf("%s/rpc/rpcproxy.dll?%s:6001", url, user)
-	//config.RPCURL = fmt.Sprintf("%s/rpc/rpcproxy.dll?%s:6001", "https://192.168.124.1", user)
 	fmt.Printf("[+] RPC URL set: %s\n", config.RPCURL)
 	return resp
 }
@@ -116,7 +115,6 @@ func main() {
 	conscPtr := flag.Int("attempts", 2, "Number of attempts before delay")
 	delayPtr := flag.Int("delay", 5, "Delay between attempts")
 	autoSendPtr := flag.Bool("send", false, "Autosend an email once the rule has been created")
-	createfPtr := flag.Bool("cf", false, "create a folder")
 	abkPtr := flag.Bool("abk", false, "Get the address book")
 
 	flag.Parse()
@@ -153,7 +151,16 @@ func main() {
 		resp = getRPCHTTP(*autoURLPtr)
 		fmt.Printf("[*] Autodiscover enabled and we could Authenticate.\nAutodiscover returned: %s", resp.Response.User)
 		os.Exit(0)
-
+	}
+	if *checkOnly == true {
+		resp = getMapiHTTP(*autoURLPtr)
+		mapiURL := mapi.ExtractMapiURL(resp)
+		if mapiURL == "" {
+			fmt.Println("[x] No MAPI URL found. Trying RPC/HTTP")
+			resp = getRPCHTTP(*autoURLPtr)
+		}
+		fmt.Println("[+] Authentication succeeded and MAPI/HTTP is available")
+		os.Exit(0)
 	}
 
 	if *rpcPtr == false {
@@ -165,27 +172,22 @@ func main() {
 		userDN = resp.Response.User.LegacyDN
 
 		if mapiURL == "" {
-			exit(fmt.Errorf("[x] No MAPI URL found. Exiting"))
+
 			//try RPC
-			//fmt.Println("[x] No MAPI URL found. Trying RPC/HTTP")
-			//resp = getRPCHTTP(*autoURLPtr)
-			//fmt.Println(resp.Response.Account.Protocol[0].Server)
-			//mapi.Init(config, resp.Response.User.LegacyDN, "", mapi.RPC)
+			fmt.Println("[x] No MAPI URL found. Trying RPC/HTTP")
+			resp = getRPCHTTP(*autoURLPtr)
+			if resp.Response.User.LegacyDN == "" {
+
+			}
+			mapi.Init(&config, resp.Response.User.LegacyDN, "", "", mapi.RPC)
 		}
 
 		fmt.Println("[+] MAPI URL found: ", mapiURL)
 		fmt.Println("[+] MAPI AddressBook URL found: ", abkURL)
-		if *checkOnly == true {
-			fmt.Println("[+] Authentication succeeded and MAPI/HTTP is available")
-			os.Exit(0)
-		}
 
 		mapi.Init(&config, userDN, mapiURL, abkURL, mapi.HTTP)
 	} else {
-		//exit(fmt.Errorf("[x] RPC/HTTP not yet supported. "))
-
 		resp = getRPCHTTP(*autoURLPtr)
-		//os.Exit(0)
 		mapi.Init(&config, resp.Response.User.LegacyDN, "", "", mapi.RPC)
 	}
 
@@ -194,7 +196,7 @@ func main() {
 		exit(err)
 	} else if logon.MailboxGUID != nil {
 		fmt.Println("[*] And we are authenticated")
-		fmt.Printf("[+] Mailbox GUID: %x\n", logon.MailboxGUID)
+		//fmt.Printf("[+] Mailbox GUID: %x\n", logon.MailboxGUID)
 		fmt.Println("[*] Openning the Inbox")
 
 		propertyTags := make([]mapi.PropertyTag, 2)
@@ -203,8 +205,11 @@ func main() {
 		mapi.GetFolder(mapi.INBOX, propertyTags) //Open Inbox
 
 		if *abkPtr == true {
+			if config.Transport != mapi.HTTP {
+				exit(fmt.Errorf("[x] Addressbook access is only supported with MAPI/HTTP for now"))
+			}
 			fmt.Println("[*] Let's play addressbook")
-			bindResp, _ := mapi.Bind()
+			bindResp, _ := mapi.BindAddressBook()
 			fmt.Printf("[*] Server GUID: %x\n", bindResp.ServerGUID)
 			columns := make([]mapi.PropertyTag, 2)
 			columns[0] = mapi.PidTagSMTPAddress
@@ -220,39 +225,8 @@ func main() {
 				fmt.Println("")
 			}
 			exit(nil)
-
 		}
-		if *createfPtr == true {
 
-			rows, er := mapi.GetSubFolders(mapi.AuthSession.Folderids[mapi.INBOX])
-			if er != nil {
-				exit(er)
-			}
-			var folderid []byte
-			for k := 0; k < len(rows.RowData); k++ {
-				fmt.Printf("Folder [%x]%s : %x \n", rows.RowData[k][0].ValueArray, rows.RowData[k][0].ValueArray, rows.RowData[k][1].ValueArray)
-				//I am extremely lazy and don't feel like converting from Unicode. This does a comparison to see
-				//if the returned folder name (in unicode) is equal to "Contacts"
-				if fmt.Sprintf("%x", rows.RowData[k][0].ValueArray) == "740075006e006e0065006c006d00650073007a0073" { //"49006e0062006f0078" {
-					folderid = rows.RowData[k][1].ValueArray
-				}
-			}
-
-			fmt.Printf("Folderid: %x\n", folderid)
-
-			res, er := mapi.CreateMessage(folderid, nil)
-
-			if er != nil {
-				exit(er)
-			}
-			fmt.Println(res.MessageID)
-
-			if 1 < 2 {
-				return
-			}
-
-			return
-		}
 		//Display All rules
 		if *displayRules == true {
 			fmt.Println("[+] Retrieving Rules")

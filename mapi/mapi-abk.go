@@ -16,8 +16,8 @@ func ExtractMapiAddressBookURL(resp *utils.AutodiscoverResp) string {
 	return ""
 }
 
-//Bind function to bind to the AddressBook provider
-func Bind() (*BindResponse, error) {
+//BindAddressBook function to bind to the AddressBook provider
+func BindAddressBook() (*BindResponse, error) {
 
 	bindReq := BindRequest{}
 	bindReq.Flags = 0x00
