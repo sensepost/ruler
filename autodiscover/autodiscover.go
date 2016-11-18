@@ -144,7 +144,11 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, error) {
 				autodiscoverStep++
 				return autodiscover(domain, mapi)
 			}
+<<<<<<< HEAD
 			//we've done all three autodiscover steps and they've all failed
+=======
+			//we've done all three steps of autodiscover and all three failed
+>>>>>>> 6243526814001efe3168c4f4467963dcd944640b
 			return nil, err
 		}
 	}
