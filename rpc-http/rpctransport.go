@@ -270,7 +270,9 @@ func DoConnectExRequest(MAPI []byte) ([]byte, error) {
 	resp, err := RPCRead(callcounter - 1)
 
 	AuthSession.ContextHandle = resp[28:44]
-
+	if utils.DecodeUint32(AuthSession.ContextHandle[0:4]) == 0x0000 {
+		return nil, fmt.Errorf("-- Unable to obtain a session context")
+	}
 	return resp, err
 }
 

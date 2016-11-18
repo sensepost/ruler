@@ -177,14 +177,21 @@ func mapiRequestRPC(body ExecuteRequest) ([]byte, error) {
 	//byte align here again
 	length := uint32(len(utils.BodyToBytes(body.RopBuffer)))
 	if length%4 != 0 {
-		if (length+1)%4 == 0 {
+
+		if (length+1)%4 == 0 { //don't even ask... Fixes a bug but still. I need to figure out exactly what should be happening here
 			body.RPCPtr = []byte{0x00, 0x70, 0x80, 0x00, 0x00}
+			lenp := uint16(length)
+			v := utils.EncodeNum(lenp)
+			v = append([]byte{0x00, 0x00}, v...)
+			body.MaxRopOut = switchEndian(utils.DecodeUint32(v))
 		} else if (length+2)%4 == 0 {
 			body.RPCPtr = []byte{0x00, 0x00, 0x70, 0x80, 0x00, 0x00}
+			body.MaxRopOut = switchEndian(length)
 		} else if (length+3)%4 == 0 {
 			body.RPCPtr = []byte{0x00, 0x00, 0x00, 0x70, 0x80, 0x00, 0x00}
+			body.MaxRopOut = switchEndian(length)
 		}
-		body.MaxRopOut = switchEndian(length)
+
 	} else {
 		body.RPCPtr = []byte{0x70, 0x80, 0x00, 0x00}
 		body.MaxRopOut = length
@@ -194,7 +201,7 @@ func mapiRequestRPC(body ExecuteRequest) ([]byte, error) {
 	body.AuxilliaryBufSize = uint32(len(body.AuxilliaryBuf) - 2)
 
 	resp, err = rpchttp.EcDoRPCExt2(body.Marshal(), body.AuxilliaryBufSize)
-
+	//fmt.Printf("%x\n", resp)
 	//we should do some proper responses here, rather than simply skipping 44 bytes ahead
 	return resp[44:], err
 }
@@ -290,6 +297,8 @@ func AuthenticateRPC() (*RopLogonResponse, error) {
 	if err != nil {
 		return nil, fmt.Errorf("[x] An error occurred setting up RPC.\n %s", err)
 	}
+
+	//Here we should check if the login worked
 
 	fmt.Println("[+] User DN: ", string(connRequest.UserDN))
 	fmt.Println("[*] Got Context, Doing ROPLogin")
