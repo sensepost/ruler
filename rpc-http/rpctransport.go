@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 
 	"github.com/ThomsonReutersEikon/go-ntlm/ntlm"
 	"github.com/sensepost/ruler/utils"
@@ -182,11 +181,7 @@ func RPCBind() {
 
 //RPCPing fucntion
 func RPCPing() {
-	for {
-		time.Sleep(time.Second * 5)
-		pkt := Ping()
-		RPCWrite(pkt.Marshal())
-	}
+	rpcInW.Write(Ping().Marshal())
 }
 
 //EcDoRPCExt2 does our actual RPC request returns the mapi data
@@ -194,7 +189,7 @@ func EcDoRPCExt2(mapi []byte, auxLen uint32) ([]byte, error) {
 	header := RTSHeader{Version: 0x05, VersionMinor: 0, Type: DCERPC_PKT_REQUEST, PFCFlags: 0x03, AuthLen: 0, CallID: uint32(callcounter)}
 	header.PackedDrep = 16
 	req := RTSRequest{}
-	req.MaxFrag = 0x01FF //784 //132
+	req.MaxFrag = 0xFFFF //784 //132
 	req.MaxRecv = 0x0000
 	req.Header = header
 	req.Version = []byte{0x00, 0x00, 0x0b, 0x00, 0x00, 0x00, 0x00, 0x00}

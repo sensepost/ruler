@@ -9,6 +9,8 @@ import (
 	"net/http/cookiejar"
 	"net/url"
 	"regexp"
+	"runtime"
+	"time"
 
 	"github.com/sensepost/ruler/http-ntlm"
 	"github.com/sensepost/ruler/rpc-http"
@@ -20,6 +22,8 @@ const HTTP int = 1
 
 //RPC over HTTP transport type for traditional MAPI
 const RPC int = 2
+
+var cnt = 0
 
 //AuthSession a
 var AuthSession *utils.Session
@@ -177,7 +181,6 @@ func mapiRequestRPC(body ExecuteRequest) ([]byte, error) {
 	//byte align here again
 	length := uint32(len(utils.BodyToBytes(body.RopBuffer)))
 	if length%4 != 0 {
-
 		if (length+1)%4 == 0 { //don't even ask... Fixes a bug but still. I need to figure out exactly what should be happening here
 			body.RPCPtr = []byte{0x00, 0x70, 0x80, 0x00, 0x00}
 			lenp := uint16(length)
@@ -767,7 +770,7 @@ func GetFolder(folderid int, columns []PropertyTag) (*RopOpenFolderResponse, err
 
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
-	execRequest.MaxRopOut = 262144
+	//execRequest.MaxRopOut = 262144
 
 	getFolder := RopOpenFolderRequest{RopID: 0x02, LogonID: AuthSession.LogonID}
 	getFolder.InputHandle = 0x00
@@ -805,7 +808,7 @@ func GetFolder(folderid int, columns []PropertyTag) (*RopOpenFolderResponse, err
 	execResponse := ExecuteResponse{}
 	execResponse.Unmarshal(responseBody)
 
-	if execResponse.ErrorCode == 0 {
+	if execResponse.StatusCode == 0 {
 		bufPtr := 10
 		openFolder := RopOpenFolderResponse{}
 		_, err := openFolder.Unmarshal(execResponse.RopBuffer[bufPtr:])
@@ -1479,11 +1482,14 @@ func ExecuteMailRuleDelete(ruleid []byte) error {
 
 //Ping send a PING message to the server
 func Ping() {
-	isAuthenticated() //check if we actually have a session
-	//responseBody, _ := sendMapiRequest("PING", []byte{})
-	//fmt.Println(responseBody)
-	fmt.Println(AuthSession.CookieJar)
-
+	//for RPC we need to keep the socket alive so keep sending pings
+	if AuthSession.Transport != HTTP {
+		for {
+			runtime.Gosched()
+			rpchttp.RPCPing()
+			time.Sleep(time.Second * 5)
+		}
+	}
 }
 
 //DecodeGetTableResponse function Unmarshals the various parts of a getproperties response (this includes the initial openfolder request)

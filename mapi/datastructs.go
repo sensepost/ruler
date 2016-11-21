@@ -914,6 +914,7 @@ func (logonResponse *RopLogonResponse) Unmarshal(resp []byte) error {
 func (execResponse *ExecuteResponse) Unmarshal(resp []byte) error {
 	pos := 0
 	var buf []byte
+
 	execResponse.StatusCode, pos = utils.ReadUint32(pos, resp)
 
 	if execResponse.StatusCode != 0 { //error occurred..
@@ -925,7 +926,7 @@ func (execResponse *ExecuteResponse) Unmarshal(resp []byte) error {
 		execResponse.RopBufferSize, pos = utils.ReadUint32(pos, resp)
 		buf, pos = utils.ReadBytes(pos, int(execResponse.RopBufferSize), resp)
 		execResponse.RopBuffer = buf //decodeLogonRopResponse(buf)
-		execResponse.AuxilliaryBufSize, pos = utils.ReadUint32(pos, resp)
+		execResponse.AuxilliaryBufSize, _ = utils.ReadUint32(pos, resp)
 		//execResponse.AuxilliaryBuf, _ = utils.ReadBytes(pos, int(execResponse.AuxilliaryBufSize), resp)
 	}
 	return nil
