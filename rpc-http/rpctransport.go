@@ -74,25 +74,29 @@ func setupHTTPNTLM(rpctype string, URL string) (net.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-
+	//we should probably extract the NTLM type from the server response and use appropriate
 	session, err := ntlm.CreateClientSession(ntlm.Version1, ntlm.ConnectionlessMode)
 	if err != nil {
 		return nil, err
 	}
 
-	session.SetUserInfo(AuthSession.User, AuthSession.Pass, "")
+	session.SetUserInfo(AuthSession.User, AuthSession.Pass, AuthSession.Domain)
+
 	// parse NTLM challenge
 	challenge, err := ntlm.ParseChallengeMessage(challengeBytes)
 	if err != nil {
+		//panic(err)
 		return nil, err
 	}
 	err = session.ProcessChallengeMessage(challenge)
 	if err != nil {
+		//panic(err)
 		return nil, err
 	}
 	// authenticate user
 	authenticate, err := session.GenerateAuthenticateMessage()
 	if err != nil {
+		//panic(err)
 		return nil, err
 	}
 	if rpctype == "RPC_IN_DATA" {
@@ -189,7 +193,7 @@ func EcDoRPCExt2(mapi []byte, auxLen uint32) ([]byte, error) {
 	header := RTSHeader{Version: 0x05, VersionMinor: 0, Type: DCERPC_PKT_REQUEST, PFCFlags: 0x03, AuthLen: 0, CallID: uint32(callcounter)}
 	header.PackedDrep = 16
 	req := RTSRequest{}
-	req.MaxFrag = 0xFFFF //784 //132
+	req.MaxFrag = 0xFFFF
 	req.MaxRecv = 0x0000
 	req.Header = header
 	req.Version = []byte{0x00, 0x00, 0x0b, 0x00, 0x00, 0x00, 0x00, 0x00}

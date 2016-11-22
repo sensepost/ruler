@@ -76,7 +76,7 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, error) {
 		//create an ntml http client
 		client = http.Client{
 			Transport: &httpntlm.NtlmTransport{
-				Domain:   "",
+				Domain:   SessionConfig.Domain,
 				User:     SessionConfig.User,
 				Password: SessionConfig.Pass,
 				Insecure: SessionConfig.Insecure,

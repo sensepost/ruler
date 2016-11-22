@@ -95,8 +95,9 @@ func getRPCHTTP(autoURLPtr string) *utils.AutodiscoverResp {
 			user = v.Server
 		}
 	}
-	url = "https://192.168.124.1"
+	//url = "https://192.168.124.1"
 	config.RPCURL = fmt.Sprintf("%s/rpc/rpcproxy.dll?%s:6001", url, user)
+
 	fmt.Printf("[+] RPC URL set: %s\n", config.RPCURL)
 	return resp
 }
@@ -231,7 +232,7 @@ func sendMessage(triggerword string) error {
 func connect(c *cli.Context) error {
 
 	//check that name, trigger and location were supplied
-	if c.GlobalString("domain") == "" || c.GlobalString("username") == "" || c.GlobalString("password") == "" || c.GlobalString("email") == "" {
+	if c.GlobalString("username") == "" || c.GlobalString("password") == "" || c.GlobalString("email") == "" {
 		return fmt.Errorf("Missing global argument. Use --domain, --username, --password and --email")
 	}
 
@@ -317,7 +318,7 @@ A tool by @sensepost to abuse Exchange Services.`
 		cli.StringFlag{
 			Name:  "domain,d",
 			Value: "",
-			Usage: "The target domain",
+			Usage: "A domain for the user (usually required for domain\\username)",
 		},
 		cli.StringFlag{
 			Name:  "username,u",

@@ -103,7 +103,7 @@ func mapiRequestHTTP(URL, mapiType string, body []byte) ([]byte, error) {
 	if AuthSession.ClientSet == false {
 		AuthSession.Client = http.Client{
 			Transport: &httpntlm.NtlmTransport{
-				Domain:   "",
+				Domain:   AuthSession.Domain,
 				User:     AuthSession.User,
 				Password: AuthSession.Pass,
 				Insecure: AuthSession.Insecure,

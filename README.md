@@ -93,7 +93,7 @@ COMMANDS:
      help, h     Shows a list of commands or help for one command
 
 GLOBAL OPTIONS:
-   --domain value, -d value    The target domain
+   --domain value, -d value    A domain for the user (usually required for domain\username)
    --username value, -u value  A valid username
    --password value, -p value  A valid password
    --email value, -e value     The target's email address
@@ -176,9 +176,9 @@ If you encounter an Exchange server where the Autodiscover service is failing, y
 
 ``` ./ruler --url http://autodiscover.somedomain.com/autodiscover/autodiscover.xml ```
 
-If you run into issues with Authentication (and you know the creds are correct), you can try and force the use of basic authentication with ```-basic```
+If you run into issues with Authentication (and you know the creds are correct), you can try and force the use of basic authentication with the global ```--basic```
 
-The ```-v``` flag will also give you some insight into the process being used by the autodiscover service.
+The global ```--verbose``` flag will also give you some insight into the process being used by the autodiscover service.
 
 
 ## Display existing rules / verify account
