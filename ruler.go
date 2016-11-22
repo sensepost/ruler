@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/sensepost/ruler/autodiscover"
@@ -34,7 +35,13 @@ func getMapiHTTP(autoURLPtr string) *utils.AutodiscoverResp {
 	var err error
 	fmt.Println("[*] Retrieving MAPI/HTTP info")
 	if autoURLPtr == "" {
-		resp, err = autodiscover.MAPIDiscover(config.Domain)
+		//rather use the email address's domain here and --domain is the authentication domain
+		lastBin := strings.LastIndex(config.Email, "@")
+		if lastBin == -1 {
+			exit(fmt.Errorf("[x] The supplied email address seems to be incorrect.\n%s", err))
+		}
+		maildomain := config.Email[lastBin+1:]
+		resp, err = autodiscover.MAPIDiscover(maildomain)
 	} else {
 		resp, err = autodiscover.MAPIDiscover(autoURLPtr)
 	}
@@ -54,7 +61,13 @@ func getRPCHTTP(autoURLPtr string) *utils.AutodiscoverResp {
 	var err error
 	fmt.Println("[*] Retrieving RPC/HTTP info")
 	if autoURLPtr == "" {
-		resp, err = autodiscover.Autodiscover(config.Domain)
+		//rather use the email address's domain here and --domain is the authentication domain
+		lastBin := strings.LastIndex(config.Email, "@")
+		if lastBin == -1 {
+			exit(fmt.Errorf("[x] The supplied email address seems to be incorrect.\n%s", err))
+		}
+		maildomain := config.Email[lastBin+1:]
+		resp, err = autodiscover.Autodiscover(maildomain)
 	} else {
 		resp, err = autodiscover.Autodiscover(autoURLPtr)
 	}
@@ -209,7 +222,6 @@ func sendMessage(triggerword string) error {
 	if er != nil {
 		return er
 	}
-
 	fmt.Println("[*] Message sent, your shell should trigger shortly.")
 
 	return nil

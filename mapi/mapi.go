@@ -178,32 +178,28 @@ func mapiRequestRPC(body ExecuteRequest) ([]byte, error) {
 	auxbuf.RPCHeader.Size = uint16(len(auxbuf.Marshal()) - 10) //account for header size
 	auxbuf.RPCHeader.SizeActual = auxbuf.RPCHeader.Size
 	//fmt.Println("Len of body: ", uint32(len(utils.BodyToBytes(body.RopBuffer))))
+
 	//byte align here again
 	length := uint32(len(utils.BodyToBytes(body.RopBuffer)))
 	if length%4 != 0 {
-		if (length+1)%4 == 0 { //don't even ask... Fixes a bug but still. I need to figure out exactly what should be happening here
-			body.RPCPtr = []byte{0x00, 0x70, 0x80, 0x00, 0x00}
-			lenp := uint16(length)
-			v := utils.EncodeNum(lenp)
-			v = append([]byte{0x00, 0x00}, v...)
-			body.MaxRopOut = switchEndian(utils.DecodeUint32(v))
+		if (length+1)%4 == 0 {
+			body.RopBuffer.ROP.ServerObjectHandleTable = append(body.RopBuffer.ROP.ServerObjectHandleTable, []byte{0x00}...)
 		} else if (length+2)%4 == 0 {
-			body.RPCPtr = []byte{0x00, 0x00, 0x70, 0x80, 0x00, 0x00}
-			body.MaxRopOut = switchEndian(length)
+			body.RopBuffer.ROP.ServerObjectHandleTable = append(body.RopBuffer.ROP.ServerObjectHandleTable, []byte{0x00, 0x00}...)
 		} else if (length+3)%4 == 0 {
-			body.RPCPtr = []byte{0x00, 0x00, 0x00, 0x70, 0x80, 0x00, 0x00}
-			body.MaxRopOut = switchEndian(length)
+			body.RopBuffer.ROP.ServerObjectHandleTable = append(body.RopBuffer.ROP.ServerObjectHandleTable, []byte{0x00, 0x00, 0x00}...)
 		}
 
-	} else {
-		body.RPCPtr = []byte{0x70, 0x80, 0x00, 0x00}
-		body.MaxRopOut = length
 	}
+
+	body.RPCPtr = []byte{0x70, 0x80, 0x00, 0x00}
+	body.MaxRopOut = length
 
 	body.AuxilliaryBuf = auxbuf.Marshal()
 	body.AuxilliaryBufSize = uint32(len(body.AuxilliaryBuf) - 2)
 
-	resp, err = rpchttp.EcDoRPCExt2(body.Marshal(), body.AuxilliaryBufSize)
+	//use RPC marshal for the body to ensure the sizes are calculated to take into account the 4-byte alignment padding
+	resp, err = rpchttp.EcDoRPCExt2(body.MarshalRPC(), body.AuxilliaryBufSize)
 	//fmt.Printf("%x\n", resp)
 	//we should do some proper responses here, rather than simply skipping 44 bytes ahead
 	return resp[44:], err
@@ -375,7 +371,7 @@ func AuthenticateFetchMailbox(essdn []byte) (*RopLogonResponse, error) {
 	execResponse := ExecuteResponse{}
 	execResponse.Unmarshal(responseBody)
 
-	if (execResponse.ErrorCode == 0 || execResponse.ErrorCode == 180) && len(execResponse.RopBuffer) > 0 {
+	if (execResponse.StatusCode == 0 || execResponse.StatusCode == 180) && len(execResponse.RopBuffer) > 0 {
 		AuthSession.Authenticated = true
 
 		logonResponse := RopLogonResponse{}
@@ -424,7 +420,7 @@ func ReleaseObject(inputHandle byte) (*RopReleaseResponse, error) {
 	execResponse := ExecuteResponse{}
 	execResponse.Unmarshal(responseBody)
 
-	if execResponse.ErrorCode == 0 {
+	if execResponse.StatusCode == 0 {
 		ropReleaseResponse := RopReleaseResponse{}
 		_, err = ropReleaseResponse.Unmarshal(execResponse.RopBuffer[10:])
 		if err != nil {
@@ -535,7 +531,7 @@ func SendMessage(triggerWord string) (*RopSubmitMessageResponse, error) {
 	execResponse := ExecuteResponse{}
 	execResponse.Unmarshal(responseBody)
 
-	if execResponse.ErrorCode == 0 {
+	if execResponse.StatusCode == 0 {
 
 		bufPtr := 10
 
@@ -608,7 +604,7 @@ func SetMessageStatus(folderid, messageid []byte) (*RopSetMessageStatusResponse,
 	execResponse := ExecuteResponse{}
 	execResponse.Unmarshal(responseBody)
 
-	if execResponse.ErrorCode == 0 {
+	if execResponse.StatusCode == 0 {
 		bufPtr := 10
 
 		setStatusResp := RopSetMessageStatusResponse{}
@@ -675,7 +671,7 @@ func CreateMessage(folderID []byte, properties []TaggedPropertyValue) (*RopSaveC
 	execResponse := ExecuteResponse{}
 	execResponse.Unmarshal(responseBody)
 
-	if execResponse.ErrorCode == 0 {
+	if execResponse.StatusCode == 0 {
 		bufPtr := 10
 
 		createMessageResponse := RopCreateMessageResponse{}
@@ -742,7 +738,7 @@ func DeleteMessages(folderid []byte, messageIDCount int, messageIDs []byte) (*Ro
 	execResponse := ExecuteResponse{}
 	execResponse.Unmarshal(responseBody)
 
-	if execResponse.ErrorCode == 0 {
+	if execResponse.StatusCode == 0 {
 		bufPtr := 10
 		openFolder := RopOpenFolderResponse{}
 		p, err := openFolder.Unmarshal(execResponse.RopBuffer[bufPtr:])
@@ -870,7 +866,7 @@ func GetMessage(folderid, messageid []byte, columns []PropertyTag) (*RopGetPrope
 	execResponse := ExecuteResponse{}
 	execResponse.Unmarshal(responseBody)
 
-	if execResponse.ErrorCode == 0 {
+	if execResponse.StatusCode == 0 {
 		if execResponse.RopBuffer[2] == 0x05 { //compression
 			//decompress
 		}
@@ -950,7 +946,7 @@ func GetMessageFast(folderid, messageid []byte, columns []PropertyTag) (*RopFast
 	execResponse := ExecuteResponse{}
 	execResponse.Unmarshal(responseBody)
 
-	if execResponse.ErrorCode == 0 {
+	if execResponse.StatusCode == 0 {
 		if execResponse.RopBuffer[2] == 0x05 { //compression
 			//decompress
 		}
@@ -1022,7 +1018,7 @@ func FastTransferFetchStep(handles []byte) ([]byte, error) {
 	execResponse := ExecuteResponse{}
 	execResponse.Unmarshal(responseBody)
 
-	if execResponse.ErrorCode == 0 {
+	if execResponse.StatusCode == 0 {
 		if execResponse.RopBuffer[2] == 0x05 { //compression
 			//decompress
 		}
@@ -1142,7 +1138,7 @@ func GetFolderHierarchy(folderid []byte) (*RopGetHierarchyTableResponse, []byte,
 	execResponse := ExecuteResponse{}
 	execResponse.Unmarshal(responseBody)
 
-	if execResponse.ErrorCode == 0 {
+	if execResponse.StatusCode == 0 {
 		bufPtr := 10
 		openFolder := RopOpenFolderResponse{}
 		p, err := openFolder.Unmarshal(execResponse.RopBuffer[bufPtr:])
@@ -1197,7 +1193,7 @@ func GetSubFolders(folderid []byte) (*RopQueryRowsResponse, error) {
 	execResponse := ExecuteResponse{}
 	execResponse.Unmarshal(responseBody)
 
-	if execResponse.ErrorCode == 0 {
+	if execResponse.StatusCode == 0 {
 		bufPtr := 10
 
 		setColumnsResp := RopSetColumnsResponse{}
@@ -1264,7 +1260,7 @@ func CreateFolder(folderName string, hidden bool) (*RopCreateFolderResponse, err
 	execResponse := ExecuteResponse{}
 	execResponse.Unmarshal(responseBody)
 
-	if execResponse.ErrorCode == 0 {
+	if execResponse.StatusCode == 0 {
 		bufPtr := 10
 		createFolder := RopCreateFolderResponse{}
 		_, err = createFolder.Unmarshal(execResponse.RopBuffer[bufPtr:])
@@ -1323,7 +1319,7 @@ func GetContents(folderid []byte) (*RopQueryRowsResponse, error) {
 	execResponse := ExecuteResponse{}
 	execResponse.Unmarshal(responseBody)
 
-	if execResponse.ErrorCode == 0 {
+	if execResponse.StatusCode == 0 {
 		bufPtr := 10
 		if execResponse.RopBuffer[2] == 0x05 { //compression
 			//decompress

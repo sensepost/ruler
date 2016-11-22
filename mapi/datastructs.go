@@ -719,7 +719,13 @@ type Request interface {
 
 //Marshal turn ExecuteRequest into Bytes
 func (execRequest ExecuteRequest) Marshal() []byte {
-	execRequest.CalcSizes()
+	execRequest.CalcSizes(false)
+	return utils.BodyToBytes(execRequest)
+}
+
+//Marshal turn ExecuteRequest into Bytes
+func (execRequest ExecuteRequest) MarshalRPC() []byte {
+	execRequest.CalcSizes(true)
 	return utils.BodyToBytes(execRequest)
 }
 
@@ -1129,11 +1135,19 @@ func (saveMessageResponse *RopSaveChangesMessageResponse) Unmarshal(resp []byte)
 }
 
 //CalcSizes func to calculate the different size fields in the ROP buffer
-func (execRequest *ExecuteRequest) CalcSizes() error {
-	execRequest.RopBuffer.ROP.RopSize = uint16(len(execRequest.RopBuffer.ROP.RopsList) + 2)
-	execRequest.RopBuffer.Header.Size = uint16(len(utils.BodyToBytes(execRequest.RopBuffer.ROP)))
-	execRequest.RopBuffer.Header.SizeActual = execRequest.RopBuffer.Header.Size
-	execRequest.RopBufferSize = uint32(len(utils.BodyToBytes(execRequest.RopBuffer)))
+func (execRequest *ExecuteRequest) CalcSizes(isRPC bool) error {
+	if !isRPC {
+		execRequest.RopBuffer.ROP.RopSize = uint16(len(execRequest.RopBuffer.ROP.RopsList) + 2)
+		execRequest.RopBuffer.Header.Size = uint16(len(utils.BodyToBytes(execRequest.RopBuffer.ROP)))
+		execRequest.RopBuffer.Header.SizeActual = execRequest.RopBuffer.Header.Size
+		execRequest.RopBufferSize = uint32(len(utils.BodyToBytes(execRequest.RopBuffer)))
+	} else {
+		padding := uint32(len(utils.BodyToBytes(execRequest.RopBuffer))) - execRequest.MaxRopOut
+		execRequest.RopBuffer.ROP.RopSize = uint16(len(execRequest.RopBuffer.ROP.RopsList) + 2)
+		execRequest.RopBuffer.Header.Size = uint16(len(utils.BodyToBytes(execRequest.RopBuffer.ROP)) - int(padding))
+		execRequest.RopBuffer.Header.SizeActual = execRequest.RopBuffer.Header.Size
+		execRequest.RopBufferSize = execRequest.MaxRopOut
+	}
 	return nil
 }
 
