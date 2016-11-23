@@ -60,7 +60,7 @@ type CONNB1 struct {
 	InChannelCookie      Cookie
 	ChannelLifetime      ChannelLifetime
 	ClientKeepAlive      ClientKeepalive
-	AssociatonGroupID    AssociationGroupId
+	AssociatonGroupID    AssociationGroupID
 }
 
 //RTSRequest an RTSRequest
@@ -76,6 +76,7 @@ type RTSRequest struct {
 	AuxOut  uint32
 }
 
+//ConnectExRequest our connection request
 type ConnectExRequest struct {
 	Header        RTSHeader
 	MaxFrag       uint16
@@ -89,6 +90,7 @@ type ConnectExRequest struct {
 	AuxOut        uint32
 }
 
+//RPCHeader common fields
 type RPCHeader struct {
 	Version    uint16 //always 0x0000
 	Flags      uint16 //0x0001 Compressed, 0x0002 XorMagic, 0x0004 Last
@@ -96,6 +98,7 @@ type RPCHeader struct {
 	SizeActual uint16 //Compressed size (if 0x0001 set)
 }
 
+//RPCResponse to hold the data from our response
 type RPCResponse struct {
 	CallID uint16
 	Body   []byte
@@ -114,6 +117,7 @@ type AUXHeader struct {
 	Type    uint8
 }
 
+//AUXPerfAccountInfo used for aux info
 type AUXPerfAccountInfo struct {
 	Header   AUXHeader
 	ClientID uint16
@@ -121,6 +125,7 @@ type AUXPerfAccountInfo struct {
 	Account  []byte
 }
 
+//AUXTypePerfSessionInfo used for aux info
 type AUXTypePerfSessionInfo struct {
 	Header       AUXHeader
 	SessionID    uint16
@@ -128,6 +133,8 @@ type AUXTypePerfSessionInfo struct {
 	SessionGUID  []byte
 	ConnectionID uint32
 }
+
+//AUXTPerfMDBSuccess used for aux info
 type AUXTPerfMDBSuccess struct {
 	Header                AUXHeader
 	ClientID              uint16
@@ -137,12 +144,15 @@ type AUXTPerfMDBSuccess struct {
 	TimeSinceRequest      uint32
 	TimeToCompleteRequest uint32
 }
+
+//AUXTypePerfRequestID used for aux info
 type AUXTypePerfRequestID struct {
 	Header    AUXHeader
 	SessionID uint16
 	RequestID uint16
 }
 
+//AUXTypePerfProcessInfo used for aux info
 type AUXTypePerfProcessInfo struct {
 	Header            AUXHeader
 	ProcessID         uint16
@@ -153,6 +163,7 @@ type AUXTypePerfProcessInfo struct {
 	ProcessName       []byte
 }
 
+//AUXPerfClientInfo used for aux info
 type AUXPerfClientInfo struct {
 	Header             AUXHeader
 	AdapterSpeed       uint32
@@ -176,6 +187,7 @@ type AUXPerfClientInfo struct {
 	MacAddress         []byte
 }
 
+//AUXClientConnectionInfo used for aux info
 type AUXClientConnectionInfo struct {
 	Header                      AUXHeader
 	ConnectionGUID              []byte
@@ -186,6 +198,7 @@ type AUXClientConnectionInfo struct {
 	ConnectionContextInfo       []byte
 }
 
+//AUXPerfGCSuccess used for aux info
 type AUXPerfGCSuccess struct {
 	Header                AUXHeader
 	ClientID              uint16
@@ -203,30 +216,36 @@ type RTSPing struct {
 	Sec    RTSSec
 }
 
+//Cookie used the connection/channel cookie
 type Cookie struct {
 	CommandType uint32 //always going to be 03
 	Cookie      []byte //16 byte
 }
 
-type AssociationGroupId struct {
+//AssociationGroupID used to hold the group id
+type AssociationGroupID struct {
 	CommandType        uint32
 	AssociationGroupID []byte //16 byte
 }
 
+//ChannelLifetime holds lifetime of channel
 type ChannelLifetime struct {
 	CommandType     uint32 //always 04
 	ChannelLifetime uint32 //range of 128kb to 2 Gb
 }
 
+//ClientKeepalive specifies how long the channel is kept open
 type ClientKeepalive struct {
 	CommandType     uint32 //always 05
 	ClientKeepalive uint32 //range of 128kb to 2 Gb
 }
 
+//AuxInfo interface to make Aux buffers generic
 type AuxInfo interface {
 	Marshal() []byte
 }
 
+//CookieGen creates a 16byte UUID
 func CookieGen() []byte {
 	rand.Seed(time.Now().UnixNano())
 	b := make([]byte, 16)
@@ -240,10 +259,11 @@ func CookieGen() []byte {
 }
 
 //Bind function Creates a Bind Packet
-func Bind() BindPDU {
+func Bind(authLevel int) BindPDU {
 	bind := BindPDU{}
 	header := RTSHeader{Version: 0x05, VersionMinor: 0, Type: DCERPC_PKT_BIND, PFCFlags: 0x13, AuthLen: 0, CallID: 1}
 	header.PackedDrep = 16
+
 	bind.Header = header
 	//Generate session cookie
 	bind.MaxFrag = 0x0ff8
@@ -256,6 +276,7 @@ func Bind() BindPDU {
 	return bind
 }
 
+//ConnA1 sent from the client to create the input channel
 func ConnA1(channelCookie []byte) CONNA1 {
 	conna1 := CONNA1{}
 	header := RTSHeader{Version: 0x05, VersionMinor: 0, Type: DCERPC_PKT_RTS, PFCFlags: 0x03, AuthLen: 0, CallID: 0}
@@ -271,6 +292,7 @@ func ConnA1(channelCookie []byte) CONNA1 {
 	return conna1
 }
 
+//ConnB1 sent from the client to create the output channel
 func ConnB1() CONNB1 {
 	connb1 := CONNB1{}
 	header := RTSHeader{Version: 0x05, VersionMinor: 0, Type: DCERPC_PKT_RTS, PFCFlags: 0x03, AuthLen: 0, CallID: 0}
@@ -283,7 +305,7 @@ func ConnB1() CONNB1 {
 	connb1.InChannelCookie = Cookie{3, CookieGen()}
 	connb1.ChannelLifetime = ChannelLifetime{4, 1073741824}
 	connb1.ClientKeepAlive = ClientKeepalive{5, 300000}
-	connb1.AssociatonGroupID = AssociationGroupId{12, CookieGen()}
+	connb1.AssociatonGroupID = AssociationGroupID{12, CookieGen()}
 	connb1.Header.FragLen = uint16(len(connb1.Marshal()))
 	return connb1
 }
@@ -311,50 +333,63 @@ func (rtsBind BindPDU) Marshal() []byte {
 func (rtsRequest RTSRequest) Marshal() []byte {
 	return utils.BodyToBytes(rtsRequest)
 }
+
+//Marshal ConnectExRequest into bytes
 func (rtsRequest ConnectExRequest) Marshal() []byte {
 	return utils.BodyToBytes(rtsRequest)
 }
 
+//Marshal connA1
 func (connA1Request CONNA1) Marshal() []byte {
 	return utils.BodyToBytes(connA1Request)
 }
 
+//Marshal connB1
 func (connB1Request CONNB1) Marshal() []byte {
 	return utils.BodyToBytes(connB1Request)
 }
 
+//Marshal AuxBuffer
 func (auxbuf AUXBuffer) Marshal() []byte {
 	return utils.BodyToBytes(auxbuf)
 }
 
+//Marshal AUXPerfClientInfo
 func (auxbuf AUXPerfClientInfo) Marshal() []byte {
 	return utils.BodyToBytes(auxbuf)
 }
 
+//Marshal AUXPerfAccountInfo
 func (auxbuf AUXPerfAccountInfo) Marshal() []byte {
 	return utils.BodyToBytes(auxbuf)
 }
 
+//Marshal AUXTypePerfSessionInfo
 func (auxbuf AUXTypePerfSessionInfo) Marshal() []byte {
 	return utils.BodyToBytes(auxbuf)
 }
 
+//Marshal AUXTypePerfProcessInfo
 func (auxbuf AUXTypePerfProcessInfo) Marshal() []byte {
 	return utils.BodyToBytes(auxbuf)
 }
 
+//Marshal AUXTypePerfRequestID
 func (auxbuf AUXTypePerfRequestID) Marshal() []byte {
 	return utils.BodyToBytes(auxbuf)
 }
 
+//Marshal AUXTPerfMDBSuccess
 func (auxbuf AUXTPerfMDBSuccess) Marshal() []byte {
 	return utils.BodyToBytes(auxbuf)
 }
 
+//Marshal AUXClientConnectionInfo
 func (auxbuf AUXClientConnectionInfo) Marshal() []byte {
 	return utils.BodyToBytes(auxbuf)
 }
 
+//Marshal AUXPerfGCSuccess
 func (auxbuf AUXPerfGCSuccess) Marshal() []byte {
 	return utils.BodyToBytes(auxbuf)
 }

@@ -91,8 +91,7 @@ func sendMapiDisconnect(mapi DisconnectRequest) ([]byte, error) {
 	if AuthSession.Transport == HTTP {
 		return mapiRequestHTTP(AuthSession.URL.String(), "Disconnect", mapi.Marshal())
 	}
-	//return mapiRequestRPC(mapi)
-	return []byte{}, nil
+	return mapiDisconnectRPC()
 }
 
 //func sendMapiConnectHTTP(mapi Conn)
@@ -158,6 +157,11 @@ func mapiConnectRPC(body ConnectRequestRPC) ([]byte, error) {
 	return resp, err
 }
 
+func mapiDisconnectRPC() ([]byte, error) {
+	rpchttp.RPCDisconnect()
+	return nil, nil
+}
+
 //mapiRequestRPC to our target. Takes the mapiType (Connect, Execute) to determine the
 //action performed on the server side
 func mapiRequestRPC(body ExecuteRequest) ([]byte, error) {
@@ -181,16 +185,8 @@ func mapiRequestRPC(body ExecuteRequest) ([]byte, error) {
 
 	//byte align here again
 	length := uint32(len(utils.BodyToBytes(body.RopBuffer)))
-	if length%4 != 0 {
-		if (length+1)%4 == 0 {
-			body.RopBuffer.ROP.ServerObjectHandleTable = append(body.RopBuffer.ROP.ServerObjectHandleTable, []byte{0x00}...)
-		} else if (length+2)%4 == 0 {
-			body.RopBuffer.ROP.ServerObjectHandleTable = append(body.RopBuffer.ROP.ServerObjectHandleTable, []byte{0x00, 0x00}...)
-		} else if (length+3)%4 == 0 {
-			body.RopBuffer.ROP.ServerObjectHandleTable = append(body.RopBuffer.ROP.ServerObjectHandleTable, []byte{0x00, 0x00, 0x00}...)
-		}
-
-	}
+	pad := (4 - length%4) % 4
+	body.RopBuffer.ROP.ServerObjectHandleTable = append(body.RopBuffer.ROP.ServerObjectHandleTable, bytes.Repeat([]byte{0x00}, int(pad))...)
 
 	body.RPCPtr = []byte{0x70, 0x80, 0x00, 0x00}
 	body.MaxRopOut = length
@@ -263,14 +259,11 @@ func AuthenticateRPC() (*RopLogonResponse, error) {
 
 	connRequest.UserDN = []byte(AuthSession.LID)
 	//check that UserDN aligns to 4 byte boundary
-	if (len(connRequest.UserDN)+1)%4 == 0 { //append single null-byte
-		connRequest.UserDN = append(connRequest.UserDN, []byte{0x00}...) //append nullbyte
-	} else if (len(connRequest.UserDN)+2)%4 == 0 {
-		connRequest.UserDN = append(connRequest.UserDN, []byte{0x00, 0x00}...) //, 0x00, 0x00}...) //append nullbyte
-	} else if (len(connRequest.UserDN)+3)%4 == 0 {
-		connRequest.UserDN = append(connRequest.UserDN, []byte{0x00, 0x00, 0x00}...) //, 0x00, 0x00}...) //append nullbyte
+	pad := (4 - len(connRequest.UserDN)%4) % 4
+	if pad == 0 {
+		connRequest.UserDN = append(connRequest.UserDN, bytes.Repeat([]byte{0x00}, 4)...)
 	} else {
-		connRequest.UserDN = append(connRequest.UserDN, []byte{0x00, 0x00, 0x00, 0x00}...) //, 0x00, 0x00}...) //append nullbyte
+		connRequest.UserDN = append(connRequest.UserDN, bytes.Repeat([]byte{0x00}, int(pad))...)
 	}
 
 	connRequest.DNLen = uint32(len(connRequest.UserDN))
