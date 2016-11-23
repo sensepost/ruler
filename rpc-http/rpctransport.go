@@ -20,6 +20,7 @@ var rpcOutR, rpcOutW = io.Pipe()
 var rpcRespBody *bufio.Reader
 var callcounter int
 var responses = make([]RPCResponse, 0)
+var rpcntlmsession ntlm.ClientSession
 
 //AuthSession Keep track of session data
 var AuthSession *utils.Session
@@ -78,7 +79,7 @@ func setupHTTPNTLM(rpctype string, URL string) (net.Conn, error) {
 	}
 
 	session.SetUserInfo(AuthSession.User, AuthSession.Pass, AuthSession.Domain)
-
+	fmt.Printf("Challenge: %x\n\n", challengeBytes)
 	// parse NTLM challenge
 	challenge, err := ntlm.ParseChallengeMessage(challengeBytes)
 	if err != nil {
@@ -152,8 +153,12 @@ func RPCOpenOut(URL string, readySignal chan bool) error {
 		if b := scanner.Bytes(); b != nil {
 			//add to list of responses
 			r := RPCResponse{}
-			r.CallID = utils.DecodeUint16(b[12:14])
+			r.Unmarshal(b)
 			r.Body = b
+			//r.Header = RPCHeader{}
+			//r.Header.Version = utils.ReadUint16(pos, buff)
+			//utils.DecodeUint16(b[12:14])
+			//r.Body = b
 			responses = append(responses, r)
 		}
 	}
@@ -162,6 +167,7 @@ func RPCOpenOut(URL string, readySignal chan bool) error {
 
 //RPCBind function establishes our session
 func RPCBind() {
+	authLevel := RPC_C_AUTHN_LEVEL_PKT_PRIVACY
 	//Generate out-channel cookie
 	//20 byte channel cookie for out-channel
 	connB1 := ConnB1()
@@ -173,15 +179,52 @@ func RPCBind() {
 	RPCWrite(connB1.Marshal())
 
 	//I should change this to an object, but it never changes, so I guess it's ok for now to leave it hardcoded
-	dataout := []byte{0x05, 0x00, 0x0b, 0x13, 0x10, 0x00, 0x00, 0x00, 0x74, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0xf8, 0x0f, 0xf8, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0xdb, 0xf1, 0xa4, 0x47, 0xca, 0x67, 0x10, 0xb3, 0x1f, 0x00, 0xdd, 0x01, 0x06, 0x62, 0xda, 0x00, 0x00, 0x51, 0x00, 0x04, 0x5d, 0x88, 0x8a, 0xeb, 0x1c, 0xc9, 0x11, 0x9f, 0xe8, 0x08, 0x00, 0x2b, 0x10, 0x48, 0x60, 0x02, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0xdb, 0xf1, 0xa4, 0x47, 0xca, 0x67, 0x10, 0xb3, 0x1f, 0x00, 0xdd, 0x01, 0x06, 0x62, 0xda, 0x00, 0x00, 0x51, 0x00, 0x2c, 0x1c, 0xb7, 0x6c, 0x12, 0x98, 0x40, 0x45, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00}
-	RPCWrite(dataout)
+	//dataout := []byte{0x05, 0x00, 0x0b, 0x13, 0x10, 0x00, 0x00, 0x00, 0x74, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0xf8, 0x0f, 0xf8, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0xdb, 0xf1, 0xa4, 0x47, 0xca, 0x67, 0x10, 0xb3, 0x1f, 0x00, 0xdd, 0x01, 0x06, 0x62, 0xda, 0x00, 0x00, 0x51, 0x00, 0x04, 0x5d, 0x88, 0x8a, 0xeb, 0x1c, 0xc9, 0x11, 0x9f, 0xe8, 0x08, 0x00, 0x2b, 0x10, 0x48, 0x60, 0x02, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0xdb, 0xf1, 0xa4, 0x47, 0xca, 0x67, 0x10, 0xb3, 0x1f, 0x00, 0xdd, 0x01, 0x06, 0x62, 0xda, 0x00, 0x00, 0x51, 0x00, 0x2c, 0x1c, 0xb7, 0x6c, 0x12, 0x98, 0x40, 0x45, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00}
+	//RPCWrite(dataout)
 
-	//bind := Bind(RPC_C_AUTHN_LEVEL_NONE)
-	//RPCWrite(bind.Marshal())
+	//bind := Bind(RPC_C_AUTHN_LEVEL_NONE, RPC_C_AUTHN_NONE)
+	bind := Bind(RPC_C_AUTHN_LEVEL_PKT_PRIVACY, RPC_C_AUTHN_WINNT)
+	//fmt.Printf("%x\n%x\n", dataout, bind.Marshal())
+	RPCWrite(bind.Marshal())
 
 	RPCRead(0)
 	RPCRead(0)
 
+	//parse out and setup security
+	if authLevel == RPC_C_AUTHN_LEVEL_PKT_PRIVACY {
+		resp, err := RPCRead(1)
+		//fmt.Printf("Security setup: %x\n\n%x\n", resp.PDU, resp.SecTrailer)
+		sec := RTSSec{}
+		sec.Unmarshal(resp.SecTrailer, int(resp.Header.AuthLen))
+		fmt.Printf("%x\n", sec.Data) //NTLM data
+		challengeBytes := append(sec.Data[:len(sec.Data)-1], []byte{0x00}...)
+		rpcntlmsession, err = ntlm.CreateClientSession(ntlm.Version1, ntlm.ConnectionlessMode)
+		if err != nil {
+			panic(err)
+		}
+
+		rpcntlmsession.SetUserInfo(AuthSession.User, AuthSession.Pass, AuthSession.Domain)
+		fmt.Printf("Challenge: %x\n\n", challengeBytes)
+		challenge, err := ntlm.ParseChallengeMessage(challengeBytes)
+		if err != nil {
+			fmt.Println("we panic here")
+			panic(err)
+		}
+		err = rpcntlmsession.ProcessChallengeMessage(challenge)
+		if err != nil {
+			fmt.Println("we panic here with challenge")
+			panic(err)
+		}
+
+		// authenticate user
+		authenticate, err := rpcntlmsession.GenerateAuthenticateMessage()
+
+		if err != nil {
+			fmt.Println("we panic here with authen")
+			panic(err)
+		}
+		fmt.Println(authenticate)
+	}
 }
 
 //RPCPing fucntion
@@ -205,8 +248,9 @@ func EcDoRPCExt2(mapi []byte, auxLen uint32) ([]byte, error) {
 
 	req.Header.FragLen = uint16(len(req.Marshal()))
 	RPCWrite(req.Marshal())
-
-	return RPCRead(callcounter - 1)
+	resp, err := RPCRead(callcounter - 1)
+	//fmt.Printf("BODY: %x\nPDU:  %x\n", resp.Body[44:], resp.PDU[28:])
+	return resp.PDU[28:], err
 }
 func obfuscate(data []byte) []byte {
 	bnew := make([]byte, len(data))
@@ -268,12 +312,12 @@ func DoConnectExRequest(MAPI []byte) ([]byte, error) {
 	RPCRead(1)
 
 	resp, err := RPCRead(callcounter - 1)
-
-	AuthSession.ContextHandle = resp[28:44]
+	//fmt.Printf("PDU:  %x\nBODY: %x\n", resp.PDU[12:28], resp.Body[28:44])
+	AuthSession.ContextHandle = resp.PDU[12:28] //resp.Body[28:44]
 	if utils.DecodeUint32(AuthSession.ContextHandle[0:4]) == 0x0000 {
 		return nil, fmt.Errorf("-- Unable to obtain a session context")
 	}
-	return resp, err
+	return resp.Body, err
 }
 
 //RPCDisconnect fucntion
@@ -306,12 +350,12 @@ func RPCOutWrite(data []byte) {
 
 //RPCRead function takes a call ID and searches for the response in
 //our list of received responses. Blocks until it finds a response
-func RPCRead(callID int) ([]byte, error) {
+func RPCRead(callID int) (RPCResponse, error) {
 	for {
 		for k, v := range responses {
-			if v.CallID == uint16(callID) {
+			if v.Header.CallID == uint32(callID) {
 				responses = append(responses[:k], responses[k+1:]...)
-				return v.Body, nil
+				return v, nil
 			}
 		}
 	}

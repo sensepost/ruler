@@ -95,7 +95,7 @@ func getRPCHTTP(autoURLPtr string) *utils.AutodiscoverResp {
 			user = v.Server
 		}
 	}
-	//url = "https://192.168.124.1"
+	url = "https://192.168.124.1"
 	config.RPCURL = fmt.Sprintf("%s/rpc/rpcproxy.dll?%s:6001", url, user)
 
 	fmt.Printf("[+] RPC URL set: %s\n", config.RPCURL)
@@ -207,8 +207,8 @@ func sendMessage(triggerword string) error {
 	fmt.Println("[*] Auto Send enabled, wait 30 seconds before sending email (synchronisation)")
 	//initate a ping sequence, just incase we are on RPC/HTTP
 	//we need to keep the socket open
-	//go mapi.Ping()
-	time.Sleep(time.Second * (time.Duration)(1))
+	go mapi.Ping()
+	time.Sleep(time.Second * (time.Duration)(30))
 	fmt.Println("[*] Sending email")
 
 	propertyTags := make([]mapi.PropertyTag, 1)

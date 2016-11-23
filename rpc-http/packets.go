@@ -25,7 +25,12 @@ type RTSHeader struct {
 //RTSSec the security trailer
 //this is going to be 0x00000010 for all of our requests
 type RTSSec struct {
-	Sec uint32
+	AuthType   uint8
+	AuthLevel  uint8
+	AuthPadLen uint8
+	AuthRsvrd  uint8
+	AuthCTX    uint32
+	Data       []byte
 }
 
 //BindPDU struct
@@ -34,9 +39,9 @@ type BindPDU struct {
 	MaxFrag            uint16
 	MaxRecvFrag        uint16
 	AssociationGroupID uint32
-	TimeOutF           uint32 //2
-	TimeOutV           uint32 //1
-	CookieIn           []byte
+	CtxNum             uint32 //2
+	CtxItems           []byte
+	SecTrailer         []byte
 }
 
 //CONNA1 struct for initial connection
@@ -100,8 +105,19 @@ type RPCHeader struct {
 
 //RPCResponse to hold the data from our response
 type RPCResponse struct {
-	CallID uint16
-	Body   []byte
+	Header     RTSHeader
+	PDU        []byte
+	SecTrailer []byte
+	Body       []byte
+}
+
+//CTX item used in Bind
+type CTX struct {
+	ContextID      uint16
+	TransItems     uint8
+	Pad            uint8
+	AbstractSyntax []byte //20 bytes
+	TransferSyntax []byte //20 bytes
 }
 
 //AUXBuffer struct
@@ -259,20 +275,48 @@ func CookieGen() []byte {
 }
 
 //Bind function Creates a Bind Packet
-func Bind(authLevel int) BindPDU {
+func Bind(authLevel, authtype uint8) BindPDU {
 	bind := BindPDU{}
 	header := RTSHeader{Version: 0x05, VersionMinor: 0, Type: DCERPC_PKT_BIND, PFCFlags: 0x13, AuthLen: 0, CallID: 1}
 	header.PackedDrep = 16
 
 	bind.Header = header
-	//Generate session cookie
+
 	bind.MaxFrag = 0x0ff8
 	bind.MaxRecvFrag = 0x0ff8
-	bind.AssociationGroupID = 0x00000000
+	bind.AssociationGroupID = 0x00
+	bind.CtxNum = 0x02
 
-	//, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0xdb, 0xf1, 0xa4, 0x47, 0xca, 0x67, 0x10, 0xb3, 0x1f, 0x00, 0xdd, 0x01, 0x06, 0x62, 0xda, 0x00, 0x00, 0x51, 0x00, 0x04, 0x5d, 0x88, 0x8a, 0xeb, 0x1c, 0xc9, 0x11, 0x9f, 0xe8, 0x08, 0x00, 0x2b, 0x10, 0x48, 0x60, 0x02, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0xdb, 0xf1, 0xa4, 0x47, 0xca, 0x67, 0x10, 0xb3, 0x1f, 0x00, 0xdd, 0x01, 0x06, 0x62, 0xda, 0x00, 0x00, 0x51, 0x00, 0x2c, 0x1c, 0xb7, 0x6c, 0x12, 0x98, 0x40, 0x45, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
+	ctx := CTX{}
+	ctx.ContextID = 0
+	ctx.TransItems = 1
+	ctx.AbstractSyntax = []byte{0x00, 0xdb, 0xf1, 0xa4, 0x47, 0xca, 0x67, 0x10, 0xb3, 0x1f, 0x00, 0xdd, 0x01, 0x06, 0x62, 0xda, 0x00, 0x00, 0x51, 0x00} //CookieGen()
+	ctx.TransferSyntax = []byte{0x04, 0x5d, 0x88, 0x8a, 0xeb, 0x1c, 0xc9, 0x11, 0x9f, 0xe8, 0x08, 0x00, 0x2b, 0x10, 0x48, 0x60, 0x02, 0x00, 0x00, 0x00}
+
+	ctx2 := CTX{}
+	ctx2.ContextID = 1
+	ctx2.TransItems = 1
+	ctx2.AbstractSyntax = ctx.AbstractSyntax
+	ctx2.TransferSyntax = append(CookieGen(), []byte{0x01, 0x00, 0x00, 0x00}...) //[]byte{0x2c, 0x1c, 0xb7, 0x6c, 0x12, 0x98, 0x40, 0x45, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00}
+
+	bind.CtxItems = append(ctx.Marshal(), ctx2.Marshal()...)
 	//unknown PDU data here
-	bind.Header.FragLen = uint16(len(bind.Marshal()) - 1)
+	bind.Header.FragLen = uint16(len(bind.Marshal()))
+
+	if authLevel != RPC_C_AUTHN_LEVEL_NONE {
+		//setup our auth here
+		if authtype == RPC_C_AUTHN_WINNT {
+			secTrailer := RTSSec{}
+			secTrailer.AuthType = authtype
+			secTrailer.AuthLevel = authLevel
+			secTrailer.AuthCTX = 0 //79233
+			fmt.Println(secTrailer)
+			secTrailer.Data = utils.NegotiateSP()
+			bind.Header.AuthLen = uint16(len(secTrailer.Data))
+			bind.SecTrailer = secTrailer.Marshal()
+			bind.Header.FragLen = uint16(len(bind.Marshal()))
+		}
+	}
 	return bind
 }
 
@@ -315,8 +359,42 @@ func Ping() RTSPing {
 	ping := RTSPing{}
 	ping.Header = RTSHeader{Version: 0x05, VersionMinor: 0, Type: DCERPC_PKT_RTS, PFCFlags: 0x03, AuthLen: 0, CallID: 0}
 	ping.Header.FragLen = 20
-	ping.Sec = RTSSec{0x00000010}
+	//ping.Sec = RTSSec{0x00000010}
 	return ping
+}
+
+//Unmarshal RPCResponse
+func (response *RPCResponse) Unmarshal(raw []byte) (int, error) {
+	pos := 0
+	response.Header = RTSHeader{}
+	response.Header.Version, pos = utils.ReadByte(pos, raw)
+	response.Header.VersionMinor, pos = utils.ReadByte(pos, raw)
+	response.Header.Type, pos = utils.ReadByte(pos, raw)
+	response.Header.PFCFlags, pos = utils.ReadByte(pos, raw)
+	response.Header.PackedDrep, pos = utils.ReadUint32(pos, raw)
+	response.Header.FragLen, pos = utils.ReadUint16(pos, raw)
+	response.Header.AuthLen, pos = utils.ReadUint16(pos, raw)
+	response.Header.CallID, pos = utils.ReadUint32(pos, raw)
+	if response.Header.AuthLen == 0 {
+		response.PDU, pos = utils.ReadBytes(pos, int(response.Header.FragLen), raw)
+	} else {
+		response.PDU, pos = utils.ReadBytes(pos, int(response.Header.FragLen-response.Header.AuthLen-24), raw)
+		response.SecTrailer, pos = utils.ReadBytes(pos, int(response.Header.AuthLen), raw)
+	}
+
+	//fmt.Printf("\n%x\n%x\n", response.PDU, response.SecTrailer)
+	return pos, nil
+}
+
+func (sec *RTSSec) Unmarshal(raw []byte, ln int) (int, error) {
+	pos := 0
+	sec.AuthType, pos = utils.ReadByte(pos, raw)
+	sec.AuthLevel, pos = utils.ReadByte(pos, raw)
+	sec.AuthPadLen, pos = utils.ReadByte(pos, raw)
+	sec.AuthRsvrd, pos = utils.ReadByte(pos, raw)
+	sec.AuthCTX, pos = utils.ReadUint32(pos, raw)
+	sec.Data, pos = utils.ReadBytes(pos, ln, raw)
+	return pos, nil
 }
 
 //Marshal turn RTSPing into Bytes
@@ -347,6 +425,16 @@ func (connA1Request CONNA1) Marshal() []byte {
 //Marshal connB1
 func (connB1Request CONNB1) Marshal() []byte {
 	return utils.BodyToBytes(connB1Request)
+}
+
+//Marshal CTX
+func (ctx CTX) Marshal() []byte {
+	return utils.BodyToBytes(ctx)
+}
+
+//Marshal RTSSec
+func (secTrailer RTSSec) Marshal() []byte {
+	return utils.BodyToBytes(secTrailer)
 }
 
 //Marshal AuxBuffer

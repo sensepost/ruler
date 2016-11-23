@@ -198,7 +198,7 @@ func mapiRequestRPC(body ExecuteRequest) ([]byte, error) {
 	resp, err = rpchttp.EcDoRPCExt2(body.MarshalRPC(), body.AuxilliaryBufSize)
 	//fmt.Printf("%x\n", resp)
 	//we should do some proper responses here, rather than simply skipping 44 bytes ahead
-	return resp[44:], err
+	return resp, err
 }
 
 //switchEndian is used to change from BigEndian to LittleEndian when we need to
