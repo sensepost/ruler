@@ -39,8 +39,8 @@ type ConnectRequestRPC struct {
 	FCanConvertCodePage uint16
 	ClientVersion       []byte
 	TimeStamp           uint32
-	//AuxilliaryBufSize uint32
-	//AuxilliaryBuf     []byte
+	AuxilliaryBufSize   uint32
+	AuxilliaryBuf       []byte
 }
 
 //DisconnectRequest structure

@@ -46,13 +46,15 @@ type Session struct {
 	NTLMAuth  string
 	BasicAuth string
 
-	RPCIn         http.Client
-	RPCOut        http.Client
 	RPCSet        bool
 	ContextHandle []byte //16-byte cookie for the RPC session
 	RPCURL        string
 	UserDN        []byte
 	Trigger       string
+
+	RPCNetworkAuthLevel uint8
+	RPCNetworkAuthType  uint8
+	RPCNtlmSessionKey   []byte
 }
 
 //AutodiscoverResp structure for unmarshal

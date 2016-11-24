@@ -44,6 +44,14 @@ type BindPDU struct {
 	SecTrailer         []byte
 }
 
+//Auth3Request struct
+type Auth3Request struct {
+	Header      RTSHeader
+	MaxFrag     uint16
+	MaxRecvFrag uint16
+	SecTrailer  []byte
+}
+
 //CONNA1 struct for initial connection
 type CONNA1 struct {
 	Header               RTSHeader
@@ -70,15 +78,24 @@ type CONNB1 struct {
 
 //RTSRequest an RTSRequest
 type RTSRequest struct {
-	Header        RTSHeader
-	MaxFrag       uint16
-	MaxRecv       uint16
-	Version       []byte //8-byte
-	ContextHandle []byte //16-byte cookie
-	Data          []byte //our MAPI request goes here
+	Header  RTSHeader
+	MaxFrag uint16
+	MaxRecv uint16
+	Command []byte //8-byte
+	PduData []byte //PDUData
+	//	ContextHandle []byte //16-byte cookie
+	//	Data          []byte //our MAPI request goes here
 	//RPC Parts
-	CbAuxIn uint32
-	AuxOut  uint32
+	//	CbAuxIn uint32
+	//	AuxOut  uint32
+	SecTrailer []byte
+}
+
+type PDUData struct {
+	ContextHandle []byte //16-byte cookie
+	Data          []byte
+	CbAuxIn       uint32
+	AuxOut        uint32
 }
 
 //ConnectExRequest our connection request
@@ -275,7 +292,7 @@ func CookieGen() []byte {
 }
 
 //Bind function Creates a Bind Packet
-func Bind(authLevel, authtype uint8) BindPDU {
+func Bind(authLevel, authType uint8) BindPDU {
 	bind := BindPDU{}
 	header := RTSHeader{Version: 0x05, VersionMinor: 0, Type: DCERPC_PKT_BIND, PFCFlags: 0x13, AuthLen: 0, CallID: 1}
 	header.PackedDrep = 16
@@ -305,12 +322,12 @@ func Bind(authLevel, authtype uint8) BindPDU {
 
 	if authLevel != RPC_C_AUTHN_LEVEL_NONE {
 		//setup our auth here
-		if authtype == RPC_C_AUTHN_WINNT {
+		if authType == RPC_C_AUTHN_WINNT {
 			secTrailer := RTSSec{}
-			secTrailer.AuthType = authtype
+			secTrailer.AuthType = authType
 			secTrailer.AuthLevel = authLevel
 			secTrailer.AuthCTX = 0 //79233
-			fmt.Println(secTrailer)
+
 			secTrailer.Data = utils.NegotiateSP()
 			bind.Header.AuthLen = uint16(len(secTrailer.Data))
 			bind.SecTrailer = secTrailer.Marshal()
@@ -318,6 +335,30 @@ func Bind(authLevel, authtype uint8) BindPDU {
 		}
 	}
 	return bind
+}
+
+func Auth3(authLevel, authType uint8, authData []byte) Auth3Request {
+	auth := Auth3Request{}
+	header := RTSHeader{Version: 0x05, VersionMinor: 0, Type: DCERPC_PKT_AUTH_3, PFCFlags: 0x17, AuthLen: 0, CallID: 1}
+	header.PackedDrep = 16
+
+	auth.Header = header
+
+	auth.MaxFrag = 0x0ff8
+	auth.MaxRecvFrag = 0x0ff8
+
+	if authType == RPC_C_AUTHN_WINNT {
+		secTrailer := RTSSec{}
+		secTrailer.AuthType = authType
+		secTrailer.AuthLevel = authLevel
+		secTrailer.AuthCTX = 0 //79233
+
+		secTrailer.Data = authData
+		auth.Header.AuthLen = uint16(len(secTrailer.Data))
+		auth.SecTrailer = secTrailer.Marshal()
+		auth.Header.FragLen = uint16(len(auth.Marshal()))
+	}
+	return auth
 }
 
 //ConnA1 sent from the client to create the input channel
@@ -376,7 +417,7 @@ func (response *RPCResponse) Unmarshal(raw []byte) (int, error) {
 	response.Header.AuthLen, pos = utils.ReadUint16(pos, raw)
 	response.Header.CallID, pos = utils.ReadUint32(pos, raw)
 	if response.Header.AuthLen == 0 {
-		response.PDU, pos = utils.ReadBytes(pos, int(response.Header.FragLen), raw)
+		response.PDU, pos = utils.ReadBytes(pos, int(response.Header.FragLen)-pos, raw)
 	} else {
 		response.PDU, pos = utils.ReadBytes(pos, int(response.Header.FragLen-response.Header.AuthLen-24), raw)
 		response.SecTrailer, pos = utils.ReadBytes(pos, int(response.Header.AuthLen), raw)
@@ -386,6 +427,7 @@ func (response *RPCResponse) Unmarshal(raw []byte) (int, error) {
 	return pos, nil
 }
 
+//Unmarshal the SecTrailer
 func (sec *RTSSec) Unmarshal(raw []byte, ln int) (int, error) {
 	pos := 0
 	sec.AuthType, pos = utils.ReadByte(pos, raw)
@@ -405,6 +447,16 @@ func (rtsPing RTSPing) Marshal() []byte {
 //Marshal turn Bind into Bytes
 func (rtsBind BindPDU) Marshal() []byte {
 	return utils.BodyToBytes(rtsBind)
+}
+
+//Marshal turn PDUData into Bytes
+func (pdu PDUData) Marshal() []byte {
+	return utils.BodyToBytes(pdu)
+}
+
+//Marshal turn Auth3Request into Bytes
+func (authBind Auth3Request) Marshal() []byte {
+	return utils.BodyToBytes(authBind)
 }
 
 //Marshal turn RTSRequest into Bytes
@@ -433,8 +485,8 @@ func (ctx CTX) Marshal() []byte {
 }
 
 //Marshal RTSSec
-func (secTrailer RTSSec) Marshal() []byte {
-	return utils.BodyToBytes(secTrailer)
+func (sec RTSSec) Marshal() []byte {
+	return utils.BodyToBytes(sec)
 }
 
 //Marshal AuxBuffer

@@ -9,8 +9,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/ThomsonReutersEikon/go-ntlm/ntlm"
 	"github.com/sensepost/ruler/utils"
+	"github.com/staaldraad/go-ntlm/ntlm"
 )
 
 var rpcInConn net.Conn
@@ -79,7 +79,7 @@ func setupHTTPNTLM(rpctype string, URL string) (net.Conn, error) {
 	}
 
 	session.SetUserInfo(AuthSession.User, AuthSession.Pass, AuthSession.Domain)
-	fmt.Printf("Challenge: %x\n\n", challengeBytes)
+	//fmt.Printf("Challenge: %x\n\n", challengeBytes)
 	// parse NTLM challenge
 	challenge, err := ntlm.ParseChallengeMessage(challengeBytes)
 	if err != nil {
@@ -167,7 +167,7 @@ func RPCOpenOut(URL string, readySignal chan bool) error {
 
 //RPCBind function establishes our session
 func RPCBind() {
-	authLevel := RPC_C_AUTHN_LEVEL_PKT_PRIVACY
+
 	//Generate out-channel cookie
 	//20 byte channel cookie for out-channel
 	connB1 := ConnB1()
@@ -182,8 +182,8 @@ func RPCBind() {
 	//dataout := []byte{0x05, 0x00, 0x0b, 0x13, 0x10, 0x00, 0x00, 0x00, 0x74, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0xf8, 0x0f, 0xf8, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0xdb, 0xf1, 0xa4, 0x47, 0xca, 0x67, 0x10, 0xb3, 0x1f, 0x00, 0xdd, 0x01, 0x06, 0x62, 0xda, 0x00, 0x00, 0x51, 0x00, 0x04, 0x5d, 0x88, 0x8a, 0xeb, 0x1c, 0xc9, 0x11, 0x9f, 0xe8, 0x08, 0x00, 0x2b, 0x10, 0x48, 0x60, 0x02, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0xdb, 0xf1, 0xa4, 0x47, 0xca, 0x67, 0x10, 0xb3, 0x1f, 0x00, 0xdd, 0x01, 0x06, 0x62, 0xda, 0x00, 0x00, 0x51, 0x00, 0x2c, 0x1c, 0xb7, 0x6c, 0x12, 0x98, 0x40, 0x45, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00}
 	//RPCWrite(dataout)
 
-	//bind := Bind(RPC_C_AUTHN_LEVEL_NONE, RPC_C_AUTHN_NONE)
-	bind := Bind(RPC_C_AUTHN_LEVEL_PKT_PRIVACY, RPC_C_AUTHN_WINNT)
+	bind := Bind(AuthSession.RPCNetworkAuthLevel, AuthSession.RPCNetworkAuthType)
+	//bind := Bind(RPC_C_AUTHN_LEVEL_PKT_PRIVACY, RPC_C_AUTHN_WINNT)
 	//fmt.Printf("%x\n%x\n", dataout, bind.Marshal())
 	RPCWrite(bind.Marshal())
 
@@ -191,20 +191,22 @@ func RPCBind() {
 	RPCRead(0)
 
 	//parse out and setup security
-	if authLevel == RPC_C_AUTHN_LEVEL_PKT_PRIVACY {
+	if AuthSession.RPCNetworkAuthLevel == RPC_C_AUTHN_LEVEL_PKT_PRIVACY {
 		resp, err := RPCRead(1)
 		//fmt.Printf("Security setup: %x\n\n%x\n", resp.PDU, resp.SecTrailer)
 		sec := RTSSec{}
 		sec.Unmarshal(resp.SecTrailer, int(resp.Header.AuthLen))
-		fmt.Printf("%x\n", sec.Data) //NTLM data
+
 		challengeBytes := append(sec.Data[:len(sec.Data)-1], []byte{0x00}...)
-		rpcntlmsession, err = ntlm.CreateClientSession(ntlm.Version1, ntlm.ConnectionlessMode)
+
+		//should check if we use Version1 or Version2
+		rpcntlmsession, err = ntlm.CreateClientSession(ntlm.Version2, ntlm.ConnectionlessMode)
 		if err != nil {
 			panic(err)
 		}
 
 		rpcntlmsession.SetUserInfo(AuthSession.User, AuthSession.Pass, AuthSession.Domain)
-		fmt.Printf("Challenge: %x\n\n", challengeBytes)
+
 		challenge, err := ntlm.ParseChallengeMessage(challengeBytes)
 		if err != nil {
 			fmt.Println("we panic here")
@@ -223,7 +225,14 @@ func RPCBind() {
 			fmt.Println("we panic here with authen")
 			panic(err)
 		}
-		fmt.Println(authenticate)
+		AuthSession.RPCNtlmSessionKey = authenticate.ClientChallenge()
+		//send auth setup complete bind
+		au := Auth3(AuthSession.RPCNetworkAuthLevel, AuthSession.RPCNetworkAuthType, authenticate.Bytes())
+		RPCWrite(au.Marshal())
+
+		//rpcntlmsession.Seal(message)
+		//RPCRead(1)
+		//save session key and set that all requests should be encrypted/signed
 	}
 }
 
@@ -240,16 +249,33 @@ func EcDoRPCExt2(mapi []byte, auxLen uint32) ([]byte, error) {
 	req.MaxFrag = 0xFFFF
 	req.MaxRecv = 0x0000
 	req.Header = header
-	req.Version = []byte{0x00, 0x00, 0x0b, 0x00, 0x00, 0x00, 0x00, 0x00} //opnum 0x0b
-	req.ContextHandle = AuthSession.ContextHandle
-	req.Data = mapi
-	req.CbAuxIn = auxLen
-	req.AuxOut = 0x000001008
+	req.Command = []byte{0x00, 0x00, 0x0b, 0x00, 0x00, 0x00, 0x00, 0x00} //opnum 0x0b
+	pdu := PDUData{}
+	pdu.ContextHandle = AuthSession.ContextHandle
+	pdu.Data = mapi
+	pdu.CbAuxIn = auxLen
+	pdu.AuxOut = 0x000001008
+
+	if AuthSession.RPCNetworkAuthLevel == RPC_C_AUTHN_LEVEL_PKT_PRIVACY {
+		data := pdu.Marshal()
+		sealed, sign, _ := rpcntlmsession.Seal(data)
+		//NTLM seal and add sectrailer
+		fmt.Printf("Seal: %x\nMAC: %x\n", sealed, sign)
+		secTrail := RTSSec{}
+		secTrail.AuthLevel = AuthSession.RPCNetworkAuthLevel
+		secTrail.AuthType = AuthSession.RPCNetworkAuthType
+		secTrail.Data = sign
+		req.Header.AuthLen = 10
+		req.SecTrailer = secTrail.Marshal()
+		req.PduData = sealed
+	} else {
+		req.PduData = pdu.Marshal() //MAPI
+	}
 
 	req.Header.FragLen = uint16(len(req.Marshal()))
 	RPCWrite(req.Marshal())
 	resp, err := RPCRead(callcounter - 1)
-	//fmt.Printf("BODY: %x\nPDU:  %x\n", resp.Body[44:], resp.PDU[28:])
+
 	return resp.PDU[28:], err
 }
 func obfuscate(data []byte) []byte {
@@ -262,50 +288,38 @@ func obfuscate(data []byte) []byte {
 
 //DoConnectExRequest makes our connection request. After this we can use
 //EcDoRPCExt2 to make our MAPI requests
-func DoConnectExRequest(MAPI []byte) ([]byte, error) {
+func DoConnectExRequest(MAPI []byte, auxlen uint32) ([]byte, error) {
 
 	callcounter += 2
 	header := RTSHeader{Version: 0x05, VersionMinor: 0, Type: DCERPC_PKT_REQUEST, PFCFlags: 0x03, AuthLen: 0, CallID: uint32(callcounter)}
 	header.PackedDrep = 16
-	req := ConnectExRequest{}
+	req := RTSRequest{}
 	req.Header = header
 	req.MaxFrag = 0xffff
 	req.MaxRecv = 0x0000
-	req.ContextHandle = []byte{0x00, 0x00, 0x0a, 0x00} //opnum 0x0a
+	req.Command = []byte{0x00, 0x00, 0x0a, 0x00} //command 10
 
-	req.Data = MAPI
+	pdu := PDUData{}
+	pdu.Data = MAPI
+	pdu.CbAuxIn = uint32(auxlen)
+	pdu.AuxOut = 0x000001008
 
-	//AUXBuffer here
-	auxbuf := AUXBuffer{}
-	auxbuf.RPCHeader = RPCHeader{Version: 0x0000, Flags: 0x04}
+	if AuthSession.RPCNetworkAuthLevel == RPC_C_AUTHN_LEVEL_PKT_PRIVACY {
+		data := pdu.Marshal()
+		sealed, sign, _ := rpcntlmsession.Seal(data)
+		//NTLM seal and add sectrailer
+		fmt.Printf("Seal: %x\nMAC: %x\n", sealed, sign)
+		secTrail := RTSSec{}
+		secTrail.AuthLevel = AuthSession.RPCNetworkAuthLevel
+		secTrail.AuthType = AuthSession.RPCNetworkAuthType
+		secTrail.Data = sign
+		req.Header.AuthLen = 10
+		req.SecTrailer = secTrail.Marshal()
+		req.PduData = sealed
+	} else {
+		req.PduData = pdu.Marshal() //MAPI
+	}
 
-	clientInfo := AUXPerfClientInfo{AdapterSpeed: 0x000186a0, ClientID: 0x0001, AdapterNameOffset: 0x0020, ClientMode: 0x0002, MachineName: utils.UniString("Ethernet 2")}
-	clientInfo.Header = AUXHeader{Version: 0x01, Type: 0x02}
-	clientInfo.Header.Size = uint16(len(clientInfo.Marshal()))
-
-	accountInfo := AUXPerfAccountInfo{ClientID: 0x0001, Account: CookieGen()}
-	accountInfo.Header = AUXHeader{Version: 0x01, Type: 0x18}
-	accountInfo.Header.Size = uint16(len(accountInfo.Marshal()))
-
-	sessionInfo := AUXTypePerfSessionInfo{SessionID: 0x0001, SessionGUID: CookieGen(), ConnectionID: 0x00000001b}
-	sessionInfo.Header = AUXHeader{Version: 0x02, Type: 0x04}
-	sessionInfo.Header.Size = uint16(len(sessionInfo.Marshal()))
-
-	processInfo := AUXTypePerfProcessInfo{ProcessID: 0x01, ProcessGUID: CookieGen(), ProcessNameOffset: 0x004f, ProcessName: utils.UniString("OUTLOOK.EXE")}
-	processInfo.Header = AUXHeader{Version: 0x02, Type: 0x0b}
-	processInfo.Header.Size = uint16(len(processInfo.Marshal()))
-
-	clientConnInfo := AUXClientConnectionInfo{ConnectionGUID: CookieGen(), ConnectionAttempts: 0x05, ConnectionFlags: 0x01, ConnectionContextInfo: utils.UniString("")}
-	clientConnInfo.Header = AUXHeader{Version: 0x01, Type: 0x4a}
-	clientConnInfo.Header.Size = uint16(len(clientConnInfo.Marshal()))
-
-	auxbuf.Buff = []AuxInfo{clientInfo, accountInfo, sessionInfo, processInfo, clientConnInfo}
-	auxbuf.RPCHeader.Size = uint16(len(auxbuf.Marshal()) - 10) //account for header size
-	auxbuf.RPCHeader.SizeActual = auxbuf.RPCHeader.Size
-	req.RgbAuxIn = auxbuf.Marshal()
-	req.CbAuxIn = uint32(len(req.RgbAuxIn) - 2)
-	req.AuxBufLen = req.CbAuxIn
-	req.AuxOut = 0x000001008
 	req.Header.FragLen = uint16(len(req.Marshal()))
 
 	RPCWrite(req.Marshal())
@@ -328,9 +342,12 @@ func RPCDisconnect() {
 	req.MaxFrag = 0xFFFF
 	req.MaxRecv = 0x0000
 	req.Header = header
-	req.Version = []byte{0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00} //opnum 0x01
-	req.ContextHandle = AuthSession.ContextHandle
-	req.AuxOut = 0x000001008
+	req.Command = []byte{0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00} //opnum 0x01
+	pdu := PDUData{}
+	pdu.ContextHandle = AuthSession.ContextHandle
+	pdu.AuxOut = 0x000001008
+	req.PduData = pdu.Marshal()
+
 	RPCWrite(req.Marshal())
 	rpcInConn.Close()
 	rpcOutConn.Close()

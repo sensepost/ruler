@@ -64,6 +64,12 @@ func Init(config *utils.Session, lid, URL, ABKURL string, transport int) {
 	AuthSession.ReqCounter = 1
 	AuthSession.LogonID = 0x09
 	AuthSession.Authenticated = false
+
+	AuthSession.RPCNetworkAuthLevel = rpchttp.RPC_C_AUTHN_LEVEL_PKT_PRIVACY
+	AuthSession.RPCNetworkAuthType = rpchttp.RPC_C_AUTHN_WINNT
+
+	AuthSession.RPCNetworkAuthLevel = rpchttp.RPC_C_AUTHN_LEVEL_NONE
+	AuthSession.RPCNetworkAuthType = rpchttp.RPC_C_AUTHN_NONE
 }
 
 func addMapiHeaders(req *http.Request, mapiType string) {
@@ -151,7 +157,39 @@ func mapiConnectRPC(body ConnectRequestRPC) ([]byte, error) {
 	//bind to RPC
 	rpchttp.RPCBind()
 
-	resp, err := rpchttp.DoConnectExRequest(body.Marshal())
+	//AUXBuffer containing client info. Technically the server doesn't process this. But my messages don't work without it.. so meh
+	auxbuf := rpchttp.AUXBuffer{}
+	auxbuf.RPCHeader = rpchttp.RPCHeader{Version: 0x0000, Flags: 0x04}
+
+	clientInfo := rpchttp.AUXPerfClientInfo{AdapterSpeed: 0x000186a0, ClientID: 0x0001, AdapterNameOffset: 0x0020, ClientMode: 0x0002, MachineName: utils.UniString("Ethernet 2")}
+	clientInfo.Header = rpchttp.AUXHeader{Version: 0x01, Type: 0x02}
+	clientInfo.Header.Size = uint16(len(clientInfo.Marshal()))
+
+	accountInfo := rpchttp.AUXPerfAccountInfo{ClientID: 0x0001, Account: rpchttp.CookieGen()}
+	accountInfo.Header = rpchttp.AUXHeader{Version: 0x01, Type: 0x18}
+	accountInfo.Header.Size = uint16(len(accountInfo.Marshal()))
+
+	sessionInfo := rpchttp.AUXTypePerfSessionInfo{SessionID: 0x0001, SessionGUID: rpchttp.CookieGen(), ConnectionID: 0x00000001b}
+	sessionInfo.Header = rpchttp.AUXHeader{Version: 0x02, Type: 0x04}
+	sessionInfo.Header.Size = uint16(len(sessionInfo.Marshal()))
+
+	processInfo := rpchttp.AUXTypePerfProcessInfo{ProcessID: 0x01, ProcessGUID: rpchttp.CookieGen(), ProcessNameOffset: 0x004f, ProcessName: utils.UniString("OUTLOOK.EXE")}
+	processInfo.Header = rpchttp.AUXHeader{Version: 0x02, Type: 0x0b}
+	processInfo.Header.Size = uint16(len(processInfo.Marshal()))
+
+	clientConnInfo := rpchttp.AUXClientConnectionInfo{ConnectionGUID: rpchttp.CookieGen(), ConnectionAttempts: 0x05, ConnectionFlags: 0x01, ConnectionContextInfo: utils.UniString("")}
+	clientConnInfo.Header = rpchttp.AUXHeader{Version: 0x01, Type: 0x4a}
+	clientConnInfo.Header.Size = uint16(len(clientConnInfo.Marshal()))
+
+	auxbuf.Buff = []rpchttp.AuxInfo{clientInfo, accountInfo, sessionInfo, processInfo, clientConnInfo}
+
+	auxbuf.RPCHeader.Size = uint16(len(auxbuf.Marshal()) - 10) //account for header size
+	auxbuf.RPCHeader.SizeActual = auxbuf.RPCHeader.Size
+
+	body.AuxilliaryBuf = auxbuf.Marshal()
+	body.AuxilliaryBufSize = uint32(len(body.AuxilliaryBuf) - 2)
+
+	resp, err := rpchttp.DoConnectExRequest(body.Marshal(), body.AuxilliaryBufSize)
 	AuthSession.RPCSet = true
 
 	return resp, err

@@ -15,8 +15,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/ThomsonReutersEikon/go-ntlm/ntlm"
 	"github.com/sensepost/ruler/utils"
+	"github.com/staaldraad/go-ntlm/ntlm"
 )
 
 // NtlmTransport is implementation of http.RoundTripper interface
