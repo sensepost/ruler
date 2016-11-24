@@ -1,5 +1,6 @@
 package utils
 
+//TODO: Merge this into go-ntlm
 //Forked from https://github.com/vadimi/go-http-ntlm
 //All credits go to them
 //Used under MIT License -- see LICENSE for details

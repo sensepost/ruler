@@ -73,7 +73,7 @@ func setupHTTPNTLM(rpctype string, URL string) (net.Conn, error) {
 		return nil, err
 	}
 	//we should probably extract the NTLM type from the server response and use appropriate
-	session, err := ntlm.CreateClientSession(ntlm.Version1, ntlm.ConnectionlessMode)
+	session, err := ntlm.CreateClientSession(ntlm.Version2, ntlm.ConnectionlessMode)
 	if err != nil {
 		return nil, err
 	}
@@ -155,10 +155,6 @@ func RPCOpenOut(URL string, readySignal chan bool) error {
 			r := RPCResponse{}
 			r.Unmarshal(b)
 			r.Body = b
-			//r.Header = RPCHeader{}
-			//r.Header.Version = utils.ReadUint16(pos, buff)
-			//utils.DecodeUint16(b[12:14])
-			//r.Body = b
 			responses = append(responses, r)
 		}
 	}
@@ -265,7 +261,7 @@ func EcDoRPCExt2(mapi []byte, auxLen uint32) ([]byte, error) {
 		secTrail.AuthLevel = AuthSession.RPCNetworkAuthLevel
 		secTrail.AuthType = AuthSession.RPCNetworkAuthType
 		secTrail.Data = sign
-		req.Header.AuthLen = 10
+		req.Header.AuthLen = uint16(len(secTrail.Data))
 		req.SecTrailer = secTrail.Marshal()
 		req.PduData = sealed
 	} else {
@@ -275,6 +271,11 @@ func EcDoRPCExt2(mapi []byte, auxLen uint32) ([]byte, error) {
 	req.Header.FragLen = uint16(len(req.Marshal()))
 	RPCWrite(req.Marshal())
 	resp, err := RPCRead(callcounter - 1)
+
+	//decrypt response PDU
+	if AuthSession.RPCNetworkAuthLevel == RPC_C_AUTHN_LEVEL_PKT_PRIVACY {
+		return resp.PDU[28:], err
+	}
 
 	return resp.PDU[28:], err
 }
@@ -305,6 +306,7 @@ func DoConnectExRequest(MAPI []byte, auxlen uint32) ([]byte, error) {
 	pdu.AuxOut = 0x000001008
 
 	if AuthSession.RPCNetworkAuthLevel == RPC_C_AUTHN_LEVEL_PKT_PRIVACY {
+		req.Command = []byte{0x01, 0x00, 0x0a, 0x00}
 		data := pdu.Marshal()
 		sealed, sign, _ := rpcntlmsession.Seal(data)
 		//NTLM seal and add sectrailer
@@ -312,8 +314,10 @@ func DoConnectExRequest(MAPI []byte, auxlen uint32) ([]byte, error) {
 		secTrail := RTSSec{}
 		secTrail.AuthLevel = AuthSession.RPCNetworkAuthLevel
 		secTrail.AuthType = AuthSession.RPCNetworkAuthType
+		secTrail.AuthPadLen = 0x08
+		secTrail.AuthCTX = 1
 		secTrail.Data = sign
-		req.Header.AuthLen = 10
+		req.Header.AuthLen = uint16(len(secTrail.Data))
 		req.SecTrailer = secTrail.Marshal()
 		req.PduData = sealed
 	} else {
@@ -326,8 +330,14 @@ func DoConnectExRequest(MAPI []byte, auxlen uint32) ([]byte, error) {
 	RPCRead(1)
 
 	resp, err := RPCRead(callcounter - 1)
-	//fmt.Printf("PDU:  %x\nBODY: %x\n", resp.PDU[12:28], resp.Body[28:44])
-	AuthSession.ContextHandle = resp.PDU[12:28] //resp.Body[28:44]
+
+	//decrypt response PDU
+	if AuthSession.RPCNetworkAuthLevel == RPC_C_AUTHN_LEVEL_PKT_PRIVACY {
+		AuthSession.ContextHandle = resp.PDU[12:28] //decrypt
+	} else {
+		AuthSession.ContextHandle = resp.PDU[12:28]
+	}
+
 	if utils.DecodeUint32(AuthSession.ContextHandle[0:4]) == 0x0000 {
 		return nil, fmt.Errorf("-- Unable to obtain a session context")
 	}
