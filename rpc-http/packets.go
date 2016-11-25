@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sensepost/ruler/utils"
+	"github.com/staaldraad/go-ntlm/ntlm"
 )
 
 //RTSHeader structure for unmarshal
@@ -292,7 +293,7 @@ func CookieGen() []byte {
 }
 
 //Bind function Creates a Bind Packet
-func Bind(authLevel, authType uint8) BindPDU {
+func Bind(authLevel, authType uint8, session *ntlm.ClientSession) BindPDU {
 	bind := BindPDU{}
 	header := RTSHeader{Version: 0x05, VersionMinor: 0, Type: DCERPC_PKT_BIND, PFCFlags: 0x13, AuthLen: 0, CallID: 1}
 	header.PackedDrep = 16
@@ -307,7 +308,13 @@ func Bind(authLevel, authType uint8) BindPDU {
 	ctx := CTX{}
 	ctx.ContextID = 0
 	ctx.TransItems = 1
-	ctx.AbstractSyntax = []byte{0x00, 0xdb, 0xf1, 0xa4, 0x47, 0xca, 0x67, 0x10, 0xb3, 0x1f, 0x00, 0xdd, 0x01, 0x06, 0x62, 0xda, 0x00, 0x00, 0x51, 0x00} //CookieGen()
+	if authLevel == RPC_C_AUTHN_LEVEL_PKT_PRIVACY {
+		ctx.AbstractSyntax = []byte{0x18, 0x5a, 0xcc, 0xf5, 0x64, 0x42, 0x1a, 0x10, 0x8c, 0x59, 0x08, 0x00, 0x2b, 0x2f, 0x84, 0x26, 0x38, 0x00, 0x00, 0x00} //CookieGen()
+
+	} else {
+		ctx.AbstractSyntax = []byte{0x00, 0xdb, 0xf1, 0xa4, 0x47, 0xca, 0x67, 0x10, 0xb3, 0x1f, 0x00, 0xdd, 0x01, 0x06, 0x62, 0xda, 0x00, 0x00, 0x51, 0x00} //CookieGen()
+	}
+
 	ctx.TransferSyntax = []byte{0x04, 0x5d, 0x88, 0x8a, 0xeb, 0x1c, 0xc9, 0x11, 0x9f, 0xe8, 0x08, 0x00, 0x2b, 0x10, 0x48, 0x60, 0x02, 0x00, 0x00, 0x00}
 
 	ctx2 := CTX{}
@@ -327,8 +334,8 @@ func Bind(authLevel, authType uint8) BindPDU {
 			secTrailer.AuthType = authType
 			secTrailer.AuthLevel = authLevel
 			secTrailer.AuthCTX = 0 //79233
-
-			secTrailer.Data = utils.NegotiateSP()
+			b, _ := rpcntlmsession.GenerateNegotiateMessage()
+			secTrailer.Data = b.Bytes() //utils.NegotiateSP()
 			bind.Header.AuthLen = uint16(len(secTrailer.Data))
 			bind.SecTrailer = secTrailer.Marshal()
 			bind.Header.FragLen = uint16(len(bind.Marshal()))
@@ -351,9 +358,13 @@ func Auth3(authLevel, authType uint8, authData []byte) Auth3Request {
 		secTrailer := RTSSec{}
 		secTrailer.AuthType = authType
 		secTrailer.AuthLevel = authLevel
-		secTrailer.AuthCTX = 0 //79233
+		secTrailer.AuthCTX = 0
 
+		//pad if necessary
+		//pad := (4 - (len(authData) % 4)) % 4
+		//authData = append(authData, bytes.Repeat([]byte{0x00}, pad)...)
 		secTrailer.Data = authData
+		//secTrailer.AuthPadLen = uint8(pad)
 		auth.Header.AuthLen = uint16(len(secTrailer.Data))
 		auth.SecTrailer = secTrailer.Marshal()
 		auth.Header.FragLen = uint16(len(auth.Marshal()))

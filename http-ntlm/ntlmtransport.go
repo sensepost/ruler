@@ -29,9 +29,17 @@ type NtlmTransport struct {
 
 // RoundTrip method send http request and tries to perform NTLM authentication
 func (t NtlmTransport) RoundTrip(req *http.Request) (res *http.Response, err error) {
+
+	session, err := ntlm.CreateClientSession(ntlm.Version1, ntlm.ConnectionlessMode)
+	if err != nil {
+		return nil, err
+	}
+
+	session.SetUserInfo(t.User, t.Password, t.Domain)
+	b, _ := session.GenerateNegotiateMessage()
 	// first send NTLM Negotiate header
 	r, _ := http.NewRequest("GET", req.URL.String(), strings.NewReader(""))
-	r.Header.Add("Authorization", "NTLM "+utils.EncBase64(utils.NegotiateSP()))
+	r.Header.Add("Authorization", "NTLM "+utils.EncBase64(b.Bytes()))
 
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: t.Insecure},
@@ -69,13 +77,6 @@ func (t NtlmTransport) RoundTrip(req *http.Request) (res *http.Response, err err
 		if err != nil {
 			return nil, err
 		}
-
-		session, err := ntlm.CreateClientSession(ntlm.Version1, ntlm.ConnectionlessMode)
-		if err != nil {
-			return nil, err
-		}
-
-		session.SetUserInfo(t.User, t.Password, t.Domain)
 
 		// parse NTLM challenge
 		challenge, err := ntlm.ParseChallengeMessage(challengeBytes)

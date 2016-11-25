@@ -2,6 +2,7 @@ package rpchttp
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/tls"
 	"fmt"
 	"io"
@@ -46,8 +47,16 @@ func setupHTTPNTLM(rpctype string, URL string) (net.Conn, error) {
 	request = fmt.Sprintf("%sAccept: application/rpc\r\n", request)
 	request = fmt.Sprintf("%sConnection: keep-alive\r\n", request)
 
+	//we should probably extract the NTLM type from the server response and use appropriate
+	session, err := ntlm.CreateClientSession(ntlm.Version2, ntlm.ConnectionlessMode)
+	b, _ := session.GenerateNegotiateMessage()
+
+	if err != nil {
+		return nil, err
+	}
+
 	//add NTML Authorization header
-	requestInit := fmt.Sprintf("%sAuthorization: NTLM %s\r\n", request, utils.EncBase64(utils.NegotiateSP()))
+	requestInit := fmt.Sprintf("%sAuthorization: NTLM %s\r\n", request, utils.EncBase64(b.Bytes()))
 	requestInit = fmt.Sprintf("%sContent-Length: 0\r\n\r\n", requestInit)
 
 	//send connect
@@ -69,11 +78,6 @@ func setupHTTPNTLM(rpctype string, URL string) (net.Conn, error) {
 
 	ntlmChallengeString := strings.Replace(ntlmChallengeHeader, "NTLM ", "", 1)
 	challengeBytes, err := utils.DecBase64(ntlmChallengeString)
-	if err != nil {
-		return nil, err
-	}
-	//we should probably extract the NTLM type from the server response and use appropriate
-	session, err := ntlm.CreateClientSession(ntlm.Version2, ntlm.ConnectionlessMode)
 	if err != nil {
 		return nil, err
 	}
@@ -163,7 +167,7 @@ func RPCOpenOut(URL string, readySignal chan bool) error {
 
 //RPCBind function establishes our session
 func RPCBind() {
-
+	var err error
 	//Generate out-channel cookie
 	//20 byte channel cookie for out-channel
 	connB1 := ConnB1()
@@ -177,10 +181,14 @@ func RPCBind() {
 	//I should change this to an object, but it never changes, so I guess it's ok for now to leave it hardcoded
 	//dataout := []byte{0x05, 0x00, 0x0b, 0x13, 0x10, 0x00, 0x00, 0x00, 0x74, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0xf8, 0x0f, 0xf8, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0xdb, 0xf1, 0xa4, 0x47, 0xca, 0x67, 0x10, 0xb3, 0x1f, 0x00, 0xdd, 0x01, 0x06, 0x62, 0xda, 0x00, 0x00, 0x51, 0x00, 0x04, 0x5d, 0x88, 0x8a, 0xeb, 0x1c, 0xc9, 0x11, 0x9f, 0xe8, 0x08, 0x00, 0x2b, 0x10, 0x48, 0x60, 0x02, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0xdb, 0xf1, 0xa4, 0x47, 0xca, 0x67, 0x10, 0xb3, 0x1f, 0x00, 0xdd, 0x01, 0x06, 0x62, 0xda, 0x00, 0x00, 0x51, 0x00, 0x2c, 0x1c, 0xb7, 0x6c, 0x12, 0x98, 0x40, 0x45, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00}
 	//RPCWrite(dataout)
+	//should check if we use Version1 or Version2
+	rpcntlmsession, err = ntlm.CreateClientSession(ntlm.Version2, ntlm.ConnectionlessMode)
+	if err != nil {
+		panic(err)
+	}
 
-	bind := Bind(AuthSession.RPCNetworkAuthLevel, AuthSession.RPCNetworkAuthType)
-	//bind := Bind(RPC_C_AUTHN_LEVEL_PKT_PRIVACY, RPC_C_AUTHN_WINNT)
-	//fmt.Printf("%x\n%x\n", dataout, bind.Marshal())
+	bind := Bind(AuthSession.RPCNetworkAuthLevel, AuthSession.RPCNetworkAuthType, &rpcntlmsession)
+
 	RPCWrite(bind.Marshal())
 
 	RPCRead(0)
@@ -195,15 +203,10 @@ func RPCBind() {
 
 		challengeBytes := append(sec.Data[:len(sec.Data)-1], []byte{0x00}...)
 
-		//should check if we use Version1 or Version2
-		rpcntlmsession, err = ntlm.CreateClientSession(ntlm.Version2, ntlm.ConnectionlessMode)
-		if err != nil {
-			panic(err)
-		}
-
 		rpcntlmsession.SetUserInfo(AuthSession.User, AuthSession.Pass, AuthSession.Domain)
 
 		challenge, err := ntlm.ParseChallengeMessage(challengeBytes)
+		fmt.Println(challenge)
 		if err != nil {
 			fmt.Println("we panic here")
 			panic(err)
@@ -222,11 +225,11 @@ func RPCBind() {
 			panic(err)
 		}
 		AuthSession.RPCNtlmSessionKey = authenticate.ClientChallenge()
+		fmt.Println(authenticate)
 		//send auth setup complete bind
 		au := Auth3(AuthSession.RPCNetworkAuthLevel, AuthSession.RPCNetworkAuthType, authenticate.Bytes())
 		RPCWrite(au.Marshal())
 
-		//rpcntlmsession.Seal(message)
 		//RPCRead(1)
 		//save session key and set that all requests should be encrypted/signed
 	}
@@ -254,12 +257,18 @@ func EcDoRPCExt2(mapi []byte, auxLen uint32) ([]byte, error) {
 
 	if AuthSession.RPCNetworkAuthLevel == RPC_C_AUTHN_LEVEL_PKT_PRIVACY {
 		data := pdu.Marshal()
+
+		//pad if necessary
+		pad := (4 - (len(data) % 4)) % 4
+		data = append(data, bytes.Repeat([]byte{0xBB}, pad)...)
+
 		sealed, sign, _ := rpcntlmsession.Seal(data)
 		//NTLM seal and add sectrailer
 		fmt.Printf("Seal: %x\nMAC: %x\n", sealed, sign)
 		secTrail := RTSSec{}
 		secTrail.AuthLevel = AuthSession.RPCNetworkAuthLevel
 		secTrail.AuthType = AuthSession.RPCNetworkAuthType
+		secTrail.AuthPadLen = uint8(pad)
 		secTrail.Data = sign
 		req.Header.AuthLen = uint16(len(secTrail.Data))
 		req.SecTrailer = secTrail.Marshal()
@@ -306,19 +315,23 @@ func DoConnectExRequest(MAPI []byte, auxlen uint32) ([]byte, error) {
 	pdu.AuxOut = 0x000001008
 
 	if AuthSession.RPCNetworkAuthLevel == RPC_C_AUTHN_LEVEL_PKT_PRIVACY {
-		req.Command = []byte{0x01, 0x00, 0x0a, 0x00}
 		data := pdu.Marshal()
+		//pad if necessary
+		//pad := 0 //(4 - (len(data) % 4)) % 4
+		//data = append(data, bytes.Repeat([]byte{0xBB}, pad)...)
+
 		sealed, sign, _ := rpcntlmsession.Seal(data)
+
 		//NTLM seal and add sectrailer
-		fmt.Printf("Seal: %x\nMAC: %x\n", sealed, sign)
 		secTrail := RTSSec{}
 		secTrail.AuthLevel = AuthSession.RPCNetworkAuthLevel
 		secTrail.AuthType = AuthSession.RPCNetworkAuthType
-		secTrail.AuthPadLen = 0x08
-		secTrail.AuthCTX = 1
+
 		secTrail.Data = sign
 		req.Header.AuthLen = uint16(len(secTrail.Data))
 		req.SecTrailer = secTrail.Marshal()
+
+		//secTrail.AuthPadLen = uint8(pad)
 		req.PduData = sealed
 	} else {
 		req.PduData = pdu.Marshal() //MAPI
