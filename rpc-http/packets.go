@@ -363,6 +363,7 @@ func Auth3(authLevel, authType uint8, authData []byte) Auth3Request {
 		//pad if necessary
 		//pad := (4 - (len(authData) % 4)) % 4
 		//authData = append(authData, bytes.Repeat([]byte{0x00}, pad)...)
+		//fmt.Println("Padding AUTH3: ", pad)
 		secTrailer.Data = authData
 		//secTrailer.AuthPadLen = uint8(pad)
 		auth.Header.AuthLen = uint16(len(secTrailer.Data))

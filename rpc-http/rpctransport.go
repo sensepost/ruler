@@ -206,7 +206,7 @@ func RPCBind() {
 		rpcntlmsession.SetUserInfo(AuthSession.User, AuthSession.Pass, AuthSession.Domain)
 
 		challenge, err := ntlm.ParseChallengeMessage(challengeBytes)
-		fmt.Println(challenge)
+		//fmt.Println(challenge)
 		if err != nil {
 			fmt.Println("we panic here")
 			panic(err)
@@ -225,7 +225,7 @@ func RPCBind() {
 			panic(err)
 		}
 		AuthSession.RPCNtlmSessionKey = authenticate.ClientChallenge()
-		fmt.Println(authenticate)
+		//fmt.Println(authenticate)
 		//send auth setup complete bind
 		au := Auth3(AuthSession.RPCNetworkAuthLevel, AuthSession.RPCNetworkAuthType, authenticate.Bytes())
 		RPCWrite(au.Marshal())
@@ -259,8 +259,8 @@ func EcDoRPCExt2(mapi []byte, auxLen uint32) ([]byte, error) {
 		data := pdu.Marshal()
 
 		//pad if necessary
-		pad := (4 - (len(data) % 4)) % 4
-		data = append(data, bytes.Repeat([]byte{0xBB}, pad)...)
+		pad := 0 //(4-(len(data)%4)) % 4
+		//data = append(data, bytes.Repeat([]byte{0xBB}, pad)...)
 
 		sealed, sign, _ := rpcntlmsession.Seal(data)
 		//NTLM seal and add sectrailer
@@ -315,11 +315,12 @@ func DoConnectExRequest(MAPI []byte, auxlen uint32) ([]byte, error) {
 	pdu.AuxOut = 0x000001008
 
 	if AuthSession.RPCNetworkAuthLevel == RPC_C_AUTHN_LEVEL_PKT_PRIVACY {
+
 		data := pdu.Marshal()
 		//pad if necessary
-		//pad := 0 //(4 - (len(data) % 4)) % 4
-		//data = append(data, bytes.Repeat([]byte{0xBB}, pad)...)
-
+		pad := (4 - (len(data) % 4)) % 4
+		data = append(data, bytes.Repeat([]byte{0x00}, pad)...)
+		fmt.Println("Padding: ", pad)
 		sealed, sign, _ := rpcntlmsession.Seal(data)
 
 		//NTLM seal and add sectrailer
@@ -331,7 +332,7 @@ func DoConnectExRequest(MAPI []byte, auxlen uint32) ([]byte, error) {
 		req.Header.AuthLen = uint16(len(secTrail.Data))
 		req.SecTrailer = secTrail.Marshal()
 
-		//secTrail.AuthPadLen = uint8(pad)
+		secTrail.AuthPadLen = uint8(pad)
 		req.PduData = sealed
 	} else {
 		req.PduData = pdu.Marshal() //MAPI
