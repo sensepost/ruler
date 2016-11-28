@@ -200,10 +200,12 @@ func RPCBind() {
 		//fmt.Printf("Security setup: %x\n\n%x\n", resp.PDU, resp.SecTrailer)
 		sec := RTSSec{}
 		sec.Unmarshal(resp.SecTrailer, int(resp.Header.AuthLen))
-
+		//fmt.Printf("Security setup: %x\nPad: %d\n", sec.Data, sec.AuthPadLen)
 		challengeBytes := append(sec.Data[:len(sec.Data)-1], []byte{0x00}...)
 
 		rpcntlmsession.SetUserInfo(AuthSession.User, AuthSession.Pass, AuthSession.Domain)
+		rpcntlmsession.SetMode(ntlm.ConnectionOrientedMode)
+		rpcntlmsession.SetTarget(fmt.Sprintf("exchangeMDB/%s", AuthSession.RPCMailbox))
 
 		challenge, err := ntlm.ParseChallengeMessage(challengeBytes)
 		//fmt.Println(challenge)
@@ -224,8 +226,7 @@ func RPCBind() {
 			fmt.Println("we panic here with authen")
 			panic(err)
 		}
-		AuthSession.RPCNtlmSessionKey = authenticate.ClientChallenge()
-		//fmt.Println(authenticate)
+
 		//send auth setup complete bind
 		au := Auth3(AuthSession.RPCNetworkAuthLevel, AuthSession.RPCNetworkAuthType, authenticate.Bytes())
 		RPCWrite(au.Marshal())
@@ -259,8 +260,8 @@ func EcDoRPCExt2(mapi []byte, auxLen uint32) ([]byte, error) {
 		data := pdu.Marshal()
 
 		//pad if necessary
-		pad := 0 //(4-(len(data)%4)) % 4
-		//data = append(data, bytes.Repeat([]byte{0xBB}, pad)...)
+		pad := (4 - (len(data) % 4)) % 4
+		data = append(data, bytes.Repeat([]byte{0x00}, pad)...)
 
 		sealed, sign, _ := rpcntlmsession.Seal(data)
 		//NTLM seal and add sectrailer
@@ -276,8 +277,9 @@ func EcDoRPCExt2(mapi []byte, auxLen uint32) ([]byte, error) {
 	} else {
 		req.PduData = pdu.Marshal() //MAPI
 	}
-
+	req.MaxFrag = uint16(len(pdu.Marshal()))
 	req.Header.FragLen = uint16(len(req.Marshal()))
+
 	RPCWrite(req.Marshal())
 	resp, err := RPCRead(callcounter - 1)
 
@@ -305,7 +307,7 @@ func DoConnectExRequest(MAPI []byte, auxlen uint32) ([]byte, error) {
 	header.PackedDrep = 16
 	req := RTSRequest{}
 	req.Header = header
-	req.MaxFrag = 0xffff
+
 	req.MaxRecv = 0x0000
 	req.Command = []byte{0x00, 0x00, 0x0a, 0x00} //command 10
 
@@ -318,9 +320,9 @@ func DoConnectExRequest(MAPI []byte, auxlen uint32) ([]byte, error) {
 
 		data := pdu.Marshal()
 		//pad if necessary
-		pad := (4 - (len(data) % 4)) % 4
+		pad := 0 //(4-(len(data)%4)) % 4
 		data = append(data, bytes.Repeat([]byte{0x00}, pad)...)
-		fmt.Println("Padding: ", pad)
+
 		sealed, sign, _ := rpcntlmsession.Seal(data)
 
 		//NTLM seal and add sectrailer
@@ -337,7 +339,7 @@ func DoConnectExRequest(MAPI []byte, auxlen uint32) ([]byte, error) {
 	} else {
 		req.PduData = pdu.Marshal() //MAPI
 	}
-
+	req.MaxFrag = uint16(len(pdu.Marshal())) //0xffff
 	req.Header.FragLen = uint16(len(req.Marshal()))
 
 	RPCWrite(req.Marshal())

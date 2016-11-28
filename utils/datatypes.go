@@ -46,12 +46,12 @@ type Session struct {
 	NTLMAuth  string
 	BasicAuth string
 
-	RPCSet        bool
-	ContextHandle []byte //16-byte cookie for the RPC session
-	RPCURL        string
-	UserDN        []byte
-	Trigger       string
-
+	RPCSet              bool
+	ContextHandle       []byte //16-byte cookie for the RPC session
+	RPCURL              string
+	UserDN              []byte
+	Trigger             string
+	RPCMailbox          string
 	RPCNetworkAuthLevel uint8
 	RPCNetworkAuthType  uint8
 	RPCNtlmSessionKey   []byte

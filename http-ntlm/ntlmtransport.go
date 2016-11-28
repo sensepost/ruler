@@ -10,6 +10,7 @@ package httpntlm
 import (
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -92,7 +93,7 @@ func (t NtlmTransport) RoundTrip(req *http.Request) (res *http.Response, err err
 
 		// authenticate user
 		authenticate, err := session.GenerateAuthenticateMessage()
-
+		fmt.Printf("%x\n", authenticate.Bytes())
 		if err != nil {
 			return nil, err
 		}
