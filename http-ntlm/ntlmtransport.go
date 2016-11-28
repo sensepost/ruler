@@ -10,7 +10,6 @@ package httpntlm
 import (
 	"crypto/tls"
 	"errors"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -25,6 +24,7 @@ type NtlmTransport struct {
 	Domain   string
 	User     string
 	Password string
+	NTHash   []byte
 	Insecure bool
 }
 
@@ -37,6 +37,11 @@ func (t NtlmTransport) RoundTrip(req *http.Request) (res *http.Response, err err
 	}
 
 	session.SetUserInfo(t.User, t.Password, t.Domain)
+
+	if len(t.NTHash) > 0 {
+		session.SetNTHash(t.NTHash)
+	}
+
 	b, _ := session.GenerateNegotiateMessage()
 	// first send NTLM Negotiate header
 	r, _ := http.NewRequest("GET", req.URL.String(), strings.NewReader(""))
@@ -93,7 +98,7 @@ func (t NtlmTransport) RoundTrip(req *http.Request) (res *http.Response, err err
 
 		// authenticate user
 		authenticate, err := session.GenerateAuthenticateMessage()
-		fmt.Printf("%x\n", authenticate.Bytes())
+		//fmt.Printf("%x\n", authenticate.Bytes())
 		if err != nil {
 			return nil, err
 		}

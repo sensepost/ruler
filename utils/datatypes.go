@@ -42,9 +42,9 @@ type Session struct {
 	Authenticated bool
 	Folderids     [][]byte
 	RulesHandle   []byte
-
-	NTLMAuth  string
-	BasicAuth string
+	NTHash        []byte
+	NTLMAuth      string
+	BasicAuth     string
 
 	RPCSet              bool
 	ContextHandle       []byte //16-byte cookie for the RPC session

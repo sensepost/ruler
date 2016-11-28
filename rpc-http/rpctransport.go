@@ -220,7 +220,7 @@ func RPCBind() {
 		}
 
 		// authenticate user
-		authenticate, err := rpcntlmsession.GenerateAuthenticateMessage()
+		authenticate, err := rpcntlmsession.GenerateAuthenticateMessageAV()
 
 		if err != nil {
 			fmt.Println("we panic here with authen")

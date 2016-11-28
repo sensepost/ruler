@@ -79,6 +79,7 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, error) {
 				Domain:   SessionConfig.Domain,
 				User:     SessionConfig.User,
 				Password: SessionConfig.Pass,
+				NTHash:   SessionConfig.NTHash,
 				Insecure: SessionConfig.Insecure,
 			},
 		}
