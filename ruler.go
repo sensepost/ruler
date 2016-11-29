@@ -246,7 +246,7 @@ func connect(c *cli.Context) error {
 	config.Basic = c.GlobalBool("basic")
 	config.Insecure = c.GlobalBool("insecure")
 	config.Verbose = c.GlobalBool("verbose")
-	//config.Admin = c.GlobalBool("admin")
+	config.Admin = c.GlobalBool("admin")
 
 	url := c.GlobalString("url")
 
@@ -354,6 +354,10 @@ A tool by @sensepost to abuse Exchange Services.`
 		cli.BoolFlag{
 			Name:  "basic,b",
 			Usage: "Force Basic authentication",
+		},
+		cli.BoolFlag{
+			Name:  "admin",
+			Usage: "Login as an admin",
 		},
 		cli.BoolFlag{
 			Name:  "rpc",
