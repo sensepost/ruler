@@ -197,10 +197,10 @@ func RPCBind() {
 	//parse out and setup security
 	if AuthSession.RPCNetworkAuthLevel == RPC_C_AUTHN_LEVEL_PKT_PRIVACY {
 		resp, err := RPCRead(1)
-		//fmt.Printf("Security setup: %x\n\n%x\n", resp.PDU, resp.SecTrailer)
+
 		sec := RTSSec{}
 		sec.Unmarshal(resp.SecTrailer, int(resp.Header.AuthLen))
-		//fmt.Printf("Security setup: %x\nPad: %d\n", sec.Data, sec.AuthPadLen)
+
 		challengeBytes := append(sec.Data[:len(sec.Data)-1], []byte{0x00}...)
 
 		rpcntlmsession.SetUserInfo(AuthSession.User, AuthSession.Pass, AuthSession.Domain)
@@ -320,7 +320,7 @@ func DoConnectExRequest(MAPI []byte, auxlen uint32) ([]byte, error) {
 
 		data := pdu.Marshal()
 		//pad if necessary
-		pad := 0 //(4-(len(data)%4)) % 4
+		pad := (4 - (len(data) % 4)) % 4
 		data = append(data, bytes.Repeat([]byte{0x00}, pad)...)
 
 		sealed, sign, _ := rpcntlmsession.Seal(data)
