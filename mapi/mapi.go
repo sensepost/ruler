@@ -65,11 +65,13 @@ func Init(config *utils.Session, lid, URL, ABKURL string, transport int) {
 	AuthSession.LogonID = 0x09
 	AuthSession.Authenticated = false
 
-	AuthSession.RPCNetworkAuthLevel = rpchttp.RPC_C_AUTHN_LEVEL_PKT_PRIVACY
-	AuthSession.RPCNetworkAuthType = rpchttp.RPC_C_AUTHN_WINNT
-
-	AuthSession.RPCNetworkAuthLevel = rpchttp.RPC_C_AUTHN_LEVEL_NONE
-	AuthSession.RPCNetworkAuthType = rpchttp.RPC_C_AUTHN_NONE
+	if AuthSession.RPCEncrypt == true {
+		AuthSession.RPCNetworkAuthLevel = rpchttp.RPC_C_AUTHN_LEVEL_PKT_PRIVACY
+		AuthSession.RPCNetworkAuthType = rpchttp.RPC_C_AUTHN_WINNT
+	} else {
+		AuthSession.RPCNetworkAuthLevel = rpchttp.RPC_C_AUTHN_LEVEL_NONE
+		AuthSession.RPCNetworkAuthType = rpchttp.RPC_C_AUTHN_NONE
+	}
 }
 
 func addMapiHeaders(req *http.Request, mapiType string) {

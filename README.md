@@ -97,6 +97,7 @@ GLOBAL OPTIONS:
    --username value, -u value  A valid username
    --password value, -p value  A valid password
    --email value, -e value     The target's email address
+   --hash value                A valid NT hash (NTLM hash) for the user
    --url value                 If you know the Autodiscover URL or the autodiscover service is failing. Requires full URI, https://autodisc.d.com/autodiscover/autodiscover.xml
    --insecure, -k              Ignore server SSL certificate errros
    --basic, -b                 Force Basic authentication
@@ -180,6 +181,13 @@ If you run into issues with Authentication (and you know the creds are correct),
 
 The global ```--verbose``` flag will also give you some insight into the process being used by the autodiscover service.
 
+## PtH - Passing the hash
+
+Ruler has support for PtH attacks, allowing you to reuse valid NTLM hashes (think responder, mimikatz, mana-eap) instead of a password. Simply provide the hash instead of a password and you are good to go. To provide the hash, use the global flag ```--hash```.
+
+```
+./ruler --domain evilcorp --username validuser --hash 71bc15c57d836a663ed0b02631d300be --email user@domain.com display
+```
 
 ## Display existing rules / verify account
 

@@ -247,6 +247,7 @@ func connect(c *cli.Context) error {
 	config.Insecure = c.GlobalBool("insecure")
 	config.Verbose = c.GlobalBool("verbose")
 	config.Admin = c.GlobalBool("admin")
+	config.RPCEncrypt = c.GlobalBool("encrypt")
 
 	url := c.GlobalString("url")
 
@@ -349,7 +350,11 @@ A tool by @sensepost to abuse Exchange Services.`
 		},
 		cli.BoolFlag{
 			Name:  "insecure,k",
-			Usage: "Ignore server SSL certificate errros",
+			Usage: "Ignore server SSL certificate errors",
+		},
+		cli.BoolFlag{
+			Name:  "encrypt",
+			Usage: "Use NTLM auth on the RPC level - some environments require this",
 		},
 		cli.BoolFlag{
 			Name:  "basic,b",

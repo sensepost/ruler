@@ -83,6 +83,7 @@ func setupHTTPNTLM(rpctype string, URL string) (net.Conn, error) {
 	}
 
 	session.SetUserInfo(AuthSession.User, AuthSession.Pass, AuthSession.Domain)
+	session.SetNTHash(AuthSession.NTHash)
 	//fmt.Printf("Challenge: %x\n\n", challengeBytes)
 	// parse NTLM challenge
 	challenge, err := ntlm.ParseChallengeMessage(challengeBytes)
@@ -199,13 +200,14 @@ func RPCBind() {
 		resp, err := RPCRead(1)
 
 		sec := RTSSec{}
-		sec.Unmarshal(resp.SecTrailer, int(resp.Header.AuthLen))
-
-		challengeBytes := append(sec.Data[:len(sec.Data)-1], []byte{0x00}...)
+		pos, _ := sec.Unmarshal(resp.SecTrailer, int(resp.Header.AuthLen))
+		//fmt.Printf("%x\n", resp.Body[len(resp.PDU)+pos+16:])
+		challengeBytes := append(resp.Body[len(resp.PDU)+pos+16:], []byte{0x00}...)
 
 		rpcntlmsession.SetUserInfo(AuthSession.User, AuthSession.Pass, AuthSession.Domain)
 		rpcntlmsession.SetMode(ntlm.ConnectionOrientedMode)
 		rpcntlmsession.SetTarget(fmt.Sprintf("exchangeMDB/%s", AuthSession.RPCMailbox))
+		rpcntlmsession.SetNTHash(AuthSession.NTHash)
 
 		challenge, err := ntlm.ParseChallengeMessage(challengeBytes)
 		//fmt.Println(challenge)
@@ -230,10 +232,12 @@ func RPCBind() {
 		//send auth setup complete bind
 		au := Auth3(AuthSession.RPCNetworkAuthLevel, AuthSession.RPCNetworkAuthType, authenticate.Bytes())
 		RPCWrite(au.Marshal())
+		//RPCWrite([]byte{0x05, 0x00, 0x14, 0x03, 0x10, 0x00, 0x00, 0x00, 0x1c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x01, 0x00, 0x05, 0x00, 0x00, 0x00, 0x30, 0x75, 0x00, 0x00})
 
 		//RPCRead(1)
 		//save session key and set that all requests should be encrypted/signed
 	}
+
 }
 
 //RPCPing fucntion
@@ -270,9 +274,11 @@ func EcDoRPCExt2(mapi []byte, auxLen uint32) ([]byte, error) {
 		secTrail.AuthLevel = AuthSession.RPCNetworkAuthLevel
 		secTrail.AuthType = AuthSession.RPCNetworkAuthType
 		secTrail.AuthPadLen = uint8(pad)
-		secTrail.Data = sign
-		req.Header.AuthLen = uint16(len(secTrail.Data))
+		secTrail.AuthCTX = 0
+		//secTrail.Data = sign
+		req.Header.AuthLen = 16
 		req.SecTrailer = secTrail.Marshal()
+		req.AuthData = sign
 		req.PduData = sealed
 	} else {
 		req.PduData = pdu.Marshal() //MAPI
@@ -303,6 +309,7 @@ func obfuscate(data []byte) []byte {
 func DoConnectExRequest(MAPI []byte, auxlen uint32) ([]byte, error) {
 
 	callcounter += 2
+
 	header := RTSHeader{Version: 0x05, VersionMinor: 0, Type: DCERPC_PKT_REQUEST, PFCFlags: 0x03, AuthLen: 0, CallID: uint32(callcounter)}
 	header.PackedDrep = 16
 	req := RTSRequest{}
@@ -316,31 +323,36 @@ func DoConnectExRequest(MAPI []byte, auxlen uint32) ([]byte, error) {
 	pdu.CbAuxIn = uint32(auxlen)
 	pdu.AuxOut = 0x000001008
 
-	if AuthSession.RPCNetworkAuthLevel == RPC_C_AUTHN_LEVEL_PKT_PRIVACY {
+	req.PduData = pdu.Marshal() //MAPI
+	req.MaxFrag = uint16(len(pdu.Marshal()))
+	req.Header.FragLen = uint16(len(req.Marshal()))
 
-		data := pdu.Marshal()
+	if AuthSession.RPCNetworkAuthLevel == RPC_C_AUTHN_LEVEL_PKT_PRIVACY {
+		data := req.PduData
 		//pad if necessary
 		pad := (4 - (len(data) % 4)) % 4
 		data = append(data, bytes.Repeat([]byte{0x00}, pad)...)
+		req.PduData = data
+		req.Header.FragLen += 16 //account for AuthData
+		//When NTLM2 is on, we sign the whole pdu, but encrypt just the data, not the dcerpc header.
 
-		sealed, sign, _ := rpcntlmsession.Seal(data)
-
-		//NTLM seal and add sectrailer
+		//add sectrailer
 		secTrail := RTSSec{}
 		secTrail.AuthLevel = AuthSession.RPCNetworkAuthLevel
 		secTrail.AuthType = AuthSession.RPCNetworkAuthType
-
-		secTrail.Data = sign
-		req.Header.AuthLen = uint16(len(secTrail.Data))
-		req.SecTrailer = secTrail.Marshal()
-
 		secTrail.AuthPadLen = uint8(pad)
+		secTrail.AuthCTX = 1
+
+		req.SecTrailer = secTrail.Marshal()
+		req.Header.AuthLen = 16
+
+		//seal data, sign pdu
+		sealed, _, _ := rpcntlmsession.SealV2(data, req.Marshal())
+		sign, _ := rpcntlmsession.Mac(req.Marshal(), int(rpcntlmsession.GetSequenceNumber()))
+		rpcntlmsession.SetSequenceNumber(rpcntlmsession.GetSequenceNumber() + 1)
+		req.AuthData = sign
 		req.PduData = sealed
-	} else {
-		req.PduData = pdu.Marshal() //MAPI
 	}
-	req.MaxFrag = uint16(len(pdu.Marshal())) //0xffff
-	req.Header.FragLen = uint16(len(req.Marshal()))
 
 	RPCWrite(req.Marshal())
 	RPCRead(1)
@@ -355,9 +367,28 @@ func DoConnectExRequest(MAPI []byte, auxlen uint32) ([]byte, error) {
 	}
 
 	if utils.DecodeUint32(AuthSession.ContextHandle[0:4]) == 0x0000 {
-		return nil, fmt.Errorf("-- Unable to obtain a session context")
+		return nil, fmt.Errorf("\n[x] Unable to obtain a session context\n[*] Try again using the --encrypt flag. It is possible that the target requires 'Encrypt traffic between Outlook and Exchange' to be enabled")
 	}
+	//RPCDummy()
+	//RPCRead(callcounter - 1) //check if we can communicate with server
 	return resp.Body, err
+}
+
+//RPCDummy is used to check if we can communicate with the server
+func RPCDummy() {
+	header := RTSHeader{Version: 0x05, VersionMinor: 0, Type: DCERPC_PKT_REQUEST, PFCFlags: 0x03, AuthLen: 0, CallID: uint32(callcounter)}
+	header.PackedDrep = 16
+	req := RTSRequest{}
+	req.MaxFrag = 0xFFFF
+	req.MaxRecv = 0x0000
+	req.Header = header
+	req.Command = []byte{0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00}
+	pdu := PDUData{}
+	pdu.ContextHandle = AuthSession.ContextHandle
+	pdu.AuxOut = 0x000001008
+	req.PduData = pdu.Marshal()
+	req.Header.FragLen = uint16(len(req.Marshal()))
+	RPCWrite(req.Marshal())
 }
 
 //RPCDisconnect fucntion
@@ -373,7 +404,7 @@ func RPCDisconnect() {
 	pdu.ContextHandle = AuthSession.ContextHandle
 	pdu.AuxOut = 0x000001008
 	req.PduData = pdu.Marshal()
-
+	req.Header.FragLen = uint16(len(req.Marshal()))
 	RPCWrite(req.Marshal())
 	rpcInConn.Close()
 	rpcOutConn.Close()

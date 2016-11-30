@@ -2,9 +2,17 @@ package utils
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/binary"
 	"fmt"
 	"reflect"
+)
+
+var (
+	put32     = binary.LittleEndian.PutUint32
+	put16     = binary.LittleEndian.PutUint16
+	EncBase64 = base64.StdEncoding.EncodeToString
+	DecBase64 = base64.StdEncoding.DecodeString
 )
 
 func UniString(str string) []byte {

@@ -1,6 +1,7 @@
 package rpchttp
 
 import (
+	"bytes"
 	"fmt"
 	"math/rand"
 	"time"
@@ -31,7 +32,6 @@ type RTSSec struct {
 	AuthPadLen uint8
 	AuthRsvrd  uint8
 	AuthCTX    uint32
-	Data       []byte
 }
 
 //BindPDU struct
@@ -43,6 +43,7 @@ type BindPDU struct {
 	CtxNum             uint32 //2
 	CtxItems           []byte
 	SecTrailer         []byte
+	AuthData           []byte
 }
 
 //Auth3Request struct
@@ -50,7 +51,9 @@ type Auth3Request struct {
 	Header      RTSHeader
 	MaxFrag     uint16
 	MaxRecvFrag uint16
-	SecTrailer  []byte
+	//Pad         uint32
+	SecTrailer []byte
+	AuthData   []byte
 }
 
 //CONNA1 struct for initial connection
@@ -90,6 +93,7 @@ type RTSRequest struct {
 	//	CbAuxIn uint32
 	//	AuxOut  uint32
 	SecTrailer []byte
+	AuthData   []byte
 }
 
 type PDUData struct {
@@ -127,6 +131,7 @@ type RPCResponse struct {
 	PDU        []byte
 	SecTrailer []byte
 	Body       []byte
+	AutData    []byte
 }
 
 //CTX item used in Bind
@@ -333,10 +338,12 @@ func Bind(authLevel, authType uint8, session *ntlm.ClientSession) BindPDU {
 			secTrailer := RTSSec{}
 			secTrailer.AuthType = authType
 			secTrailer.AuthLevel = authLevel
-			secTrailer.AuthCTX = 0 //79233
+			secTrailer.AuthCTX = 1
+
 			b, _ := rpcntlmsession.GenerateNegotiateMessage()
-			secTrailer.Data = b.Bytes() //utils.NegotiateSP()
-			bind.Header.AuthLen = uint16(len(secTrailer.Data))
+			bind.AuthData = b.Bytes()
+			bind.Header.AuthLen = uint16(len(bind.AuthData))
+
 			bind.SecTrailer = secTrailer.Marshal()
 			bind.Header.FragLen = uint16(len(bind.Marshal()))
 		}
@@ -348,7 +355,7 @@ func Auth3(authLevel, authType uint8, authData []byte) Auth3Request {
 	auth := Auth3Request{}
 	header := RTSHeader{Version: 0x05, VersionMinor: 0, Type: DCERPC_PKT_AUTH_3, PFCFlags: 0x17, AuthLen: 0, CallID: 1}
 	header.PackedDrep = 16
-
+	header.PFCFlags = header.PFCFlags | 0x04
 	auth.Header = header
 
 	auth.MaxFrag = 0x0ff8
@@ -358,15 +365,16 @@ func Auth3(authLevel, authType uint8, authData []byte) Auth3Request {
 		secTrailer := RTSSec{}
 		secTrailer.AuthType = authType
 		secTrailer.AuthLevel = authLevel
-		secTrailer.AuthCTX = 0
+		secTrailer.AuthCTX = 1
 
 		//pad if necessary
-		//pad := (4 - (len(authData) % 4)) % 4
-		//authData = append(authData, bytes.Repeat([]byte{0x00}, pad)...)
-		//fmt.Println("Padding AUTH3: ", pad)
-		secTrailer.Data = authData
-		//secTrailer.AuthPadLen = uint8(pad)
-		auth.Header.AuthLen = uint16(len(secTrailer.Data))
+		pad := (4 - (len(authData) % 4)) % 4
+		authData = append(authData, bytes.Repeat([]byte{0x00}, pad)...)
+		auth.AuthData = authData
+
+		secTrailer.AuthPadLen = uint8(pad)
+		auth.Header.AuthLen = uint16(len(auth.AuthData))
+
 		auth.SecTrailer = secTrailer.Marshal()
 		auth.Header.FragLen = uint16(len(auth.Marshal()))
 	}
@@ -447,7 +455,7 @@ func (sec *RTSSec) Unmarshal(raw []byte, ln int) (int, error) {
 	sec.AuthPadLen, pos = utils.ReadByte(pos, raw)
 	sec.AuthRsvrd, pos = utils.ReadByte(pos, raw)
 	sec.AuthCTX, pos = utils.ReadUint32(pos, raw)
-	sec.Data, pos = utils.ReadBytes(pos, ln, raw)
+	//sec.Data, pos = utils.ReadBytes(pos, ln, raw)
 	return pos, nil
 }
 
