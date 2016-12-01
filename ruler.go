@@ -233,7 +233,7 @@ func connect(c *cli.Context) error {
 
 	//check that name, trigger and location were supplied
 	if c.GlobalString("username") == "" || (c.GlobalString("password") == "" && c.GlobalString("hash") == "") || c.GlobalString("email") == "" {
-		return fmt.Errorf("Missing global argument. Use --domain, --username, --password and --email")
+		return fmt.Errorf("Missing global argument. Use --domain, --username, (--password or --hash) and --email")
 	}
 
 	//setup our autodiscover service
@@ -407,7 +407,7 @@ A tool by @sensepost to abuse Exchange Services.`
 
 				err := connect(c)
 				if err != nil {
-					cli.NewExitError(err, 1)
+					return cli.NewExitError(err, 1)
 				}
 				err = addRule(c)
 				exit(err)
@@ -432,7 +432,7 @@ A tool by @sensepost to abuse Exchange Services.`
 				}
 				err := connect(c)
 				if err != nil {
-					cli.NewExitError(err, 1)
+					return cli.NewExitError(err, 1)
 				}
 				err = deleteRule(c)
 				exit(err)
@@ -446,7 +446,7 @@ A tool by @sensepost to abuse Exchange Services.`
 			Action: func(c *cli.Context) error {
 				err := connect(c)
 				if err != nil {
-					cli.NewExitError(err, 1)
+					return cli.NewExitError(err, 1)
 				}
 				err = displayRules(c)
 				exit(err)
