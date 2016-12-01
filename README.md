@@ -50,6 +50,10 @@ Then build it
 go build
 ```
 
+## Pre-built Binaries
+
+Compiled binaries for Linux, OSX and Windows are available. Find these in [Releases]
+
 # Interacting with Exchange
 
 ~~It is important to note that for now this only works with the newer MAPI/HTTP used for OutlookAnywhere. The older RPC/HTTP which MAPI replaces is not supported and may possibly not be supported.~~ RPC/HTTP support has also been included, with Ruler favouring MAPI/HTTP. If MAPI/HTTP fails, an attempt will be made to use RPC/HTTP. You can also force RPC/HTTP by supplying the ```--rpc``` flag.
@@ -294,3 +298,4 @@ RPC/HTTP usually works through a RPC/HTTP proxy, this requires NTLM authenticati
 [Silentbreak blog]: <https://silentbreaksecurity.com/malicious-outlook-rules/>
 [SensePost blog]: <https://sensepost.com/blog/2016/mapi-over-http-and-mailrule-pwnage/>
 [Ruler on YouTube]:<https://www.youtube.com/watch?v=Epk28fEw2Vk>
+[Releases]: <https://github.com/sensepost/ruler/releases>
