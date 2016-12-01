@@ -406,7 +406,7 @@ func AuthenticateFetchMailbox(essdn []byte) (*RopLogonResponse, error) {
 	execResponse := ExecuteResponse{}
 	execResponse.Unmarshal(responseBody)
 
-	if (execResponse.StatusCode == 0 || execResponse.StatusCode == 180) && len(execResponse.RopBuffer) > 0 {
+	if execResponse.StatusCode == 0 {
 		AuthSession.Authenticated = true
 
 		logonResponse := RopLogonResponse{}

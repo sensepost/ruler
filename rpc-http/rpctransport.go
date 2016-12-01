@@ -41,7 +41,7 @@ func setupHTTPNTLM(rpctype string, URL string) (net.Conn, error) {
 		return nil, err
 	}
 
-	request := fmt.Sprintf("%s %s HTTP/1.1\r\nHost: %s\r\n", rpctype, u.RequestURI(), u.Host)
+	request := fmt.Sprintf("%s %s HTTP/1.1\r\nHost: %s\r\n", rpctype, u.String(), u.Host)
 	request = fmt.Sprintf("%sUser-Agent: MSRPC\r\n", request)
 	request = fmt.Sprintf("%sCache-Control: no-cache\r\n", request)
 	request = fmt.Sprintf("%sAccept: application/rpc\r\n", request)
@@ -237,10 +237,6 @@ func RPCBind() {
 		//send auth setup complete bind
 		au := Auth3(AuthSession.RPCNetworkAuthLevel, AuthSession.RPCNetworkAuthType, authenticate.Bytes())
 		RPCWrite(au.Marshal())
-		//RPCWrite([]byte{0x05, 0x00, 0x14, 0x03, 0x10, 0x00, 0x00, 0x00, 0x1c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x01, 0x00, 0x05, 0x00, 0x00, 0x00, 0x30, 0x75, 0x00, 0x00})
-
-		//RPCRead(1)
-		//save session key and set that all requests should be encrypted/signed
 	}
 
 }
@@ -373,7 +369,7 @@ func DoConnectExRequest(MAPI []byte, auxlen uint32) ([]byte, error) {
 	//decrypt response PDU
 	if AuthSession.RPCNetworkAuthLevel == RPC_C_AUTHN_LEVEL_PKT_PRIVACY {
 		dec, _ := rpcntlmsession.UnSeal(resp.PDU[8:])
-		AuthSession.ContextHandle = dec[4:20] //decrypt
+		AuthSession.ContextHandle = dec[4:20] //decrypted
 	} else {
 		AuthSession.ContextHandle = resp.PDU[12:28]
 	}
@@ -482,6 +478,10 @@ func SplitData(data []byte, atEOF bool) (advance int, token []byte, err error) {
 		}
 
 		if start == -1 { //we didn't find the start of the string, reset the head of the scanner and try again
+			return 0, nil, nil
+		}
+		//fmt.Println(start, end, len(data))
+		if start > end {
 			return 0, nil, nil
 		}
 		return end + 2, append(dbuf, data[start:end]...), nil
