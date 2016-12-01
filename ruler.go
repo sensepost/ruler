@@ -109,6 +109,7 @@ func brute(c *cli.Context) error {
 	}
 	if c.String("passwords") == "" && c.String("userpass") == "" {
 		return fmt.Errorf("Either --passwords or --userpass required")
+
 	}
 	if c.GlobalString("domain") == "" && c.GlobalString("url") == "" {
 		return fmt.Errorf("Either --domain or --url required")

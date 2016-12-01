@@ -168,6 +168,7 @@ cindy.baker:Password1
 ```
 
 There are a few other flags that work with ```brute```
+
 These are:
 * --stop _//stop on the first valid username:password combo_
 * --delay _//how long to wait between multiple password guesses_
