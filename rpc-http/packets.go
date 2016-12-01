@@ -298,7 +298,7 @@ func CookieGen() []byte {
 }
 
 //Bind function Creates a Bind Packet
-func Bind(authLevel, authType uint8, session *ntlm.ClientSession) BindPDU {
+func Bind() BindPDU {
 	bind := BindPDU{}
 	header := RTSHeader{Version: 0x05, VersionMinor: 0, Type: DCERPC_PKT_BIND, PFCFlags: 0x13, AuthLen: 0, CallID: 1}
 	header.PackedDrep = 16
@@ -313,13 +313,7 @@ func Bind(authLevel, authType uint8, session *ntlm.ClientSession) BindPDU {
 	ctx := CTX{}
 	ctx.ContextID = 0
 	ctx.TransItems = 1
-	if authLevel == RPC_C_AUTHN_LEVEL_PKT_PRIVACY {
-		ctx.AbstractSyntax = []byte{0x18, 0x5a, 0xcc, 0xf5, 0x64, 0x42, 0x1a, 0x10, 0x8c, 0x59, 0x08, 0x00, 0x2b, 0x2f, 0x84, 0x26, 0x38, 0x00, 0x00, 0x00} //CookieGen()
-
-	} else {
-		ctx.AbstractSyntax = []byte{0x00, 0xdb, 0xf1, 0xa4, 0x47, 0xca, 0x67, 0x10, 0xb3, 0x1f, 0x00, 0xdd, 0x01, 0x06, 0x62, 0xda, 0x00, 0x00, 0x51, 0x00} //CookieGen()
-	}
-
+	ctx.AbstractSyntax = []byte{0x00, 0xdb, 0xf1, 0xa4, 0x47, 0xca, 0x67, 0x10, 0xb3, 0x1f, 0x00, 0xdd, 0x01, 0x06, 0x62, 0xda, 0x00, 0x00, 0x51, 0x00} //CookieGen()
 	ctx.TransferSyntax = []byte{0x04, 0x5d, 0x88, 0x8a, 0xeb, 0x1c, 0xc9, 0x11, 0x9f, 0xe8, 0x08, 0x00, 0x2b, 0x10, 0x48, 0x60, 0x02, 0x00, 0x00, 0x00}
 
 	ctx2 := CTX{}
@@ -332,22 +326,48 @@ func Bind(authLevel, authType uint8, session *ntlm.ClientSession) BindPDU {
 	//unknown PDU data here
 	bind.Header.FragLen = uint16(len(bind.Marshal()))
 
-	if authLevel != RPC_C_AUTHN_LEVEL_NONE {
-		//setup our auth here
-		if authType == RPC_C_AUTHN_WINNT {
-			secTrailer := RTSSec{}
-			secTrailer.AuthType = authType
-			secTrailer.AuthLevel = authLevel
-			secTrailer.AuthCTX = 1
+	return bind
+}
 
-			b, _ := rpcntlmsession.GenerateNegotiateMessage()
-			bind.AuthData = b.Bytes()
-			bind.Header.AuthLen = uint16(len(bind.AuthData))
+func SecureBind(authLevel, authType uint8, session *ntlm.ClientSession) BindPDU {
+	bind := BindPDU{}
+	header := RTSHeader{Version: 0x05, VersionMinor: 0, Type: DCERPC_PKT_BIND, PFCFlags: 0x17, AuthLen: 0, CallID: 1}
+	header.PackedDrep = 16
 
-			bind.SecTrailer = secTrailer.Marshal()
-			bind.Header.FragLen = uint16(len(bind.Marshal()))
-		}
+	bind.Header = header
+
+	bind.MaxFrag = 0x0ff8
+	bind.MaxRecvFrag = 0x0ff8
+	bind.AssociationGroupID = 0
+	bind.CtxNum = 0x01
+
+	ctx := CTX{}
+	ctx.ContextID = 1
+	ctx.TransItems = 1
+	ctx.AbstractSyntax = []byte{0x00, 0xdb, 0xf1, 0xa4, 0x47, 0xca, 0x67, 0x10, 0xb3, 0x1f, 0x00, 0xdd, 0x01, 0x06, 0x62, 0xda, 0x00, 0x00, 0x51, 0x00} //CookieGen()
+	//ctx.AbstractSyntax = []byte{0x18, 0x5a, 0xcc, 0xf5, 0x64, 0x42, 0x1a, 0x10, 0x8c, 0x59, 0x08, 0x00, 0x2b, 0x2f, 0x84, 0x26, 0x38, 0x00, 0x00, 0x00} //CookieGen()
+	ctx.TransferSyntax = []byte{0x04, 0x5d, 0x88, 0x8a, 0xeb, 0x1c, 0xc9, 0x11, 0x9f, 0xe8, 0x08, 0x00, 0x2b, 0x10, 0x48, 0x60, 0x02, 0x00, 0x00, 0x00}
+
+	bind.CtxItems = ctx.Marshal()
+	//unknown PDU data here
+	bind.Header.FragLen = uint16(len(bind.Marshal()))
+
+	//setup our auth here
+	//for now just WINNT auth, should add GSSP_NEGOTIATE / NETLOGON?
+	if authType == RPC_C_AUTHN_WINNT {
+		secTrailer := RTSSec{}
+		secTrailer.AuthType = authType
+		secTrailer.AuthLevel = authLevel
+		secTrailer.AuthCTX = 0
+
+		b, _ := rpcntlmsession.GenerateNegotiateMessage()
+		bind.AuthData = b.Bytes()
+		bind.Header.AuthLen = uint16(len(bind.AuthData))
+
+		bind.SecTrailer = secTrailer.Marshal()
+		bind.Header.FragLen = uint16(len(bind.Marshal()))
 	}
+
 	return bind
 }
 
@@ -365,7 +385,7 @@ func Auth3(authLevel, authType uint8, authData []byte) Auth3Request {
 		secTrailer := RTSSec{}
 		secTrailer.AuthType = authType
 		secTrailer.AuthLevel = authLevel
-		secTrailer.AuthCTX = 1
+		secTrailer.AuthCTX = 0
 
 		//pad if necessary
 		pad := (4 - (len(authData) % 4)) % 4
