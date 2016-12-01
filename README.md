@@ -22,12 +22,8 @@ Ruler attempts to be semi-smart when it comes to interacting with Exchange and u
 # Getting the Code
 
 Ruler is written in Go so you'll need to have Go setup to run/build the project
-The first step as always is to clone the repo :
 
-```
-git clone https://github.com/sensepost/ruler.git
-```
-Or you can get it through Go:
+Get it through Go:
 ```
 go get github.com/sensepost/ruler
 ```
@@ -39,6 +35,17 @@ go run ruler.go -h
 
 Or build it (the prefered option):
 
+The first step as always is to clone the repo :
+```
+git clone https://github.com/sensepost/ruler.git
+```
+
+Ensure you have the dependencies (go get is the easiest option, otherwise clone the repos into your GOPATH):
+```
+go get github.com/urfave/cli
+go get github.com/staaldraad/go-ntlm/ntlm
+```
+Then build it
 ```
 go build
 ```
@@ -93,19 +100,20 @@ COMMANDS:
      help, h     Shows a list of commands or help for one command
 
 GLOBAL OPTIONS:
-   --domain value, -d value    A domain for the user (usually required for domain\username)
-   --username value, -u value  A valid username
-   --password value, -p value  A valid password
-   --email value, -e value     The target's email address
-   --hash value                A valid NT hash (NTLM hash) for the user
-   --url value                 If you know the Autodiscover URL or the autodiscover service is failing. Requires full URI, https://autodisc.d.com/autodiscover/autodiscover.xml
-   --insecure, -k              Ignore server SSL certificate errros
-   --basic, -b                 Force Basic authentication
-   --rpc                       Force RPC/HTTP rather than MAPI/HTTP
-   --verbose                   Be verbose and show some of thei inner workings
-   --help, -h                  show help
-   --version, -v               print the version
-
+    --domain value, -d value    A domain for the user (usually required for domain\username)
+    --username value, -u value  A valid username
+    --password value, -p value  A valid password
+    --hash value                A NT hash for pass the hash (NTLMv1)
+    --email value, -e value     The target's email address
+    --url value                 If you know the Autodiscover URL or the autodiscover service is failing. Requires full URI, https://autodisc.d.com/autodiscover/autodiscover.xml
+    --insecure, -k              Ignore server SSL certificate errors
+    --encrypt                   Use NTLM auth on the RPC level - some environments require this
+    --basic, -b                 Force Basic authentication
+    --admin                     Login as an admin
+    --rpc                       Force RPC/HTTP rather than MAPI/HTTP
+    --verbose                   Be verbose and show some of thei inner workings
+    --help, -h                  show help
+    --version, -v               print the version
 ```
 
 ## Brute-force for credentials
@@ -277,6 +285,10 @@ Rule: autopop RuleID: 010000000c4baa84
 ```
 
 Enjoy your shell and don't forget to clean-up after yourself by deleting the rule (or leave it for persistence).
+
+## A note about RPC
+
+RPC/HTTP usually works through a RPC/HTTP proxy, this requires NTLM authentication. By default, Ruler takes care of this. There is however the option to have additional security enabled for Exchange, where Encryption and Integrity checking is enabled on RPC. This requires addional auth to happen on the RPC layer (inside the already NTLM authenticated HTTP channel). To force this, use the ```--encrypt``` flag. Ruler will try and warn you that this is required, if it is able to detect an issue. Alternatively just use this flag when in doubt.
 
 [Silentbreak blog]: <https://silentbreaksecurity.com/malicious-outlook-rules/>
 [SensePost blog]: <https://sensepost.com/blog/2016/mapi-over-http-and-mailrule-pwnage/>
