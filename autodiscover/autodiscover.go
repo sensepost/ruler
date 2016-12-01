@@ -17,7 +17,7 @@ import (
 //globals
 
 //SessionConfig holds the configuration for this autodiscover session
-var SessionConfig *utils.Config
+var SessionConfig *utils.Session
 var autodiscoverStep int
 
 //the xml for the autodiscover service
@@ -76,9 +76,10 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, error) {
 		//create an ntml http client
 		client = http.Client{
 			Transport: &httpntlm.NtlmTransport{
-				Domain:   "",
+				Domain:   SessionConfig.Domain,
 				User:     SessionConfig.User,
 				Password: SessionConfig.Pass,
+				NTHash:   SessionConfig.NTHash,
 				Insecure: SessionConfig.Insecure,
 			},
 		}
@@ -124,6 +125,7 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, error) {
 	//if we have been redirected to outlook, change the auth header to basic auth
 	if SessionConfig.Basic == false {
 		req.SetBasicAuth(SessionConfig.Email, SessionConfig.Pass)
+		SessionConfig.BasicAuth = req.Header.Get("WWW-Authenticate")
 	} else {
 		req.SetBasicAuth(SessionConfig.User, SessionConfig.Pass)
 	}
@@ -144,6 +146,7 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, error) {
 				return autodiscover(domain, mapi)
 			}
 			//we've done all three steps of autodiscover and all three failed
+
 			return nil, err
 		}
 	}
@@ -166,7 +169,11 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, error) {
 			}
 			return nil, fmt.Errorf("[x] Error in autodiscover response, %s", err)
 		}
-		//fmt.Println(string(body))
+		SessionConfig.NTLMAuth = req.Header.Get("Authorization")
+		if SessionConfig.Verbose == true {
+
+			fmt.Println(string(body))
+		}
 		//check if we got a RedirectAddr ,
 		//if yes, get the new autodiscover url
 		if autodiscoverResp.Response.Account.Action == "redirectAddr" {

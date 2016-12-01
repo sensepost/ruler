@@ -24,9 +24,15 @@ type Session struct {
 	User          string
 	Pass          string
 	Email         string
+	Domain        string
+	Basic         bool
+	Insecure      bool
+	Verbose       bool
+	Admin         bool
 	LID           string
 	URL           *url.URL
-	Host          string //used for TCP
+	ABKURL        *url.URL //URL for the AddressBook Provider
+	Host          string   //used for TCP
 	ReqCounter    int
 	Transport     int
 	CookieJar     *cookiejar.Jar
@@ -36,14 +42,20 @@ type Session struct {
 	Authenticated bool
 	Folderids     [][]byte
 	RulesHandle   []byte
-	Insecure      bool
+	NTHash        []byte
 	NTLMAuth      string
-	Admin         bool
-	RPCIn         http.Client
-	RPCOut        http.Client
-	RPCSet        bool
-	UserDN        []byte
-	Trigger       string
+	BasicAuth     string
+
+	RPCSet              bool
+	ContextHandle       []byte //16-byte cookie for the RPC session
+	RPCURL              string
+	UserDN              []byte
+	Trigger             string
+	RPCMailbox          string
+	RPCEncrypt          bool
+	RPCNetworkAuthLevel uint8
+	RPCNetworkAuthType  uint8
+	RPCNtlmSessionKey   []byte
 }
 
 //AutodiscoverResp structure for unmarshal
@@ -136,8 +148,8 @@ type MailStore struct {
 
 //AddressBook structure for unmarshal
 type AddressBook struct {
-	Internal string
-	External string
+	InternalUrl string
+	ExternalUrl string
 }
 
 //PublicFolderInformation structure for unmarshal

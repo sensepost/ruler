@@ -1,5 +1,7 @@
 package mapi
 
+import "github.com/sensepost/ruler/utils"
+
 const (
 	uFlagsUser         = 0x00000000
 	uFlagsAdmin        = 0x00000001
@@ -61,6 +63,13 @@ const (
 	SHORTCUTS      = 12
 )
 
+//Message status flags
+const (
+	MSRemoteDownload = 0x00001000
+	MSInConflict     = 0x00000800
+	MSRemoteDelete   = 0x00002000
+)
+
 //-------- TAGS -------
 
 //Find these in [MS-OXPROPS]
@@ -107,6 +116,9 @@ var PidTagDefaultPostMessageClass = PropertyTag{PtypString, 0x36e5}
 //PidTagDisplayName display name of the folder
 var PidTagDisplayName = PropertyTag{PtypString, 0x3001}
 
+//PidTagEntryID display name of the folder
+var PidTagEntryID = PropertyTag{PtypBinary, 0x0FFF}
+
 //PidTagEmailAddress display name of the folder
 var PidTagEmailAddress = PropertyTag{PtypString, 0x3003}
 
@@ -115,6 +127,9 @@ var PidTagAddressType = PropertyTag{PtypString, 0x3001}
 
 //PidTagFolderType specifies the type of folder that includes the root folder,
 var PidTagFolderType = PropertyTag{PtypInteger32, 0x3601}
+
+//PidTagFolderID the ID of the folder
+var PidTagFolderID = PropertyTag{PtypInteger64, 0x6748}
 
 //PidTagContentCount specifies the number of rows under the header row
 var PidTagContentCount = PropertyTag{PtypInteger32, 0x3602}
@@ -136,11 +151,17 @@ var PidTagSentMailSvrEID = PropertyTag{0x00FB, 0x6740}
 //PidTagBody a
 var PidTagBody = PropertyTag{PtypString, 0x1000}
 
+//PidTagBodyContentID a
+var PidTagBodyContentID = PropertyTag{PtypString, 0x1015}
+
 //PidTagConversationTopic a
 var PidTagConversationTopic = PropertyTag{PtypString, 0x0070}
 
 //PidTagMessageClass this will always be IPM.Note
-var PidTagMessageClass = TaggedPropertyValue{PropertyTag{PtypString, 0x001A}, UniString("IPM.Note")}
+var PidTagMessageClass = PropertyTag{PtypString, 0x001A}
+
+//PidTagMessageClassIPMNote this will always be IPM.Note
+var PidTagMessageClassIPMNote = TaggedPropertyValue{PropertyTag{PtypString, 0x001A}, utils.UniString("IPM.Note")}
 
 //PidTagMessageFlags setting this to unsent
 var PidTagMessageFlags = PropertyTag{PtypInteger32, 0x0E07} //0x00000008
@@ -204,3 +225,21 @@ var PidTagNormalizedSubject = PropertyTag{PtypString, 0x0E1D}
 
 //PidTagSubject used in recepient
 var PidTagSubject = PropertyTag{PtypString, 0x0037}
+
+//PidTagHidden specify whether folder is hidden
+var PidTagHidden = PropertyTag{PtypBoolean, 0x10F4}
+
+//PidTagInstID identifier for all instances of a row in the table
+var PidTagInstID = PropertyTag{PtypInteger64, 0x674D}
+
+//PidTagInstanceNum identifier for single instance of a row in the table
+var PidTagInstanceNum = PropertyTag{PtypInteger32, 0x674E}
+
+//PidTagMid is the message id of a message in a store
+var PidTagMid = PropertyTag{PtypInteger64, 0x674A}
+
+//PidTagBodyHtml is the message id of a message in a store
+var PidTagBodyHtml = PropertyTag{PtypBinary, 0x1013}
+
+//PidTagHtmlBody is the same as above?
+var PidTagHtmlBody = PropertyTag{PtypString, 0x1013}

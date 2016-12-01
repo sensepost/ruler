@@ -1,140 +1,494 @@
 package rpchttp
 
 import (
+	"bufio"
+	"bytes"
+	"crypto/tls"
 	"fmt"
 	"io"
-	"io/ioutil"
-	"net/http"
-	"regexp"
+	"net"
+	"net/url"
 	"strings"
 
-	"github.com/sensepost/ruler/http-ntlm"
 	"github.com/sensepost/ruler/utils"
+	"github.com/staaldraad/go-ntlm/ntlm"
 )
 
-type NtlmTransport struct {
-	Domain   string
-	User     string
-	Password string
-	Insecure bool
-}
-
-func addRPCHeaders(req *http.Request) {
-	req.Header.Set("User-Agent", "MSRPC")
-	req.Header.Add("Cache-Control", "no-cache")
-	req.Header.Add("Accept", "application/rpc")
-	req.Header.Add("Connection", "keep-alive")
-}
-
-var rpcInData http.Client
-var rpcOutData http.Client
+var rpcInConn net.Conn
+var rpcOutConn net.Conn
+var rpcInR, rpcInW = io.Pipe()
+var rpcOutR, rpcOutW = io.Pipe()
+var rpcRespBody *bufio.Reader
+var callcounter int
+var responses = make([]RPCResponse, 0)
+var rpcntlmsession ntlm.ClientSession
 
 //AuthSession Keep track of session data
 var AuthSession *utils.Session
 
-const (
-	RPCIN  = 1
-	RPCOUT = 2
-)
-
-//RPCOpen opens HTTP for RPC_IN_DATA or RPC_OUT_DATA
-func RPCOpen(rpcType int, URL string) (err error) {
-	var method string
-	if rpcType == 1 {
-		method = "RPC_IN_DATA"
-	} else if rpcType == 2 {
-		method = "RPC_OUT_DATA"
+func setupHTTPNTLM(rpctype string, URL string) (net.Conn, error) {
+	u, err := url.Parse(URL)
+	var connection net.Conn
+	if u.Scheme == "http" {
+		connection, err = net.Dial("tcp", fmt.Sprintf("%s:80", u.Host))
 	} else {
-		return fmt.Errorf("Bad rpc type")
+		conf := tls.Config{InsecureSkipVerify: true}
+		connection, err = tls.Dial("tcp", fmt.Sprintf("%s:443", u.Host), &conf)
 	}
-	r, _ := http.NewRequest(method, URL, strings.NewReader(" "))
-	addRPCHeaders(r)
-
-	rpcData := http.Client{
-		Transport: &httpntlm.NtlmTransport{
-			Domain:   "",
-			User:     AuthSession.User,
-			Password: AuthSession.Pass,
-			Insecure: AuthSession.Insecure,
-		},
-		Jar: AuthSession.CookieJar,
-	}
-	resp, err := rpcData.Do(r)
 
 	if err != nil {
-		//check if this error was because of ntml auth when basic auth was expected.
-		if m, _ := regexp.Match("illegal base64", []byte(err.Error())); m == true {
-			rpcInData = http.Client{}
-			resp, err = rpcData.Do(r)
-		} else {
-			fmt.Println(err)
-			return nil
+		fmt.Println("Could not connect")
+		return nil, err
+	}
+
+	request := fmt.Sprintf("%s %s HTTP/1.1\r\nHost: %s\r\n", rpctype, u.String(), u.Host)
+	request = fmt.Sprintf("%sUser-Agent: MSRPC\r\n", request)
+	request = fmt.Sprintf("%sCache-Control: no-cache\r\n", request)
+	request = fmt.Sprintf("%sAccept: application/rpc\r\n", request)
+	request = fmt.Sprintf("%sConnection: keep-alive\r\n", request)
+
+	//we should probably extract the NTLM type from the server response and use appropriate
+	session, err := ntlm.CreateClientSession(ntlm.Version2, ntlm.ConnectionlessMode)
+	b, _ := session.GenerateNegotiateMessage()
+
+	if err != nil {
+		return nil, err
+	}
+
+	//add NTML Authorization header
+	requestInit := fmt.Sprintf("%sAuthorization: NTLM %s\r\n", request, utils.EncBase64(b.Bytes()))
+	requestInit = fmt.Sprintf("%sContent-Length: 0\r\n\r\n", requestInit)
+
+	//send connect
+	connection.Write([]byte(requestInit))
+	//read response
+	data := make([]byte, 2048)
+	connection.Read(data)
+
+	parts := strings.Split(string(data), "\r\n")
+	ntlmChallengeHeader := ""
+	for _, v := range parts {
+		if n := strings.Split(v, ": "); len(n) > 0 {
+			if n[0] == "WWW-Authenticate" {
+				ntlmChallengeHeader = n[1]
+				break
+			}
 		}
 	}
 
-	if err == nil && resp.StatusCode == http.StatusUnauthorized {
-		// it's necessary to reuse the same http connection
-		// in order to do that it's required to read Body and close it
-		_, err = io.Copy(ioutil.Discard, resp.Body)
-		if err != nil {
-			fmt.Println(err)
-			return err
-		}
-		err = resp.Body.Close()
-		if err != nil {
-			fmt.Println(err)
-			return err
-		}
+	ntlmChallengeString := strings.Replace(ntlmChallengeHeader, "NTLM ", "", 1)
+	challengeBytes, err := utils.DecBase64(ntlmChallengeString)
+	if err != nil {
+		return nil, err
 	}
-	fmt.Println(resp)
 
-	if rpcType == 1 {
-		rpcInData = rpcData
-	} else if rpcType == 2 {
-		rpcOutData = rpcData
+	session.SetUserInfo(AuthSession.User, AuthSession.Pass, AuthSession.Domain)
+	session.SetNTHash(AuthSession.NTHash)
+	//fmt.Printf("Challenge: %x\n\n", challengeBytes)
+	// parse NTLM challenge
+	challenge, err := ntlm.ParseChallengeMessage(challengeBytes)
+	if err != nil {
+		//panic(err)
+		return nil, err
 	}
-	return err
+	err = session.ProcessChallengeMessage(challenge)
+	if err != nil {
+		//panic(err)
+		return nil, err
+	}
+	// authenticate user
+	authenticate, err := session.GenerateAuthenticateMessage()
+	if err != nil {
+		//panic(err)
+		return nil, err
+	}
+	if rpctype == "RPC_IN_DATA" {
+		request = fmt.Sprintf("%sContent-Length: 1073741824\r\n", request)
+	} else if rpctype == "RPC_OUT_DATA" {
+		request = fmt.Sprintf("%sContent-Length: 76\r\n", request)
+	}
+	request = fmt.Sprintf("%sAuthorization: NTLM %s\r\n\r\n", request, utils.EncBase64(authenticate.Bytes()))
+
+	connection.Write([]byte(request))
+
+	return connection, nil
 }
 
-func RPCSend(data []byte) {
+//RPCOpen opens HTTP for RPC_IN_DATA and RPC_OUT_DATA
+func RPCOpen(URL string, readySignal chan bool) (err error) {
+	//I'm so damn frustrated at not being able to use the http client here
+	//can't find a way to keep the write channel open (other than going over to http/2, which isn't valid here)
+	//so this is some damn messy code, but screw it
 
+	rpcInConn, _ = setupHTTPNTLM("RPC_IN_DATA", URL)
+
+	//open the RPC_OUT_DATA channel, receive a "ready" signal when this is setup
+	//this will be sent back to the caller through "c", whi
+	go RPCOpenOut(URL, readySignal)
+
+	for {
+		data := make([]byte, 2048)
+		n, err := rpcInR.Read(data)
+		if n > 0 {
+			//fmt.Printf("sending some data: %x\n", data[:n])
+			_, err = rpcInConn.Write(data[:n])
+		}
+		if err != nil && err != io.EOF {
+			fmt.Println(err)
+			break
+		}
+	}
+
+	return nil
 }
 
-//RPCAUTH allows us to do the NTLM auth inside the RPC message
-func RPCAuth() (err error) {
+//RPCOpenOut function opens the RPC_OUT_DATA channel
+//starts our listening "loop" which scans for new responses and pushes
+//these to our list of recieved responses
+func RPCOpenOut(URL string, readySignal chan bool) error {
+	rpcOutConn, _ = setupHTTPNTLM("RPC_OUT_DATA", URL)
 
-	//resp, err = client.Do()
-	//session, err := ntlm.CreateClientSession(ntlm.Version1, ntlm.ConnectionlessMode)
-	//if err != nil {
-	//	return nil, err
-	//}
-	/*
-		session.SetUserInfo(t.User, t.Password, t.Domain)
+	//signal that the RPC_OUT_DATA channel has been setup. This means both channels should be ready to go
+	readySignal <- true
 
-		// parse NTLM challenge
+	scanner := bufio.NewScanner(rpcOutConn)
+	scanner.Split(SplitData)
+
+	for scanner.Scan() {
+		if b := scanner.Bytes(); b != nil {
+			//add to list of responses
+			r := RPCResponse{}
+			r.Unmarshal(b)
+			r.Body = b
+			responses = append(responses, r)
+		}
+	}
+	return nil
+}
+
+//RPCBind function establishes our session
+func RPCBind() {
+	var err error
+	//Generate out-channel cookie
+	//20 byte channel cookie for out-channel
+	connB1 := ConnB1()
+	//Send CONN/A1
+	connA1 := ConnA1(connB1.VirtualConnectCookie.Cookie)
+	RPCOutWrite(connA1.Marshal())
+
+	//send CONN/B1
+	RPCWrite(connB1.Marshal())
+
+	//I should change this to an object, but it never changes, so I guess it's ok for now to leave it hardcoded
+	//dataout := []byte{0x05, 0x00, 0x0b, 0x13, 0x10, 0x00, 0x00, 0x00, 0x74, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0xf8, 0x0f, 0xf8, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0xdb, 0xf1, 0xa4, 0x47, 0xca, 0x67, 0x10, 0xb3, 0x1f, 0x00, 0xdd, 0x01, 0x06, 0x62, 0xda, 0x00, 0x00, 0x51, 0x00, 0x04, 0x5d, 0x88, 0x8a, 0xeb, 0x1c, 0xc9, 0x11, 0x9f, 0xe8, 0x08, 0x00, 0x2b, 0x10, 0x48, 0x60, 0x02, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0xdb, 0xf1, 0xa4, 0x47, 0xca, 0x67, 0x10, 0xb3, 0x1f, 0x00, 0xdd, 0x01, 0x06, 0x62, 0xda, 0x00, 0x00, 0x51, 0x00, 0x2c, 0x1c, 0xb7, 0x6c, 0x12, 0x98, 0x40, 0x45, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00}
+	//RPCWrite(dataout)
+	//should check if we use Version1 or Version2
+	rpcntlmsession, err = ntlm.CreateClientSession(ntlm.Version2, ntlm.ConnectionlessMode)
+	if err != nil {
+		panic(err)
+	}
+
+	bind := BindPDU{}
+	if AuthSession.RPCNetworkAuthLevel == RPC_C_AUTHN_LEVEL_PKT_PRIVACY {
+		bind = SecureBind(AuthSession.RPCNetworkAuthLevel, AuthSession.RPCNetworkAuthType, &rpcntlmsession)
+	} else {
+		bind = Bind()
+	}
+
+	RPCWrite(bind.Marshal())
+
+	RPCRead(0)
+	RPCRead(0)
+
+	//parse out and setup security
+	if AuthSession.RPCNetworkAuthLevel == RPC_C_AUTHN_LEVEL_PKT_PRIVACY {
+		resp, err := RPCRead(1)
+
+		sec := RTSSec{}
+		pos, _ := sec.Unmarshal(resp.SecTrailer, int(resp.Header.AuthLen))
+		//fmt.Printf("%x\n", resp.Body[len(resp.PDU)+pos+16:])
+		challengeBytes := append(resp.Body[len(resp.PDU)+pos+16:], []byte{0x00}...)
+
+		rpcntlmsession.SetUserInfo(AuthSession.User, AuthSession.Pass, AuthSession.Domain)
+		rpcntlmsession.SetMode(ntlm.ConnectionOrientedMode)
+		rpcntlmsession.SetTarget(fmt.Sprintf("exchangeMDB/%s", AuthSession.RPCMailbox))
+		rpcntlmsession.SetNTHash(AuthSession.NTHash)
+
 		challenge, err := ntlm.ParseChallengeMessage(challengeBytes)
-
+		//fmt.Println(challenge)
 		if err != nil {
-			return nil, err
+			fmt.Println("we panic here")
+			panic(err)
 		}
-
-		err = session.ProcessChallengeMessage(challenge)
+		err = rpcntlmsession.ProcessChallengeMessage(challenge)
 		if err != nil {
-			return nil, err
+			fmt.Println("we panic here with challenge")
+			panic(err)
 		}
 
 		// authenticate user
-		authenticate, err := session.GenerateAuthenticateMessage()
+		authenticate, err := rpcntlmsession.GenerateAuthenticateMessageAV()
 
 		if err != nil {
-			return nil, err
+			fmt.Println("we panic here with authen")
+			panic(err)
 		}
 
-		// set NTLM Authorization header
-		//req.Header.Set("Authorization", "NTLM "+encBase64(authenticate.Bytes()))
-		resp, err = client.Do(req)
+		//send auth setup complete bind
+		au := Auth3(AuthSession.RPCNetworkAuthLevel, AuthSession.RPCNetworkAuthType, authenticate.Bytes())
+		RPCWrite(au.Marshal())
+	}
 
-		return resp, err
-	*/
-	return nil
+}
+
+//RPCPing fucntion
+func RPCPing() {
+	rpcInW.Write(Ping().Marshal())
+}
+
+//EcDoRPCExt2 does our actual RPC request returns the mapi data
+func EcDoRPCExt2(mapi []byte, auxLen uint32) ([]byte, error) {
+	header := RTSHeader{Version: 0x05, VersionMinor: 0, Type: DCERPC_PKT_REQUEST, PFCFlags: 0x03, AuthLen: 0, CallID: uint32(callcounter)}
+	header.PackedDrep = 16
+	req := RTSRequest{}
+
+	req.Header = header
+	req.Command = []byte{0x00, 0x00, 0x0b, 0x00, 0x00, 0x00, 0x00, 0x00} //opnum 0x0b
+	pdu := PDUData{}
+	pdu.ContextHandle = AuthSession.ContextHandle
+	pdu.Data = mapi
+	pdu.CbAuxIn = auxLen
+	pdu.AuxOut = 0x000001008
+
+	req.PduData = pdu.Marshal() //MAPI
+	req.MaxFrag = uint16(len(pdu.Marshal()) + 24)
+	req.Header.FragLen = uint16(len(req.Marshal()))
+
+	if AuthSession.RPCNetworkAuthLevel == RPC_C_AUTHN_LEVEL_PKT_PRIVACY {
+		req.Command = []byte{0x01, 0x00, 0x0b, 0x00} //opnum 0x0b
+		data := append([]byte{0x00, 0x00, 0x00, 0x00}, req.PduData...)
+		//pad if necessary
+		pad := (4 - (len(data) % 4)) % 4
+		data = append(data, bytes.Repeat([]byte{0x00}, pad)...)
+		req.PduData = data
+		req.Header.FragLen += 24 //account for AuthData
+		//When NTLM2 is on, we sign the whole pdu, but encrypt just the data, not the dcerpc header.
+
+		//add sectrailer
+		secTrail := RTSSec{}
+		secTrail.AuthLevel = AuthSession.RPCNetworkAuthLevel
+		secTrail.AuthType = AuthSession.RPCNetworkAuthType
+		secTrail.AuthPadLen = uint8(pad)
+		secTrail.AuthCTX = 0
+
+		req.SecTrailer = secTrail.Marshal()
+		req.Header.AuthLen = 16
+
+		//seal data, sign pdu
+		sealed, sign, _ := rpcntlmsession.SealV2(data, req.Marshal())
+
+		req.AuthData = sign
+		req.PduData = sealed
+	}
+
+	RPCWrite(req.Marshal())
+	resp, err := RPCRead(callcounter - 1)
+
+	//decrypt response PDU
+	if AuthSession.RPCNetworkAuthLevel == RPC_C_AUTHN_LEVEL_PKT_PRIVACY {
+		dec, _ := rpcntlmsession.UnSeal(resp.PDU[8:])
+		sec := RTSSec{}
+		sec.Unmarshal(resp.SecTrailer, int(resp.Header.AuthLen))
+		return dec[20:], err
+	}
+	return resp.PDU[28:], err
+}
+func obfuscate(data []byte) []byte {
+	bnew := make([]byte, len(data))
+	for k := range data {
+		bnew[k] = data[k] ^ 0xA5
+	}
+	return bnew
+}
+
+//DoConnectExRequest makes our connection request. After this we can use
+//EcDoRPCExt2 to make our MAPI requests
+func DoConnectExRequest(MAPI []byte, auxlen uint32) ([]byte, error) {
+
+	callcounter += 2
+
+	header := RTSHeader{Version: 0x05, VersionMinor: 0, Type: DCERPC_PKT_REQUEST, PFCFlags: 0x03, AuthLen: 0, CallID: uint32(callcounter)}
+	header.PackedDrep = 16
+	req := RTSRequest{}
+	req.Header = header
+
+	req.MaxRecv = 0x0000
+	req.Command = []byte{0x00, 0x00, 0x0a, 0x00} //command 10
+
+	pdu := PDUData{}
+	pdu.Data = MAPI
+	pdu.CbAuxIn = uint32(auxlen)
+	pdu.AuxOut = 0x000001008
+
+	req.PduData = pdu.Marshal() //MAPI
+	req.MaxFrag = uint16(len(pdu.Marshal()) + 24)
+	req.Header.FragLen = uint16(len(req.Marshal()))
+
+	if AuthSession.RPCNetworkAuthLevel == RPC_C_AUTHN_LEVEL_PKT_PRIVACY {
+		req.Command = []byte{0x01, 0x00, 0x0a, 0x00} //command 10
+		data := req.PduData
+		//pad if necessary
+		pad := (4 - (len(data) % 4)) % 4
+		data = append(data, bytes.Repeat([]byte{0x00}, pad)...)
+		req.PduData = data
+		req.Header.FragLen += 24 //account for AuthData
+		//When NTLM2 is on, we sign the whole pdu, but encrypt just the data, not the dcerpc header.
+
+		//add sectrailer
+		secTrail := RTSSec{}
+		secTrail.AuthLevel = AuthSession.RPCNetworkAuthLevel
+		secTrail.AuthType = AuthSession.RPCNetworkAuthType
+		secTrail.AuthPadLen = uint8(pad)
+		secTrail.AuthCTX = 0
+
+		req.SecTrailer = secTrail.Marshal()
+		req.Header.AuthLen = 16
+
+		//seal data, sign pdu
+		sealed, sign, _ := rpcntlmsession.SealV2(data, req.Marshal())
+
+		req.AuthData = sign
+		req.PduData = sealed
+	}
+
+	RPCWrite(req.Marshal())
+	//RPCRead(1)
+
+	resp, err := RPCRead(callcounter - 1)
+
+	//decrypt response PDU
+	if AuthSession.RPCNetworkAuthLevel == RPC_C_AUTHN_LEVEL_PKT_PRIVACY {
+		dec, _ := rpcntlmsession.UnSeal(resp.PDU[8:])
+		AuthSession.ContextHandle = dec[4:20] //decrypted
+	} else {
+		AuthSession.ContextHandle = resp.PDU[12:28]
+	}
+
+	if utils.DecodeUint32(AuthSession.ContextHandle[0:4]) == 0x0000 {
+		return nil, fmt.Errorf("\n[x] Unable to obtain a session context\n[*] Try again using the --encrypt flag. It is possible that the target requires 'Encrypt traffic between Outlook and Exchange' to be enabled")
+	}
+
+	return resp.Body, err
+}
+
+//RPCDummy is used to check if we can communicate with the server
+func RPCDummy() {
+	header := RTSHeader{Version: 0x05, VersionMinor: 0, Type: DCERPC_PKT_REQUEST, PFCFlags: 0x03, AuthLen: 0, CallID: uint32(callcounter)}
+	header.PackedDrep = 16
+	req := RTSRequest{}
+	req.MaxFrag = 0xFFFF
+	req.MaxRecv = 0x0000
+	req.Header = header
+	req.Command = []byte{0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00}
+	pdu := PDUData{}
+	pdu.ContextHandle = AuthSession.ContextHandle
+	pdu.AuxOut = 0x000001008
+	req.PduData = pdu.Marshal()
+	req.Header.FragLen = uint16(len(req.Marshal()))
+	RPCWrite(req.Marshal())
+}
+
+//RPCDisconnect fucntion
+func RPCDisconnect() {
+	header := RTSHeader{Version: 0x05, VersionMinor: 0, Type: DCERPC_PKT_REQUEST, PFCFlags: 0x03, AuthLen: 0, CallID: uint32(callcounter)}
+	header.PackedDrep = 16
+	req := RTSRequest{}
+	req.MaxFrag = 0xFFFF
+	req.MaxRecv = 0x0000
+	req.Header = header
+	req.Command = []byte{0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00} //opnum 0x01
+	pdu := PDUData{}
+	pdu.ContextHandle = AuthSession.ContextHandle
+	pdu.AuxOut = 0x000001008
+	req.PduData = pdu.Marshal()
+	req.Header.FragLen = uint16(len(req.Marshal()))
+	RPCWrite(req.Marshal())
+	rpcInConn.Close()
+	rpcOutConn.Close()
+}
+
+//RPCWrite function writes to our RPC_IN_DATA channel
+func RPCWrite(data []byte) {
+	callcounter++
+	rpcInW.Write(data)
+}
+
+//RPCOutWrite function writes to the RPC_OUT_DATA channel,
+//this should only happen once, for ConnA1
+func RPCOutWrite(data []byte) {
+	rpcOutConn.Write(data)
+}
+
+//RPCRead function takes a call ID and searches for the response in
+//our list of received responses. Blocks until it finds a response
+func RPCRead(callID int) (RPCResponse, error) {
+	for {
+		for k, v := range responses {
+			if v.Header.CallID == uint32(callID) {
+				responses = append(responses[:k], responses[k+1:]...)
+				return v, nil
+			}
+		}
+	}
+}
+
+//SplitData is used to scan through the input stream and split data into individual responses
+func SplitData(data []byte, atEOF bool) (advance int, token []byte, err error) {
+	if atEOF && len(data) == 0 {
+		return 0, nil, nil
+	}
+	//check if HTTP response
+	if string(data[0:4]) == "HTTP" {
+		for k := range data {
+			if data[k] == 0x0d && data[k+1] == 0x0a && data[k+2] == 0x0d && data[k+3] == 0x0a {
+				return k + 4, nil, nil //data[k+4:], nil
+			}
+		}
+	}
+	//proud of this bit, not 100% sure why it works but it works a charm
+	if data[0] != 0x0d { //check if we've hit the start of a new sequence
+		start := -1
+		end := -1
+		var dbuf []byte
+
+		for k := range data {
+			if data[k] == 0x0d && data[k+1] == 0x0a {
+				if start == -1 {
+					start = k + 2
+				} else {
+					end = k - 1
+					if start == end {
+						dbuf = data[start : end+1]
+						start, end = -1, -1
+					} else {
+						break
+					}
+				}
+			}
+		}
+
+		if start == -1 { //we didn't find the start of the string, reset the head of the scanner and try again
+			return 0, nil, nil
+		}
+		//fmt.Println(start, end, len(data))
+		if start > end {
+			return 0, nil, nil
+		}
+		return end + 2, append(dbuf, data[start:end]...), nil
+	}
+	if atEOF {
+		return len(data), data, nil
+	}
+
+	return
 }

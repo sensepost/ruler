@@ -14,10 +14,9 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strings"
-	"time"
 
-	"github.com/ThomsonReutersEikon/go-ntlm/ntlm"
 	"github.com/sensepost/ruler/utils"
+	"github.com/staaldraad/go-ntlm/ntlm"
 )
 
 // NtlmTransport is implementation of http.RoundTripper interface
@@ -25,19 +24,34 @@ type NtlmTransport struct {
 	Domain   string
 	User     string
 	Password string
+	NTHash   []byte
 	Insecure bool
 }
 
 // RoundTrip method send http request and tries to perform NTLM authentication
 func (t NtlmTransport) RoundTrip(req *http.Request) (res *http.Response, err error) {
+
+	session, err := ntlm.CreateClientSession(ntlm.Version2, ntlm.ConnectionlessMode)
+	if err != nil {
+		return nil, err
+	}
+
+	session.SetUserInfo(t.User, t.Password, t.Domain)
+
+	if len(t.NTHash) > 0 {
+		session.SetNTHash(t.NTHash)
+	}
+
+	b, _ := session.GenerateNegotiateMessage()
 	// first send NTLM Negotiate header
 	r, _ := http.NewRequest("GET", req.URL.String(), strings.NewReader(""))
-	r.Header.Add("Authorization", "NTLM "+utils.EncBase64(utils.NegotiateSP()))
+	r.Header.Add("Authorization", "NTLM "+utils.EncBase64(b.Bytes()))
 
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: t.Insecure},
 	}
-	client := http.Client{Transport: tr, Timeout: time.Minute}
+
+	client := http.Client{Transport: tr, Timeout: 0} //time.Minute * 2}
 	resp, err := client.Do(r)
 
 	if err != nil {
@@ -70,13 +84,6 @@ func (t NtlmTransport) RoundTrip(req *http.Request) (res *http.Response, err err
 			return nil, err
 		}
 
-		session, err := ntlm.CreateClientSession(ntlm.Version1, ntlm.ConnectionlessMode)
-		if err != nil {
-			return nil, err
-		}
-
-		session.SetUserInfo(t.User, t.Password, t.Domain)
-
 		// parse NTLM challenge
 		challenge, err := ntlm.ParseChallengeMessage(challengeBytes)
 
@@ -91,16 +98,15 @@ func (t NtlmTransport) RoundTrip(req *http.Request) (res *http.Response, err err
 
 		// authenticate user
 		authenticate, err := session.GenerateAuthenticateMessage()
-
+		//fmt.Printf("%x\n", authenticate.Bytes())
 		if err != nil {
 			return nil, err
 		}
 
 		// set NTLM Authorization header
 		req.Header.Set("Authorization", "NTLM "+utils.EncBase64(authenticate.Bytes()))
+
 		resp, err = client.Do(req)
-
 	}
-
 	return resp, err
 }

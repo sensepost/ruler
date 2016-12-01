@@ -1,21 +1,46 @@
 package mapi
 
 import (
-	"bytes"
-	"encoding/binary"
 	"fmt"
-	"reflect"
+	"hash/fnv"
+
+	"github.com/sensepost/ruler/utils"
 )
+
+func hash(s string) uint32 {
+	h := fnv.New32()
+	h.Write([]byte(s))
+	return h.Sum32()
+}
 
 //ConnectRequest struct
 type ConnectRequest struct {
 	UserDN            []byte
 	Flags             uint32
 	DefaultCodePage   uint32
-	LcidSort          uint32
 	LcidString        uint32
+	LcidSort          uint32
 	AuxilliaryBufSize uint32
 	AuxilliaryBuf     []byte
+}
+
+type ConnectRequestRPC struct {
+	DNLen               uint32
+	Reserved            uint32
+	DNLenActual         uint32
+	UserDN              []byte
+	Flags               uint32
+	DNHash              uint32
+	CbLimit             uint32 //[]byte
+	DefaultCodePage     uint32
+	LcidString          uint32
+	LcidSort            uint32
+	IcxrLink            uint32
+	FCanConvertCodePage uint16
+	ClientVersion       []byte
+	TimeStamp           uint32
+	AuxilliaryBufSize   uint32
+	AuxilliaryBuf       []byte
 }
 
 //DisconnectRequest structure
@@ -30,8 +55,16 @@ type ExecuteRequest struct {
 	RopBufferSize     uint32
 	RopBuffer         ROPBuffer
 	MaxRopOut         uint32
+	RPCPtr            []byte
 	AuxilliaryBufSize uint32
 	AuxilliaryBuf     []byte
+}
+
+type ExecuteRequestRPC struct {
+	Flags         uint32 //[]byte //lets stick to ropFlagsNoXorMagic
+	RopBufferSize uint32
+	RopBuffer     ROPBuffer
+	MaxRopOut     uint32
 }
 
 //ExecuteResponse struct
@@ -119,8 +152,8 @@ type RopLogonResponse struct {
 	StoreState        []byte
 }
 
-//RopGetRulesRequest struct
-type RopGetRulesRequest struct {
+//RopGetRulesTableRequest struct
+type RopGetRulesTableRequest struct {
 	RopID             uint8 //0x3f
 	LogonID           uint8
 	InputHandleIndex  uint8
@@ -153,7 +186,6 @@ type RopGetContentsTableResponse struct {
 	OutputHandle uint8
 	ReturnValue  uint32
 	RowCount     uint32
-	Rows         []byte
 }
 
 //RopGetPropertiesSpecific struct to get propertiesfor a folder
@@ -217,7 +249,50 @@ type RopOpenFolderResponse struct {
 	Servers          []byte //only if IsGhosted == true
 }
 
+//RopGetHierarchyTableRequest struct used to get folder hierarchy
+type RopGetHierarchyTableRequest struct {
+	RopID        uint8 //0x04
+	LogonID      uint8
+	InputHandle  uint8
+	OutputHandle uint8
+	TableFlags   uint8
+}
+
+//RopGetHierarchyTableResponse struct used to get folder hierarchy
+type RopGetHierarchyTableResponse struct {
+	RopID        uint8 //0x04
+	OutputHandle uint8
+	ReturnValue  uint32
+	RowCount     uint32
+}
+
 //RopCreateFolderRequest struct used to create a folder
+type RopCreateFolderRequest struct {
+	RopID             uint8 //0x1C
+	LogonID           uint8
+	InputHandle       uint8
+	OutputHandle      uint8
+	FolderType        uint8
+	UseUnicodeStrings uint8
+	OpenExisting      uint8
+	Reserved          uint8
+	DisplayName       []byte
+	Comment           []byte
+}
+
+//RopCreateFolderResponse struct used to create a folder
+type RopCreateFolderResponse struct {
+	RopID            uint8 //0x1C
+	OutputHandle     uint8
+	ReturnValue      uint32
+	FolderID         []byte
+	IsExisting       uint8
+	HasRules         byte   //bool
+	IsGhosted        byte   //bool
+	ServerCount      uint16 //only if IsGhosted == true
+	CheapServerCount uint16 //only if IsGhosted == true
+	Servers          []byte //only if IsGhosted == true
+}
 
 //RopCreateMessageRequest struct used to open handle to new email message
 type RopCreateMessageRequest struct {
@@ -243,6 +318,25 @@ type RopSubmitMessageResponse struct {
 	RopID       uint8
 	InputHandle uint8
 	ReturnValue uint32
+}
+
+//RopDeleteMessagesRequest struct used to delete one or more messages
+type RopDeleteMessagesRequest struct {
+	RopID           uint8 //0x1E
+	LogonID         uint8
+	InputHandle     uint8
+	WantSynchronous uint8
+	NotifyNonRead   uint8
+	MessageIDCount  uint16
+	MessageIDs      []byte //messageIdCount * 64 bit identifiers
+}
+
+//RopDeleteMessagesResponse struct holds response for deleting messages
+type RopDeleteMessagesResponse struct {
+	RopID             uint8
+	InputHandle       uint8
+	ReturnValue       uint32
+	PartialCompletion uint8
 }
 
 //RopSaveChangesMessageRequest struct used to open handle to new email message
@@ -304,6 +398,62 @@ type RopOpenMessageResponse struct {
 	RecipientColumns   []PropertyTag
 	RowCount           uint8
 	RecipientRows      []RecipientRow
+}
+
+//RopFastTransferSourceCopyToRequest struct used to open handle to  message
+type RopFastTransferSourceCopyToRequest struct {
+	RopID            uint8 //0x4D
+	LogonID          uint8
+	InputHandle      uint8
+	OutputHandle     uint8
+	Level            uint8
+	CopyFlags        uint32
+	SendOptions      uint8
+	PropertyTagCount uint16
+	PropertyTags     []PropertyTag
+}
+
+//RopFastTransferSourceCopyPropertiesRequest struct used to open handle to  message
+type RopFastTransferSourceCopyPropertiesRequest struct {
+	RopID            uint8 //0x69
+	LogonID          uint8
+	InputHandle      uint8
+	OutputHandle     uint8
+	Level            uint8
+	CopyFlags        uint8
+	SendOptions      uint8
+	PropertyTagCount uint16
+	PropertyTags     []PropertyTag
+}
+
+//RopFastTransferSourceGetBufferRequest struct used to open handle to  message
+type RopFastTransferSourceGetBufferRequest struct {
+	RopID             uint8 //0x4E
+	LogonID           uint8
+	InputHandle       uint8
+	BufferSize        uint16
+	MaximumBufferSize uint16 //0xBABE
+}
+
+//RopFastTransferSourceCopyPropertiesResponse struct used to open handle to  message
+type RopFastTransferSourceCopyPropertiesResponse struct {
+	RopID       uint8 //0x4E
+	InputHandle uint8
+	ReturnValue uint32
+}
+
+//RopFastTransferSourceGetBufferResponse struct used to open handle to  message
+type RopFastTransferSourceGetBufferResponse struct {
+	RopID                   uint8 //0x4E
+	InputHandle             uint8
+	ReturnValue             uint32
+	TransferStatus          uint16
+	InProgressCount         uint16
+	TotalStepCount          uint16
+	Reserved                uint8 //0x00
+	TotalTransferBufferSize uint16
+	TransferBuffer          []byte
+	BackoffTime             uint32
 }
 
 //RopOpenStreamRequest struct used to open a stream
@@ -371,6 +521,24 @@ type RopQueryRowsResponse struct {
 	Origin      byte
 	RowCount    uint16
 	RowData     [][]PropertyRow
+}
+
+//RopSetMessageStatusRequest struct used to select the columns to use
+type RopSetMessageStatusRequest struct {
+	RopID              uint8 //0x20
+	LogonID            uint8
+	InputHandle        uint8
+	MessageID          []byte
+	MessageStatusFlags PropertyTag
+	MessageStatusMask  uint32
+}
+
+//RopSetMessageStatusResponse struct used to select the columns to use
+type RopSetMessageStatusResponse struct {
+	RopID              uint8 //0x20
+	InputHandle        uint8
+	ReturnValue        uint32
+	MessageStatusFlags uint32
 }
 
 //RopReleaseRequest struct used to release all resources associated with a server object
@@ -524,19 +692,6 @@ type StandardPropertyRow struct {
 	ValueArray [][]byte
 }
 
-//AUXBuffer struct
-type AUXBuffer struct {
-	RPCHeader RPCHeader
-	Header    AUXHeader
-}
-
-//AUXHeader struct
-type AUXHeader struct {
-	Size    uint16 //
-	Version []byte //0x01, 0x02
-	Type    []byte //AUX_TYPE_PERF_CLIENTINFO 0x02
-}
-
 //PropertyRow used to hold the data of getRow requests such as RopGetPropertiesSpecific
 type PropertyRow struct {
 	Flag       uint8 //non-zero indicates error
@@ -558,283 +713,183 @@ type RopBuffer interface {
 	Unmarshal([]byte) error
 }
 
-//UniString func
-func UniString(str string) []byte {
-	bt := make([]byte, (len(str) * 2))
-	cnt := 0
-	for _, v := range str {
-		bt[cnt] = byte(v)
-		cnt++
-		bt[cnt] = 0x00
-		cnt++
-	}
-	bt = append(bt, []byte{0x00, 0x00}...)
-	return bt
-}
-
-//UTF16BE func to encode strings for the CRuleElement
-func UTF16BE(str string, trail int) []byte {
-	bt := make([]byte, (len(str) * 2))
-	cnt := 0
-	for _, v := range str {
-		bt[cnt] = byte(v)
-		cnt++
-		bt[cnt] = 0x00
-		cnt++
-	}
-	if trail == 1 {
-		bt = append(bt, []byte{0x01}...)
-	}
-	byteNum := new(bytes.Buffer)
-	binary.Write(byteNum, binary.BigEndian, uint16(len(bt)/2))
-
-	bt = append(byteNum.Bytes(), bt...)
-	return bt
-}
-
-func decodeUint32(num []byte) uint32 {
-	var number uint32
-	bf := bytes.NewReader(num)
-	binary.Read(bf, binary.LittleEndian, &number)
-	return number
-}
-func decodeUint16(num []byte) uint16 {
-	var number uint16
-	bf := bytes.NewReader(num)
-	binary.Read(bf, binary.LittleEndian, &number)
-	return number
-}
-
-func decodeUint8(num []byte) uint8 {
-	var number uint8
-	bf := bytes.NewReader(num)
-	binary.Read(bf, binary.LittleEndian, &number)
-	return number
-}
-func encodeNum(v interface{}) []byte {
-	byteNum := new(bytes.Buffer)
-	binary.Write(byteNum, binary.LittleEndian, v)
-	return byteNum.Bytes()
-}
-
-//BodyToBytes func
-func BodyToBytes(DataStruct interface{}) []byte {
-	dumped := []byte{}
-	v := reflect.ValueOf(DataStruct)
-	var value []byte
-
-	//check if we have a slice of structs
-	if reflect.TypeOf(DataStruct).Kind() == reflect.Slice {
-		for i := 0; i < v.Len(); i++ {
-			if v.Index(i).Kind() == reflect.Uint8 || v.Index(i).Kind() == reflect.Uint16 || v.Index(i).Kind() == reflect.Uint32 {
-				byteNum := new(bytes.Buffer)
-				binary.Write(byteNum, binary.LittleEndian, v.Index(i).Interface())
-				dumped = append(dumped, byteNum.Bytes()...)
-			} else {
-				if v.Index(i).Kind() == reflect.Struct || v.Index(i).Kind() == reflect.Slice {
-					value = BodyToBytes(v.Index(i).Interface())
-				} else {
-					value = v.Index(i).Bytes()
-				}
-				dumped = append(dumped, value...)
-			}
-		}
-	} else {
-		for i := 0; i < v.NumField(); i++ {
-			if v.Field(i).Kind() == reflect.Uint8 || v.Field(i).Kind() == reflect.Uint16 || v.Field(i).Kind() == reflect.Uint32 {
-				byteNum := new(bytes.Buffer)
-				binary.Write(byteNum, binary.LittleEndian, v.Field(i).Interface())
-				dumped = append(dumped, byteNum.Bytes()...)
-			} else {
-				if v.Field(i).Kind() == reflect.Struct || v.Field(i).Kind() == reflect.Slice {
-					value = BodyToBytes(v.Field(i).Interface())
-				} else {
-					value = v.Field(i).Bytes()
-				}
-				dumped = append(dumped, value...)
-			}
-		}
-	}
-	return dumped
-}
-
-func readUint32(pos int, buff []byte) (uint32, int) {
-	return decodeUint32(buff[pos : pos+4]), pos + 4
-}
-
-func readUint16(pos int, buff []byte) (uint16, int) {
-	return decodeUint16(buff[pos : pos+2]), pos + 2
-}
-func readUint8(pos int, buff []byte) (uint8, int) {
-	return decodeUint8(buff[pos : pos+2]), pos + 2
-}
-
-func readBytes(pos, count int, buff []byte) ([]byte, int) {
-	return buff[pos : pos+count], pos + count
-}
-
-func readByte(pos int, buff []byte) (byte, int) {
-	return buff[pos : pos+1][0], pos + 1
-}
-
-func readUnicodeString(pos int, buff []byte) ([]byte, int) {
-	//stupid hack as using bufio and ReadString(byte) would terminate too early
-	//would terminate on 0x00 instead of 0x0000
-	index := bytes.Index(buff[pos:], []byte{0x00, 0x00})
-	str := buff[pos : pos+index]
-	return []byte(str), pos + index + 2
-}
-
-func readASCIIString(pos int, buff []byte) ([]byte, int) {
-	bf := bytes.NewBuffer(buff[pos:])
-	str, _ := bf.ReadString(0x00)
-	return []byte(str), pos + len(str)
-}
-
-func readTypedString(pos int, buff []byte) ([]byte, int) {
-	var t = buff[pos]
-	if t == 0 { //no string
-		return []byte{}, pos + 1
-	}
-	str, _ := readBytes(pos+1, 4, buff)
-	return str, pos + len(str)
-}
-
-//DecodeAuxBuffer func
-func DecodeAuxBuffer(buff []byte) AUXBuffer {
-	pos := 0
-	auxBuf := AUXBuffer{}
-	auxBuf.RPCHeader = RPCHeader{}
-	auxBuf.RPCHeader.Version, pos = readUint16(pos, buff)
-	auxBuf.RPCHeader.Flags, pos = readUint16(pos, buff)
-	auxBuf.RPCHeader.Size, pos = readUint16(pos, buff)
-	auxBuf.RPCHeader.SizeActual, _ = readUint16(pos, buff)
-	auxBuf.Header = AUXHeader{}
-	auxBuf.Header.Size = uint16(1)
-	return auxBuf
+type Request interface {
+	Marshal() []byte
 }
 
 //Marshal turn ExecuteRequest into Bytes
 func (execRequest ExecuteRequest) Marshal() []byte {
-	execRequest.CalcSizes()
-	return BodyToBytes(execRequest)
+	execRequest.CalcSizes(false)
+	return utils.BodyToBytes(execRequest)
+}
+
+//Marshal turn ExecuteRequest into Bytes
+func (execRequest ExecuteRequest) MarshalRPC() []byte {
+	execRequest.CalcSizes(true)
+	return utils.BodyToBytes(execRequest)
+}
+
+//Marshal turn ExecuteRequest into Bytes
+func (execRequest ExecuteRequestRPC) Marshal() []byte {
+	//execRequest.CalcSizes()
+	return utils.BodyToBytes(execRequest)
 }
 
 //Marshal turn ConnectRequest into Bytes
 func (connRequest ConnectRequest) Marshal() []byte {
-	return BodyToBytes(connRequest)
+	return utils.BodyToBytes(connRequest)
+}
+
+//Marshal turn ConnectRequest into Bytes
+func (connRequest ConnectRequestRPC) Marshal() []byte {
+	return utils.BodyToBytes(connRequest)
 }
 
 //Marshal turn DisconnectRequest into Bytes
 func (disconnectRequest DisconnectRequest) Marshal() []byte {
-	return BodyToBytes(disconnectRequest)
+	return utils.BodyToBytes(disconnectRequest)
 }
 
 //Marshal turn RopLogonRequest into Bytes
 func (logonRequest RopLogonRequest) Marshal() []byte {
-	return BodyToBytes(logonRequest)
+	return utils.BodyToBytes(logonRequest)
 }
 
 //Marshal turn the RopQueryRowsRequest into bytes
 func (queryRows RopQueryRowsRequest) Marshal() []byte {
-	return BodyToBytes(queryRows)
+	return utils.BodyToBytes(queryRows)
 }
 
 //Marshal to turn the RopSetColumnsRequest into bytes
 func (setColumns RopSetColumnsRequest) Marshal() []byte {
-	return BodyToBytes(setColumns)
+	return utils.BodyToBytes(setColumns)
 }
 
 //Marshal turn RopOpenFolder into Bytes
 func (openFolder RopOpenFolderRequest) Marshal() []byte {
-	return BodyToBytes(openFolder)
+	return utils.BodyToBytes(openFolder)
+}
+
+//Marshal turn RopSetMessageStatusRequest into Bytes
+func (setStatus RopSetMessageStatusRequest) Marshal() []byte {
+	return utils.BodyToBytes(setStatus)
+}
+
+//Marshal turn RopCreateFolderRequest into Bytes
+func (createFolder RopCreateFolderRequest) Marshal() []byte {
+	return utils.BodyToBytes(createFolder)
+}
+
+//Marshal turn RopGetHierarchyTableRequest into Bytes
+func (getHierarchy RopGetHierarchyTableRequest) Marshal() []byte {
+	return utils.BodyToBytes(getHierarchy)
+}
+
+//Marshal turn RopFastTransferSourceCopyToRequest into Bytes
+func (getProps RopFastTransferSourceCopyToRequest) Marshal() []byte {
+	return utils.BodyToBytes(getProps)
+}
+
+//Marshal turn RopFastTransferSourceCopyPropertiesRequest into Bytes
+func (getProps RopFastTransferSourceCopyPropertiesRequest) Marshal() []byte {
+	return utils.BodyToBytes(getProps)
+}
+
+//Marshal turn RopFastTransferSourceGetBufferRequest into Bytes
+func (getBuff RopFastTransferSourceGetBufferRequest) Marshal() []byte {
+	return utils.BodyToBytes(getBuff)
 }
 
 //Marshal turn RopGetPropertiesSpecific into Bytes
 func (getProps RopGetPropertiesSpecific) Marshal() []byte {
-	return BodyToBytes(getProps)
+	return utils.BodyToBytes(getProps)
 }
 
 //Marshal turn RopGetContentsTableRequest into Bytes
 func (getContentsTable RopGetContentsTableRequest) Marshal() []byte {
-	return BodyToBytes(getContentsTable)
+	return utils.BodyToBytes(getContentsTable)
 }
 
-//Marshal turn RopGetRulesRequest into Bytes
-func (getRules RopGetRulesRequest) Marshal() []byte {
-	return BodyToBytes(getRules)
+//Marshal turn RopGetRulesTableRequest into Bytes
+func (getRules RopGetRulesTableRequest) Marshal() []byte {
+	return utils.BodyToBytes(getRules)
 }
 
 //Marshal turn ExecuteRequest into Bytes
 func (createMessage RopCreateMessageRequest) Marshal() []byte {
-	return BodyToBytes(createMessage)
+	return utils.BodyToBytes(createMessage)
+}
+
+//Marshal turn ExecuteRequest into Bytes
+func (deleteMessage RopDeleteMessagesRequest) Marshal() []byte {
+	return utils.BodyToBytes(deleteMessage)
 }
 
 //Marshal turn RopSetPropertiesRequest into Bytes
 func (setProperties RopSetPropertiesRequest) Marshal() []byte {
-	return BodyToBytes(setProperties)
+	return utils.BodyToBytes(setProperties)
 }
 
 //Marshal turn  RopSaveChangesMessageRequest into Bytes
 func (saveMessage RopSaveChangesMessageRequest) Marshal() []byte {
-	return BodyToBytes(saveMessage)
+	return utils.BodyToBytes(saveMessage)
 }
 
 //Marshal turn RopOpenMessageRequest into Bytes
 func (openMessage RopOpenMessageRequest) Marshal() []byte {
-	return BodyToBytes(openMessage)
+	return utils.BodyToBytes(openMessage)
 }
 
 //Marshal turn RopSubmitMessageRequest into Bytes
 func (submitMessage RopSubmitMessageRequest) Marshal() []byte {
-	return BodyToBytes(submitMessage)
+	return utils.BodyToBytes(submitMessage)
 }
 
 //Marshal turn RopSynchronizationOpenCollectorRequest into Bytes
 func (syncRop RopSynchronizationOpenCollectorRequest) Marshal() []byte {
-	return BodyToBytes(syncRop)
+	return utils.BodyToBytes(syncRop)
 }
 
 //Marshal turn RopOpenStreamRequest into Bytes
 func (openStream RopOpenStreamRequest) Marshal() []byte {
-	return BodyToBytes(openStream)
+	return utils.BodyToBytes(openStream)
 }
 
 //Marshal turn RopReadStreamRequest into Bytes
 func (readStream RopReadStreamRequest) Marshal() []byte {
-	return BodyToBytes(readStream)
+	return utils.BodyToBytes(readStream)
 }
 
 //Marshal turn RuleAction into Bytes
 func (ruleAction RuleAction) Marshal() []byte {
-	return BodyToBytes(ruleAction)
+	return utils.BodyToBytes(ruleAction)
 }
 
 //Marshal turn RopReleaseRequest into Bytes
 func (releaseRequest RopReleaseRequest) Marshal() []byte {
-	return BodyToBytes(releaseRequest)
+	return utils.BodyToBytes(releaseRequest)
 }
 
 //Marshal turn RopModifyRecipientsRequest into Bytes
 func (modRecipients RopModifyRecipientsRequest) Marshal() []byte {
-	return BodyToBytes(modRecipients)
+	return utils.BodyToBytes(modRecipients)
 }
 
 //Unmarshal function to convert response into ConnectResponse struct
 func (connResponse *ConnectResponse) Unmarshal(resp []byte) error {
 	pos := 0
-	connResponse.StatusCode, pos = readUint32(pos, resp)
+	connResponse.StatusCode, pos = utils.ReadUint32(pos, resp)
 	if connResponse.StatusCode != 0 { //error occurred..
-		connResponse.AuxilliaryBufferSize, pos = readUint32(pos, resp)
+		connResponse.AuxilliaryBufferSize, pos = utils.ReadUint32(pos, resp)
 		connResponse.AuxilliaryBuffer = resp[8 : 8+connResponse.AuxilliaryBufferSize]
 	} else {
-		connResponse.ErrorCode, pos = readUint32(pos, resp)
-		connResponse.PollsMax, pos = readUint32(pos, resp)
-		connResponse.RetryCount, pos = readUint32(pos, resp)
-		connResponse.RetryDelay, pos = readUint32(pos, resp)
-		connResponse.DNPrefix, pos = readUnicodeString(pos, resp)
-		connResponse.DisplayName, pos = readASCIIString(pos, resp)
-		connResponse.AuxilliaryBufferSize, pos = readUint32(pos, resp)
+		connResponse.ErrorCode, pos = utils.ReadUint32(pos, resp)
+		connResponse.PollsMax, pos = utils.ReadUint32(pos, resp)
+		connResponse.RetryCount, pos = utils.ReadUint32(pos, resp)
+		connResponse.RetryDelay, pos = utils.ReadUint32(pos, resp)
+		connResponse.DNPrefix, pos = utils.ReadUnicodeString(pos, resp)
+		connResponse.DisplayName, pos = utils.ReadASCIIString(pos, resp)
+		connResponse.AuxilliaryBufferSize, pos = utils.ReadUint32(pos, resp)
 		connResponse.AuxilliaryBuffer = resp[pos:]
 	}
 	return nil
@@ -843,21 +898,21 @@ func (connResponse *ConnectResponse) Unmarshal(resp []byte) error {
 //Unmarshal function to produce RopLogonResponse struct
 func (logonResponse *RopLogonResponse) Unmarshal(resp []byte) error {
 	pos := 10
-	logonResponse.RopID, pos = readByte(pos, resp)
-	logonResponse.OutputHandleIndex, pos = readByte(pos, resp)
-	logonResponse.ReturnValue, pos = readUint32(pos, resp)
+	logonResponse.RopID, pos = utils.ReadByte(pos, resp)
+	logonResponse.OutputHandleIndex, pos = utils.ReadByte(pos, resp)
+	logonResponse.ReturnValue, pos = utils.ReadUint32(pos, resp)
 	if logonResponse.ReturnValue != 0 {
 		return fmt.Errorf("[x] Non-zero response value: %d", logonResponse.ReturnValue)
 	}
-	logonResponse.LogonFlags, pos = readByte(pos, resp)
-	logonResponse.FolderIds, pos = readBytes(pos, 104, resp)
-	logonResponse.ResponseFlags, pos = readByte(pos, resp)
-	logonResponse.MailboxGUID, pos = readBytes(pos, 16, resp)
-	logonResponse.RepID, pos = readBytes(pos, 2, resp)
-	logonResponse.ReplGUID, pos = readBytes(pos, 16, resp)
-	logonResponse.LogonTime, pos = readBytes(pos, 8, resp)
-	logonResponse.GwartTime, pos = readBytes(pos, 8, resp)
-	logonResponse.StoreState, _ = readBytes(pos, 4, resp)
+	logonResponse.LogonFlags, pos = utils.ReadByte(pos, resp)
+	logonResponse.FolderIds, pos = utils.ReadBytes(pos, 104, resp)
+	logonResponse.ResponseFlags, pos = utils.ReadByte(pos, resp)
+	logonResponse.MailboxGUID, pos = utils.ReadBytes(pos, 16, resp)
+	logonResponse.RepID, pos = utils.ReadBytes(pos, 2, resp)
+	logonResponse.ReplGUID, pos = utils.ReadBytes(pos, 16, resp)
+	logonResponse.LogonTime, pos = utils.ReadBytes(pos, 8, resp)
+	logonResponse.GwartTime, pos = utils.ReadBytes(pos, 8, resp)
+	logonResponse.StoreState, _ = utils.ReadBytes(pos, 4, resp)
 	return nil
 }
 
@@ -865,19 +920,20 @@ func (logonResponse *RopLogonResponse) Unmarshal(resp []byte) error {
 func (execResponse *ExecuteResponse) Unmarshal(resp []byte) error {
 	pos := 0
 	var buf []byte
-	execResponse.StatusCode, pos = readUint32(pos, resp)
+
+	execResponse.StatusCode, pos = utils.ReadUint32(pos, resp)
 
 	if execResponse.StatusCode != 0 { //error occurred..
-		execResponse.AuxilliaryBufSize, pos = readUint32(pos, resp)
+		execResponse.AuxilliaryBufSize, pos = utils.ReadUint32(pos, resp)
 		execResponse.AuxilliaryBuf = resp[8 : 8+execResponse.AuxilliaryBufSize]
 	} else {
-		execResponse.ErrorCode, pos = readUint32(pos, resp)
-		execResponse.Flags, pos = readBytes(pos, 4, resp)
-		execResponse.RopBufferSize, pos = readUint32(pos, resp)
-		buf, pos = readBytes(pos, int(execResponse.RopBufferSize), resp)
+		execResponse.ErrorCode, pos = utils.ReadUint32(pos, resp)
+		execResponse.Flags, pos = utils.ReadBytes(pos, 4, resp)
+		execResponse.RopBufferSize, pos = utils.ReadUint32(pos, resp)
+		buf, pos = utils.ReadBytes(pos, int(execResponse.RopBufferSize), resp)
 		execResponse.RopBuffer = buf //decodeLogonRopResponse(buf)
-		execResponse.AuxilliaryBufSize, pos = readUint32(pos, resp)
-		execResponse.AuxilliaryBuf, _ = readBytes(pos, int(execResponse.AuxilliaryBufSize), resp)
+		execResponse.AuxilliaryBufSize, _ = utils.ReadUint32(pos, resp)
+		//execResponse.AuxilliaryBuf, _ = utils.ReadBytes(pos, int(execResponse.AuxilliaryBufSize), resp)
 	}
 	return nil
 }
@@ -885,37 +941,65 @@ func (execResponse *ExecuteResponse) Unmarshal(resp []byte) error {
 //Unmarshal func
 func (ropRelease *RopReleaseResponse) Unmarshal(resp []byte) (int, error) {
 	pos := 0
-	ropRelease.RopID, pos = readByte(pos, resp)
-	ropRelease.ReturnValue, pos = readUint32(pos, resp)
+	ropRelease.RopID, pos = utils.ReadByte(pos, resp)
+	ropRelease.ReturnValue, pos = utils.ReadUint32(pos, resp)
 	if ropRelease.ReturnValue != 0 {
-		return pos, fmt.Errorf("non-zero return code %d", ropRelease.ReturnValue)
+		return pos, fmt.Errorf("non-zero return code %x", ropRelease.ReturnValue)
 	}
 	return pos, nil
 }
 
 //Unmarshal func
-func (ropContents *RopGetContentsTableResponse) Unmarshal(resp []byte) error {
-	pos := 10
-	ropContents.RopID, pos = readByte(pos, resp)
-	ropContents.OutputHandle, pos = readByte(pos, resp)
-	ropContents.ReturnValue, pos = readUint32(pos, resp)
-	ropContents.RowCount, pos = readUint32(pos, resp)
-	ropContents.Rows = resp[pos:]
-	return nil
+func (ropContents *RopGetContentsTableResponse) Unmarshal(resp []byte) (int, error) {
+	pos := 0
+	ropContents.RopID, pos = utils.ReadByte(pos, resp)
+	ropContents.OutputHandle, pos = utils.ReadByte(pos, resp)
+	ropContents.ReturnValue, pos = utils.ReadUint32(pos, resp)
+	if ropContents.ReturnValue != 0 {
+		return pos, fmt.Errorf("non-zero return code %d", ropContents.ReturnValue)
+	}
+	ropContents.RowCount, pos = utils.ReadUint32(pos, resp)
+	return pos, nil
+}
+
+//Unmarshal func
+func (setStatus *RopSetMessageStatusResponse) Unmarshal(resp []byte) (int, error) {
+	pos := 0
+	setStatus.RopID, pos = utils.ReadByte(pos, resp)
+	setStatus.InputHandle, pos = utils.ReadByte(pos, resp)
+	setStatus.ReturnValue, pos = utils.ReadUint32(pos, resp)
+	if setStatus.ReturnValue != 0 {
+		return pos, fmt.Errorf("non-zero return code %d", setStatus.ReturnValue)
+	}
+	setStatus.MessageStatusFlags, pos = utils.ReadUint32(pos, resp)
+	return pos, nil
+}
+
+//Unmarshal func for RopCreateFolderResponse
+func (createFolder *RopCreateFolderResponse) Unmarshal(resp []byte) (int, error) {
+	pos := 0
+	createFolder.RopID, pos = utils.ReadByte(pos, resp)
+	createFolder.OutputHandle, pos = utils.ReadByte(pos, resp)
+	createFolder.ReturnValue, pos = utils.ReadUint32(pos, resp)
+	if createFolder.ReturnValue != 0 {
+		return pos, fmt.Errorf("non-zero return code %x", createFolder.ReturnValue)
+	}
+
+	return pos, nil
 }
 
 //Unmarshal function to produce RopCreateMessageResponse struct
 func (createMessageResponse *RopCreateMessageResponse) Unmarshal(resp []byte) (int, error) {
 	pos := 0
 
-	createMessageResponse.RopID, pos = readByte(pos, resp)
-	createMessageResponse.OutputHandle, pos = readByte(pos, resp)
-	createMessageResponse.ReturnValue, pos = readUint32(pos, resp)
+	createMessageResponse.RopID, pos = utils.ReadByte(pos, resp)
+	createMessageResponse.OutputHandle, pos = utils.ReadByte(pos, resp)
+	createMessageResponse.ReturnValue, pos = utils.ReadUint32(pos, resp)
 
 	if createMessageResponse.ReturnValue == 0 {
-		createMessageResponse.HasMessageID, pos = readByte(pos, resp)
+		createMessageResponse.HasMessageID, pos = utils.ReadByte(pos, resp)
 		if createMessageResponse.HasMessageID == 1 {
-			createMessageResponse.MessageID, _ = readBytes(pos, 8, resp)
+			createMessageResponse.MessageID, _ = utils.ReadBytes(pos, 8, resp)
 
 		}
 	} else {
@@ -924,13 +1008,27 @@ func (createMessageResponse *RopCreateMessageResponse) Unmarshal(resp []byte) (i
 	return pos, nil
 }
 
+//Unmarshal function to produce RopDeleteMessagesResponse struct
+func (deleteMessageResponse *RopDeleteMessagesResponse) Unmarshal(resp []byte) (int, error) {
+	pos := 0
+
+	deleteMessageResponse.RopID, pos = utils.ReadByte(pos, resp)
+	deleteMessageResponse.InputHandle, pos = utils.ReadByte(pos, resp)
+	deleteMessageResponse.ReturnValue, pos = utils.ReadUint32(pos, resp)
+	deleteMessageResponse.PartialCompletion, pos = utils.ReadByte(pos, resp)
+	if deleteMessageResponse.ReturnValue != 0 {
+		return pos, fmt.Errorf("non-zero return code %x", deleteMessageResponse.ReturnValue)
+	}
+	return pos, nil
+}
+
 //Unmarshal function to produce RopCreateMessageResponse struct
 func (modRecipientsResponse *RopModifyRecipientsResponse) Unmarshal(resp []byte) (int, error) {
 	pos := 0
 
-	modRecipientsResponse.RopID, pos = readByte(pos, resp)
-	modRecipientsResponse.InputHandle, pos = readByte(pos, resp)
-	modRecipientsResponse.ReturnValue, pos = readUint32(pos, resp)
+	modRecipientsResponse.RopID, pos = utils.ReadByte(pos, resp)
+	modRecipientsResponse.InputHandle, pos = utils.ReadByte(pos, resp)
+	modRecipientsResponse.ReturnValue, pos = utils.ReadUint32(pos, resp)
 
 	if modRecipientsResponse.ReturnValue != 0 {
 		return pos, fmt.Errorf("non-zero return code %d", modRecipientsResponse.ReturnValue)
@@ -942,9 +1040,9 @@ func (modRecipientsResponse *RopModifyRecipientsResponse) Unmarshal(resp []byte)
 func (syncResponse *RopSynchronizationOpenCollectorResponse) Unmarshal(resp []byte) (int, error) {
 	pos := 0
 
-	syncResponse.RopID, pos = readByte(pos, resp)
-	syncResponse.OutputHandle, pos = readByte(pos, resp)
-	syncResponse.ReturnValue, pos = readUint32(pos, resp)
+	syncResponse.RopID, pos = utils.ReadByte(pos, resp)
+	syncResponse.OutputHandle, pos = utils.ReadByte(pos, resp)
+	syncResponse.ReturnValue, pos = utils.ReadUint32(pos, resp)
 
 	if syncResponse.ReturnValue != 0 {
 		return pos, fmt.Errorf("non-zero return code %d", syncResponse.ReturnValue)
@@ -956,9 +1054,9 @@ func (syncResponse *RopSynchronizationOpenCollectorResponse) Unmarshal(resp []by
 func (submitMessageResp *RopSubmitMessageResponse) Unmarshal(resp []byte) (int, error) {
 	pos := 0
 
-	submitMessageResp.RopID, pos = readByte(pos, resp)
-	submitMessageResp.InputHandle, pos = readByte(pos, resp)
-	submitMessageResp.ReturnValue, pos = readUint32(pos, resp)
+	submitMessageResp.RopID, pos = utils.ReadByte(pos, resp)
+	submitMessageResp.InputHandle, pos = utils.ReadByte(pos, resp)
+	submitMessageResp.ReturnValue, pos = utils.ReadUint32(pos, resp)
 
 	if submitMessageResp.ReturnValue != 0 {
 		return pos, fmt.Errorf("non-zero return code %d", submitMessageResp.ReturnValue)
@@ -970,17 +1068,53 @@ func (submitMessageResp *RopSubmitMessageResponse) Unmarshal(resp []byte) (int, 
 func (setPropertiesResponse *RopSetPropertiesResponse) Unmarshal(resp []byte) (int, error) {
 	pos := 0
 
-	setPropertiesResponse.RopID, pos = readByte(pos, resp)
-	setPropertiesResponse.InputHandle, pos = readByte(pos, resp)
-	setPropertiesResponse.ReturnValue, pos = readUint32(pos, resp)
+	setPropertiesResponse.RopID, pos = utils.ReadByte(pos, resp)
+	setPropertiesResponse.InputHandle, pos = utils.ReadByte(pos, resp)
+	setPropertiesResponse.ReturnValue, pos = utils.ReadUint32(pos, resp)
 
 	if setPropertiesResponse.ReturnValue == 0 {
-		setPropertiesResponse.PropertProblemCount, pos = readUint16(pos, resp)
+		setPropertiesResponse.PropertProblemCount, pos = utils.ReadUint16(pos, resp)
 		if setPropertiesResponse.PropertProblemCount > 0 {
 			fmt.Println(setPropertiesResponse.PropertProblemCount)
 		}
 	} else {
-		return pos, fmt.Errorf("non-zero return code %d", setPropertiesResponse.ReturnValue)
+		return pos, fmt.Errorf("non-zero return code %x", setPropertiesResponse.ReturnValue)
+	}
+	return pos, nil
+}
+
+//Unmarshal function to produce RopCreateMessageResponse struct
+func (getPropertiesResponse *RopFastTransferSourceCopyPropertiesResponse) Unmarshal(resp []byte) (int, error) {
+	pos := 0
+
+	getPropertiesResponse.RopID, pos = utils.ReadByte(pos, resp)
+	getPropertiesResponse.InputHandle, pos = utils.ReadByte(pos, resp)
+	getPropertiesResponse.ReturnValue, pos = utils.ReadUint32(pos, resp)
+
+	if getPropertiesResponse.ReturnValue != 0 {
+		return pos, fmt.Errorf("non-zero return code %x", getPropertiesResponse.ReturnValue)
+	}
+	return pos, nil
+}
+
+//Unmarshal function to produce RopFastTransferSourceGetBufferResponse struct
+func (buffResponse *RopFastTransferSourceGetBufferResponse) Unmarshal(resp []byte) (int, error) {
+	pos := 0
+
+	buffResponse.RopID, pos = utils.ReadByte(pos, resp)
+	buffResponse.InputHandle, pos = utils.ReadByte(pos, resp)
+	buffResponse.ReturnValue, pos = utils.ReadUint32(pos, resp)
+
+	if buffResponse.ReturnValue == 0 {
+		buffResponse.TransferStatus, pos = utils.ReadUint16(pos, resp)
+		buffResponse.InProgressCount, pos = utils.ReadUint16(pos, resp)
+		buffResponse.TotalStepCount, pos = utils.ReadUint16(pos, resp)
+		buffResponse.Reserved, pos = utils.ReadByte(pos, resp)
+		buffResponse.TotalTransferBufferSize, pos = utils.ReadUint16(pos, resp)
+		buffResponse.TransferBuffer, pos = utils.ReadBytes(pos, int(buffResponse.TotalTransferBufferSize), resp)
+		buffResponse.BackoffTime, pos = utils.ReadUint32(pos, resp)
+	} else {
+		return pos, fmt.Errorf("non-zero return code %x", buffResponse.ReturnValue)
 	}
 	return pos, nil
 }
@@ -989,66 +1123,74 @@ func (setPropertiesResponse *RopSetPropertiesResponse) Unmarshal(resp []byte) (i
 func (saveMessageResponse *RopSaveChangesMessageResponse) Unmarshal(resp []byte) error {
 	pos := 0
 
-	saveMessageResponse.RopID, pos = readByte(pos, resp)
-	saveMessageResponse.ResponseHandleIndex, pos = readByte(pos, resp)
-	saveMessageResponse.ReturnValue, pos = readUint32(pos, resp)
+	saveMessageResponse.RopID, pos = utils.ReadByte(pos, resp)
+	saveMessageResponse.ResponseHandleIndex, pos = utils.ReadByte(pos, resp)
+	saveMessageResponse.ReturnValue, pos = utils.ReadUint32(pos, resp)
 
 	if saveMessageResponse.ReturnValue == 0 {
-		saveMessageResponse.InputHandle, pos = readByte(pos, resp)
-		saveMessageResponse.MessageID, _ = readBytes(pos, 8, resp)
+		saveMessageResponse.InputHandle, pos = utils.ReadByte(pos, resp)
+		saveMessageResponse.MessageID, _ = utils.ReadBytes(pos, 8, resp)
 	}
 	return nil
 }
 
 //CalcSizes func to calculate the different size fields in the ROP buffer
-func (execRequest *ExecuteRequest) CalcSizes() error {
-	execRequest.RopBuffer.ROP.RopSize = uint16(len(execRequest.RopBuffer.ROP.RopsList) + 2)
-	execRequest.RopBuffer.Header.Size = uint16(len(BodyToBytes(execRequest.RopBuffer.ROP)))
-	execRequest.RopBuffer.Header.SizeActual = execRequest.RopBuffer.Header.Size
-	execRequest.RopBufferSize = uint32(len(BodyToBytes(execRequest.RopBuffer)))
+func (execRequest *ExecuteRequest) CalcSizes(isRPC bool) error {
+	if !isRPC {
+		execRequest.RopBuffer.ROP.RopSize = uint16(len(execRequest.RopBuffer.ROP.RopsList) + 2)
+		execRequest.RopBuffer.Header.Size = uint16(len(utils.BodyToBytes(execRequest.RopBuffer.ROP)))
+		execRequest.RopBuffer.Header.SizeActual = execRequest.RopBuffer.Header.Size
+		execRequest.RopBufferSize = uint32(len(utils.BodyToBytes(execRequest.RopBuffer)))
+	} else {
+		padding := uint32(len(utils.BodyToBytes(execRequest.RopBuffer))) - execRequest.MaxRopOut
+		execRequest.RopBuffer.ROP.RopSize = uint16(len(execRequest.RopBuffer.ROP.RopsList) + 2)
+		execRequest.RopBuffer.Header.Size = uint16(len(utils.BodyToBytes(execRequest.RopBuffer.ROP)) - int(padding))
+		execRequest.RopBuffer.Header.SizeActual = execRequest.RopBuffer.Header.Size
+		execRequest.RopBufferSize = execRequest.MaxRopOut
+	}
 	return nil
 }
 
 //Init function to create a base ExecuteRequest object
 func (execRequest *ExecuteRequest) Init() {
-	execRequest.Flags = 0x00000002
+	execRequest.Flags = 0x00000002 | 0x00000001
 	execRequest.RopBuffer.Header.Version = 0x0000
 	execRequest.RopBuffer.Header.Flags = ropFlagsChain //[]byte{0x04, 0x00}
-	execRequest.MaxRopOut = 32775
+	execRequest.MaxRopOut = 23041                      //2634022912                 //23041                      //262143
 }
 
 //Unmarshal func
 func (queryRows *RopQueryRowsResponse) Unmarshal(resp []byte, properties []PropertyTag) (int, error) {
 	pos := 0
-	queryRows.RopID, pos = readByte(pos, resp)
-	queryRows.InputHandle, pos = readByte(pos, resp)
-	queryRows.ReturnValue, pos = readUint32(pos, resp)
+	queryRows.RopID, pos = utils.ReadByte(pos, resp)
+	queryRows.InputHandle, pos = utils.ReadByte(pos, resp)
+	queryRows.ReturnValue, pos = utils.ReadUint32(pos, resp)
 	if queryRows.ReturnValue != 0 {
-		return pos, fmt.Errorf("Non-zero return value %d", queryRows.ReturnValue)
+		return pos, fmt.Errorf("Non-zero return value %x", queryRows.ReturnValue)
 	}
-	queryRows.Origin, pos = readByte(pos, resp)
-	queryRows.RowCount, pos = readUint16(pos, resp)
+	queryRows.Origin, pos = utils.ReadByte(pos, resp)
+	queryRows.RowCount, pos = utils.ReadUint16(pos, resp)
 
 	rows := make([][]PropertyRow, queryRows.RowCount)
 
 	for k := 0; k < int(queryRows.RowCount); k++ {
 		trow := PropertyRow{}
-		trow.Flag, pos = readByte(pos, resp)
+		trow.Flag, pos = utils.ReadByte(pos, resp)
 		for _, property := range properties {
 			if property.PropertyType == PtypInteger32 {
-				trow.ValueArray, pos = readBytes(pos, 2, resp)
+				trow.ValueArray, pos = utils.ReadBytes(pos, 2, resp)
 				rows[k] = append(rows[k], trow)
 			} else if property.PropertyType == PtypInteger64 {
-				trow.ValueArray, pos = readBytes(pos, 8, resp)
+				trow.ValueArray, pos = utils.ReadBytes(pos, 8, resp)
 				rows[k] = append(rows[k], trow)
 			} else if property.PropertyType == PtypString {
-				trow.ValueArray, pos = readUnicodeString(pos, resp)
+				trow.ValueArray, pos = utils.ReadUnicodeString(pos, resp)
 				rows[k] = append(rows[k], trow)
 				pos++
 			} else if property.PropertyType == PtypBinary {
-				cnt, p := readByte(pos, resp)
+				cnt, p := utils.ReadByte(pos, resp)
 				pos = p
-				trow.ValueArray, pos = readBytes(pos, int(cnt), resp)
+				trow.ValueArray, pos = utils.ReadBytes(pos, int(cnt), resp)
 				rows[k] = append(rows[k], trow)
 			}
 		}
@@ -1062,12 +1204,12 @@ func (queryRows *RopQueryRowsResponse) Unmarshal(resp []byte, properties []Prope
 //Unmarshal func
 func (setColumnsResponse *RopSetColumnsResponse) Unmarshal(resp []byte) (int, error) {
 	pos := 0
-	setColumnsResponse.RopID, pos = readByte(pos, resp)
-	setColumnsResponse.InputHandle, pos = readByte(pos, resp)
-	setColumnsResponse.ReturnValue, pos = readUint32(pos, resp)
-	setColumnsResponse.TableStatus, pos = readByte(pos, resp)
+	setColumnsResponse.RopID, pos = utils.ReadByte(pos, resp)
+	setColumnsResponse.InputHandle, pos = utils.ReadByte(pos, resp)
+	setColumnsResponse.ReturnValue, pos = utils.ReadUint32(pos, resp)
+	setColumnsResponse.TableStatus, pos = utils.ReadByte(pos, resp)
 	if setColumnsResponse.ReturnValue != 0 {
-		return pos, fmt.Errorf("Non-zero return value %d", setColumnsResponse.ReturnValue)
+		return pos, fmt.Errorf("Non-zero return value %x", setColumnsResponse.ReturnValue)
 	}
 	return pos, nil
 }
@@ -1075,9 +1217,9 @@ func (setColumnsResponse *RopSetColumnsResponse) Unmarshal(resp []byte) (int, er
 //Unmarshal function to produce RopLogonResponse struct
 func (getRulesTable *RopGetRulesTableResponse) Unmarshal(resp []byte) (int, error) {
 	var pos = 0
-	getRulesTable.RopID, pos = readByte(pos, resp)
-	getRulesTable.OutputHandle, pos = readByte(pos, resp)
-	getRulesTable.ReturnValue, pos = readUint32(pos, resp)
+	getRulesTable.RopID, pos = utils.ReadByte(pos, resp)
+	getRulesTable.OutputHandle, pos = utils.ReadByte(pos, resp)
+	getRulesTable.ReturnValue, pos = utils.ReadUint32(pos, resp)
 	if getRulesTable.ReturnValue != 0 {
 		return pos, fmt.Errorf("Non-zero return value %d", getRulesTable.ReturnValue)
 	}
@@ -1088,48 +1230,61 @@ func (getRulesTable *RopGetRulesTableResponse) Unmarshal(resp []byte) (int, erro
 //Unmarshal func
 func (ropOpenFolderResponse *RopOpenFolderResponse) Unmarshal(resp []byte) (int, error) {
 	pos := 0
-	ropOpenFolderResponse.RopID, pos = readByte(pos, resp)
-	ropOpenFolderResponse.OutputHandle, pos = readByte(pos, resp)
-	ropOpenFolderResponse.ReturnValue, pos = readUint32(pos, resp)
+	ropOpenFolderResponse.RopID, pos = utils.ReadByte(pos, resp)
+	ropOpenFolderResponse.OutputHandle, pos = utils.ReadByte(pos, resp)
+	ropOpenFolderResponse.ReturnValue, pos = utils.ReadUint32(pos, resp)
 
 	if ropOpenFolderResponse.ReturnValue != 0x000000 {
 		return pos, fmt.Errorf("Non-zero reponse value %d", ropOpenFolderResponse.ReturnValue)
 	}
 
-	ropOpenFolderResponse.HasRules, pos = readByte(pos, resp)
-	ropOpenFolderResponse.IsGhosted, pos = readByte(pos, resp)
+	ropOpenFolderResponse.HasRules, pos = utils.ReadByte(pos, resp)
+	ropOpenFolderResponse.IsGhosted, pos = utils.ReadByte(pos, resp)
 
 	if ropOpenFolderResponse.IsGhosted == 1 {
-		ropOpenFolderResponse.ServerCount, pos = readUint16(pos, resp)
-		ropOpenFolderResponse.CheapServerCount, pos = readUint16(pos, resp)
-		ropOpenFolderResponse.Servers, pos = readASCIIString(pos, resp)
+		ropOpenFolderResponse.ServerCount, pos = utils.ReadUint16(pos, resp)
+		ropOpenFolderResponse.CheapServerCount, pos = utils.ReadUint16(pos, resp)
+		ropOpenFolderResponse.Servers, pos = utils.ReadASCIIString(pos, resp)
 	}
 
 	return pos, nil
 }
 
 //Unmarshal func
+func (ropGetHierarchyResponse *RopGetHierarchyTableResponse) Unmarshal(resp []byte) (int, error) {
+	pos := 0
+	ropGetHierarchyResponse.RopID, pos = utils.ReadByte(pos, resp)
+	ropGetHierarchyResponse.OutputHandle, pos = utils.ReadByte(pos, resp)
+	ropGetHierarchyResponse.ReturnValue, pos = utils.ReadUint32(pos, resp)
+
+	if ropGetHierarchyResponse.ReturnValue != 0x000000 {
+		return pos, fmt.Errorf("Non-zero reponse value %d", ropGetHierarchyResponse.ReturnValue)
+	}
+
+	ropGetHierarchyResponse.RowCount, pos = utils.ReadUint32(pos, resp)
+	return pos, nil
+}
+
+//Unmarshal func
 func (ropOpenMessageResponse *RopOpenMessageResponse) Unmarshal(resp []byte) (int, error) {
 	pos := 0
-	ropOpenMessageResponse.RopID, pos = readByte(pos, resp)
-	ropOpenMessageResponse.OutputHandle, pos = readByte(pos, resp)
-	ropOpenMessageResponse.ReturnValue, pos = readUint32(pos, resp)
+	ropOpenMessageResponse.RopID, pos = utils.ReadByte(pos, resp)
+	ropOpenMessageResponse.OutputHandle, pos = utils.ReadByte(pos, resp)
+	ropOpenMessageResponse.ReturnValue, pos = utils.ReadUint32(pos, resp)
 
 	if ropOpenMessageResponse.ReturnValue != 0x000000 {
-		return pos, fmt.Errorf("Non-zero reponse value %d", ropOpenMessageResponse.ReturnValue)
+		return pos, fmt.Errorf("Non-zero reponse value %x", ropOpenMessageResponse.ReturnValue)
 	}
 
-	ropOpenMessageResponse.HasNamedProperties, pos = readByte(pos, resp)
-	if ropOpenMessageResponse.HasNamedProperties > 0 {
-		ropOpenMessageResponse.SubjectPrefix, pos = readTypedString(pos, resp) //readUnicodeString(pos, resp)
-		ropOpenMessageResponse.NormalizedSubject, pos = readTypedString(pos, resp)
-		ropOpenMessageResponse.RecipientCount, pos = readUint16(pos, resp)
-
-		//read recipients
-
+	ropOpenMessageResponse.HasNamedProperties, pos = utils.ReadByte(pos, resp)
+	if ropOpenMessageResponse.HasNamedProperties == 1 {
+		ropOpenMessageResponse.SubjectPrefix, pos = utils.ReadTypedString(pos, resp) //utils.ReadUnicodeString(pos, resp)
+		ropOpenMessageResponse.NormalizedSubject, pos = utils.ReadTypedString(pos, resp)
+		ropOpenMessageResponse.RecipientCount, pos = utils.ReadUint16(pos, resp)
+		//utils.Read recipients
 	}
-	ropOpenMessageResponse.ColumnCount, pos = readUint16(pos, resp)
-	ropOpenMessageResponse.RowCount, pos = readByte(pos, resp)
+	ropOpenMessageResponse.ColumnCount, pos = utils.ReadUint16(pos, resp)
+	ropOpenMessageResponse.RowCount, pos = utils.ReadByte(pos, resp)
 
 	return pos, nil
 }
@@ -1137,9 +1292,9 @@ func (ropOpenMessageResponse *RopOpenMessageResponse) Unmarshal(resp []byte) (in
 //Unmarshal func
 func (ropGetPropertiesSpecificResponse *RopGetPropertiesSpecificResponse) Unmarshal(resp []byte, columns []PropertyTag) (int, error) {
 	pos := 0
-	ropGetPropertiesSpecificResponse.RopID, pos = readByte(pos, resp)
-	ropGetPropertiesSpecificResponse.InputHandleIndex, pos = readByte(pos, resp)
-	ropGetPropertiesSpecificResponse.ReturnValue, pos = readUint32(pos, resp)
+	ropGetPropertiesSpecificResponse.RopID, pos = utils.ReadByte(pos, resp)
+	ropGetPropertiesSpecificResponse.InputHandleIndex, pos = utils.ReadByte(pos, resp)
+	ropGetPropertiesSpecificResponse.ReturnValue, pos = utils.ReadUint32(pos, resp)
 
 	if ropGetPropertiesSpecificResponse.ReturnValue != 0x000000 {
 		return pos, fmt.Errorf("Non-zero reponse value %d", ropGetPropertiesSpecificResponse.ReturnValue)
@@ -1147,20 +1302,28 @@ func (ropGetPropertiesSpecificResponse *RopGetPropertiesSpecificResponse) Unmars
 	var rows []PropertyRow
 	for _, property := range columns {
 		trow := PropertyRow{}
-		trow.Flag, pos = readByte(pos, resp)
+		trow.Flag, pos = utils.ReadByte(pos, resp)
 		if property.PropertyType == PtypInteger32 {
-			trow.ValueArray, pos = readBytes(pos, 2, resp)
+			trow.ValueArray, pos = utils.ReadBytes(pos, 2, resp)
 			rows = append(rows, trow)
 		} else if property.PropertyType == PtypString {
-			trow.ValueArray, pos = readUnicodeString(pos, resp)
+			trow.ValueArray, pos = utils.ReadUnicodeString(pos, resp)
 			rows = append(rows, trow)
 		} else if property.PropertyType == PtypBinary {
-			cnt, p := readByte(pos, resp)
+			cnt, p := utils.ReadByte(pos, resp)
 			pos = p
-			trow.ValueArray, pos = readBytes(pos, int(cnt), resp)
+			trow.ValueArray, pos = utils.ReadBytes(pos, int(cnt), resp)
 			rows = append(rows, trow)
 		}
 	}
 	ropGetPropertiesSpecificResponse.RowData = rows
+	return pos, nil
+}
+
+//Unmarshal func
+func (propTag *PropertyTag) Unmarshal(resp []byte) (int, error) {
+	pos := 0
+	propTag.PropertyType, pos = utils.ReadUint16(pos, resp)
+	propTag.PropertyID, pos = utils.ReadUint16(pos, resp)
 	return pos, nil
 }
