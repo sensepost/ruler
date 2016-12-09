@@ -31,7 +31,7 @@ type NtlmTransport struct {
 // RoundTrip method send http request and tries to perform NTLM authentication
 func (t NtlmTransport) RoundTrip(req *http.Request) (res *http.Response, err error) {
 
-	session, err := ntlm.CreateClientSession(ntlm.Version2, ntlm.ConnectionlessMode)
+	session, err := ntlm.CreateClientSession(ntlm.Version1, ntlm.ConnectionlessMode)
 	if err != nil {
 		return nil, err
 	}

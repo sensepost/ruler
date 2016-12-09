@@ -149,13 +149,22 @@ func mapiRequestHTTP(URL, mapiType string, body []byte) ([]byte, error) {
 
 func mapiConnectRPC(body ConnectRequestRPC) ([]byte, error) {
 	rpchttp.AuthSession = AuthSession
-	ready := make(chan bool) //this is our ready channel,
+	ready := make(chan bool)      //this is our ready channel,
+	chanError := make(chan error) //get the error message from our channel setup
+
 	//we should add a channel to check if there was an error setting up the channels
 	//there will currently be a deadlock here if something goes wrong
-	go rpchttp.RPCOpen(AuthSession.RPCURL, ready)
+	go rpchttp.RPCOpen(AuthSession.RPCURL, ready, chanError)
 
+	if AuthSession.Verbose {
+		fmt.Println("[+] Setting up channels")
+	}
 	//wait for channels to be setup
-	<-ready
+	if v := <-ready; v == false { //check if the setup was successful or premission Denied
+		e := <-chanError
+		return nil, fmt.Errorf("[x] Couldn't setup RPC channel - %s", e)
+	}
+
 	fmt.Println("[+] Binding to RPC")
 	//bind to RPC
 	rpchttp.RPCBind()
@@ -200,7 +209,7 @@ func mapiConnectRPC(body ConnectRequestRPC) ([]byte, error) {
 }
 
 func mapiDisconnectRPC() ([]byte, error) {
-	//rpchttp.RPCDisconnect()
+	rpchttp.RPCDisconnect()
 	return nil, nil
 }
 
@@ -329,7 +338,7 @@ func AuthenticateRPC() (*RopLogonResponse, error) {
 	_, err := mapiConnectRPC(connRequest)
 
 	if err != nil {
-		return nil, fmt.Errorf("[x] An error occurred setting up RPC.\n %s", err)
+		return nil, fmt.Errorf("[x] An error occurred setting up RPC.\n%s", err)
 	}
 
 	//Here we should check if the login worked

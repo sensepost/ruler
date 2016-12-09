@@ -37,7 +37,6 @@ func setupHTTPNTLM(rpctype string, URL string) (net.Conn, error) {
 	}
 
 	if err != nil {
-		fmt.Println("Could not connect")
 		return nil, err
 	}
 
@@ -83,8 +82,10 @@ func setupHTTPNTLM(rpctype string, URL string) (net.Conn, error) {
 	}
 
 	session.SetUserInfo(AuthSession.User, AuthSession.Pass, AuthSession.Domain)
-	session.SetNTHash(AuthSession.NTHash)
-	//fmt.Printf("Challenge: %x\n\n", challengeBytes)
+	if len(AuthSession.NTHash) > 0 {
+		session.SetNTHash(AuthSession.NTHash)
+	}
+
 	// parse NTLM challenge
 	challenge, err := ntlm.ParseChallengeMessage(challengeBytes)
 	if err != nil {
@@ -115,22 +116,27 @@ func setupHTTPNTLM(rpctype string, URL string) (net.Conn, error) {
 }
 
 //RPCOpen opens HTTP for RPC_IN_DATA and RPC_OUT_DATA
-func RPCOpen(URL string, readySignal chan bool) (err error) {
+func RPCOpen(URL string, readySignal chan bool, errOccurred chan error) (err error) {
 	//I'm so damn frustrated at not being able to use the http client here
 	//can't find a way to keep the write channel open (other than going over to http/2, which isn't valid here)
 	//so this is some damn messy code, but screw it
 
-	rpcInConn, _ = setupHTTPNTLM("RPC_IN_DATA", URL)
+	rpcInConn, err = setupHTTPNTLM("RPC_IN_DATA", URL)
+
+	if err != nil {
+		readySignal <- false
+		errOccurred <- err
+		return err
+	}
 
 	//open the RPC_OUT_DATA channel, receive a "ready" signal when this is setup
 	//this will be sent back to the caller through "c", whi
-	go RPCOpenOut(URL, readySignal)
+	go RPCOpenOut(URL, readySignal, errOccurred)
 
 	for {
 		data := make([]byte, 2048)
 		n, err := rpcInR.Read(data)
 		if n > 0 {
-			//fmt.Printf("sending some data: %x\n", data[:n])
 			_, err = rpcInConn.Write(data[:n])
 		}
 		if err != nil && err != io.EOF {
@@ -138,16 +144,19 @@ func RPCOpen(URL string, readySignal chan bool) (err error) {
 			break
 		}
 	}
-
 	return nil
 }
 
 //RPCOpenOut function opens the RPC_OUT_DATA channel
 //starts our listening "loop" which scans for new responses and pushes
 //these to our list of recieved responses
-func RPCOpenOut(URL string, readySignal chan bool) error {
-	rpcOutConn, _ = setupHTTPNTLM("RPC_OUT_DATA", URL)
-
+func RPCOpenOut(URL string, readySignal chan bool, errOccurred chan error) (err error) {
+	rpcOutConn, err = setupHTTPNTLM("RPC_OUT_DATA", URL)
+	if err != nil {
+		readySignal <- false
+		errOccurred <- err
+		return err
+	}
 	//signal that the RPC_OUT_DATA channel has been setup. This means both channels should be ready to go
 	readySignal <- true
 
@@ -179,9 +188,6 @@ func RPCBind() {
 	//send CONN/B1
 	RPCWrite(connB1.Marshal())
 
-	//I should change this to an object, but it never changes, so I guess it's ok for now to leave it hardcoded
-	//dataout := []byte{0x05, 0x00, 0x0b, 0x13, 0x10, 0x00, 0x00, 0x00, 0x74, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0xf8, 0x0f, 0xf8, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0xdb, 0xf1, 0xa4, 0x47, 0xca, 0x67, 0x10, 0xb3, 0x1f, 0x00, 0xdd, 0x01, 0x06, 0x62, 0xda, 0x00, 0x00, 0x51, 0x00, 0x04, 0x5d, 0x88, 0x8a, 0xeb, 0x1c, 0xc9, 0x11, 0x9f, 0xe8, 0x08, 0x00, 0x2b, 0x10, 0x48, 0x60, 0x02, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0xdb, 0xf1, 0xa4, 0x47, 0xca, 0x67, 0x10, 0xb3, 0x1f, 0x00, 0xdd, 0x01, 0x06, 0x62, 0xda, 0x00, 0x00, 0x51, 0x00, 0x2c, 0x1c, 0xb7, 0x6c, 0x12, 0x98, 0x40, 0x45, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00}
-	//RPCWrite(dataout)
 	//should check if we use Version1 or Version2
 	rpcntlmsession, err = ntlm.CreateClientSession(ntlm.Version2, ntlm.ConnectionlessMode)
 	if err != nil {
