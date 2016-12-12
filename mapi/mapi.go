@@ -167,13 +167,15 @@ func mapiConnectRPC(body ConnectRequestRPC) ([]byte, error) {
 
 	fmt.Println("[+] Binding to RPC")
 	//bind to RPC
-	rpchttp.RPCBind()
+	if err := rpchttp.RPCBind(); err != nil {
+		return nil, err
+	}
 
 	//AUXBuffer containing client info. Technically the server doesn't process this. But my messages don't work without it.. so meh
 	auxbuf := rpchttp.AUXBuffer{}
 	auxbuf.RPCHeader = rpchttp.RPCHeader{Version: 0x0000, Flags: 0x04}
 
-	clientInfo := rpchttp.AUXPerfClientInfo{AdapterSpeed: 0x000186a0, ClientID: 0x0001, AdapterNameOffset: 0x0020, ClientMode: 0x0002, MachineName: utils.UniString("Ethernet 2")}
+	clientInfo := rpchttp.AUXPerfClientInfo{AdapterSpeed: 0x000186a0, ClientID: 0x0001, AdapterNameOffset: 0x0020, ClientMode: 0x0001, MachineName: utils.UniString("Ethernet 2")}
 	clientInfo.Header = rpchttp.AUXHeader{Version: 0x01, Type: 0x02}
 	clientInfo.Header.Size = uint16(len(clientInfo.Marshal()))
 
@@ -189,7 +191,7 @@ func mapiConnectRPC(body ConnectRequestRPC) ([]byte, error) {
 	processInfo.Header = rpchttp.AUXHeader{Version: 0x02, Type: 0x0b}
 	processInfo.Header.Size = uint16(len(processInfo.Marshal()))
 
-	clientConnInfo := rpchttp.AUXClientConnectionInfo{ConnectionGUID: rpchttp.CookieGen(), ConnectionAttempts: 0x05, ConnectionFlags: 0x01, ConnectionContextInfo: utils.UniString("")}
+	clientConnInfo := rpchttp.AUXClientConnectionInfo{ConnectionGUID: rpchttp.CookieGen(), ConnectionAttempts: 0x02, ConnectionFlags: 0x00, ConnectionContextInfo: utils.UniString("")}
 	clientConnInfo.Header = rpchttp.AUXHeader{Version: 0x01, Type: 0x4a}
 	clientConnInfo.Header.Size = uint16(len(clientConnInfo.Marshal()))
 
@@ -311,6 +313,7 @@ func AuthenticateRPC() (*RopLogonResponse, error) {
 	connRequest.UserDN = []byte(AuthSession.LID)
 	//check that UserDN aligns to 4 byte boundary
 	pad := (4 - len(connRequest.UserDN)%4) % 4
+
 	if pad == 0 {
 		connRequest.UserDN = append(connRequest.UserDN, bytes.Repeat([]byte{0x00}, 4)...)
 	} else {
