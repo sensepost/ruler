@@ -86,7 +86,7 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, error) {
 	}
 
 	var autodiscoverURL string
-	//check if this is just a domain or a redirect (starts with http[s]://)
+	//check if this is just a domain, a redirect or a url (starts with http[s]://)
 
 	if m, _ := regexp.Match("http[s]?://", []byte(domain)); m == true {
 		autodiscoverURL = domain
@@ -179,7 +179,11 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, error) {
 		if autodiscoverResp.Response.Account.Action == "redirectAddr" {
 			rediraddr := autodiscoverResp.Response.Account.RedirectAddr
 			rediraddr = regexp.MustCompile(".*@").Split(rediraddr, 2)[1]
-			return autodiscover(redirectAutodiscover(rediraddr), mapi)
+			red, err := redirectAutodiscover(rediraddr)
+			if err != nil {
+				return nil, err
+			}
+			return autodiscover(red, mapi)
 		}
 		return &autodiscoverResp, nil
 	}
@@ -197,16 +201,18 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, error) {
 	return nil, fmt.Errorf("[x] Got an unexpected result: StatusCode [%d] %s\n", resp.StatusCode, body)
 }
 
-func redirectAutodiscover(redirdom string) string {
+func redirectAutodiscover(redirdom string) (string, error) {
 	fmt.Printf("[*] Redirected with new address [%s]\n", redirdom)
 	//create the autodiscover url
 	autodiscoverURL := fmt.Sprintf("http://autodiscover.%s/autodiscover/autodiscover.xml", redirdom)
 	req, _ := http.NewRequest("GET", autodiscoverURL, nil)
 	var DefaultTransport http.RoundTripper = &http.Transport{}
-	resp, _ := DefaultTransport.RoundTrip(req)
+	resp, err := DefaultTransport.RoundTrip(req)
+	if err != nil {
+		return "", err
+	}
 	defer resp.Body.Close()
 	fmt.Printf("[*] Authenticating through: %s\n", string(resp.Header.Get("Location")))
 	//return the new autodiscover server location
-	return resp.Header.Get("Location")
-
+	return resp.Header.Get("Location"), nil
 }

