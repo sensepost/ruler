@@ -220,7 +220,7 @@ func RPCBind() error {
 		rpcntlmsession.SetNTHash(AuthSession.NTHash)
 
 		challenge, err := ntlm.ParseChallengeMessage(challengeBytes)
-		//fmt.Println(challenge)
+
 		if err != nil {
 			fmt.Println("we panic here")
 			panic(err)
@@ -252,51 +252,10 @@ func RPCPing() {
 }
 
 //EcDoRPCExt2 does our actual RPC request returns the mapi data
-func EcDoRPCExt2(mapi []byte, auxLen uint32) ([]byte, error) {
-	header := RTSHeader{Version: 0x05, VersionMinor: 0, Type: DCERPC_PKT_REQUEST, PFCFlags: 0x03, AuthLen: 0, CallID: uint32(callcounter)}
-	header.PackedDrep = 16
-	req := RTSRequest{}
+func EcDoRPCExt2(MAPI []byte, auxLen uint32) ([]byte, error) {
 
-	req.Header = header
-	req.Command = []byte{0x00, 0x00, 0x0b, 0x00, 0x00, 0x00, 0x00, 0x00} //opnum 0x0b
-	pdu := PDUData{}
-	pdu.ContextHandle = AuthSession.ContextHandle
-	pdu.Data = mapi
-	pdu.CbAuxIn = auxLen
-	pdu.AuxOut = 0x000001008
-
-	req.PduData = pdu.Marshal() //MAPI
-	req.MaxFrag = uint16(len(pdu.Marshal()) + 24)
-	req.Header.FragLen = uint16(len(req.Marshal()))
-
-	if AuthSession.RPCNetworkAuthLevel == RPC_C_AUTHN_LEVEL_PKT_PRIVACY {
-		req.Command = []byte{0x01, 0x00, 0x0b, 0x00} //opnum 0x0b
-		data := append([]byte{0x00, 0x00, 0x00, 0x00}, req.PduData...)
-		//calculate padding, this is dependant on the length of the entire packet
-		pad := (4 - (len(data) % 4)) % 4
-		data = append(data, bytes.Repeat([]byte{0xBB}, pad)...)
-		req.PduData = data
-		req.Header.FragLen += 24 //account for AuthData
-		//When NTLM2 is on, we sign the whole pdu, but encrypt just the data, not the dcerpc header.
-
-		//add sectrailer
-		secTrail := RTSSec{}
-		secTrail.AuthLevel = AuthSession.RPCNetworkAuthLevel
-		secTrail.AuthType = AuthSession.RPCNetworkAuthType
-		secTrail.AuthPadLen = uint8(pad)
-		secTrail.AuthCTX = 0
-
-		req.SecTrailer = secTrail.Marshal()
-		req.Header.AuthLen = 16
-
-		//seal data, sign pdu
-		sealed, sign, _ := rpcntlmsession.SealV2(data, req.Marshal())
-
-		req.AuthData = sign
-		req.PduData = sealed
-	}
-
-	RPCWrite(req.Marshal())
+	RPCWriteN(MAPI, auxLen, 0x0b)
+	//RPCWrite(req.Marshal())
 	resp, err := RPCRead(callcounter - 1)
 
 	if err != nil {
@@ -322,58 +281,11 @@ func obfuscate(data []byte) []byte {
 
 //DoConnectExRequest makes our connection request. After this we can use
 //EcDoRPCExt2 to make our MAPI requests
-func DoConnectExRequest(MAPI []byte, auxlen uint32) ([]byte, error) {
+func DoConnectExRequest(MAPI []byte, auxLen uint32) ([]byte, error) {
 
 	callcounter += 2
 
-	header := RTSHeader{Version: 0x05, VersionMinor: 0, Type: DCERPC_PKT_REQUEST, PFCFlags: 0x03, AuthLen: 0, CallID: uint32(callcounter)}
-	header.PackedDrep = 16
-	req := RTSRequest{}
-	req.Header = header
-
-	req.MaxRecv = 0x0000
-	req.Command = []byte{0x00, 0x00, 0x0a, 0x00} //command 10
-
-	pdu := PDUData{}
-	pdu.Data = MAPI
-	pdu.CbAuxIn = uint32(auxlen)
-	pdu.AuxOut = 0x000001008
-
-	req.PduData = pdu.Marshal() //MAPI
-	req.MaxFrag = uint16(len(pdu.Marshal()) + 24)
-	req.Header.FragLen = uint16(len(req.Marshal()))
-
-	if AuthSession.RPCNetworkAuthLevel == RPC_C_AUTHN_LEVEL_PKT_PRIVACY {
-		req.Command = []byte{0x01, 0x00, 0x0a, 0x00} //command 10
-		data := req.PduData
-		//pad if necessary
-
-		pad := (4 - (len(data) % 4)) % 4
-
-		data = append(data, bytes.Repeat([]byte{0xBB}, pad)...)
-		req.PduData = data
-		req.Header.FragLen += 24 //account for AuthData
-		//When NTLM2 is on, we sign the whole pdu, but encrypt just the data, not the dcerpc header.
-
-		//add sectrailer
-		secTrail := RTSSec{}
-		secTrail.AuthLevel = AuthSession.RPCNetworkAuthLevel
-		secTrail.AuthType = AuthSession.RPCNetworkAuthType
-		secTrail.AuthPadLen = uint8(pad)
-		secTrail.AuthCTX = 0
-
-		req.SecTrailer = secTrail.Marshal()
-		req.Header.AuthLen = 16
-
-		//seal data, sign pdu
-		sealed, sign, _ := rpcntlmsession.SealV2(data, req.Marshal())
-
-		req.AuthData = sign
-		req.PduData = sealed
-	}
-
-	RPCWrite(req.Marshal())
-	//RPCRead(1)
+	RPCWriteN(MAPI, auxLen, 0x0a)
 
 	resp, err := RPCRead(callcounter - 1)
 
@@ -432,8 +344,72 @@ func RPCDisconnect() {
 	rpcOutConn.Close()
 }
 
+//RPCWriteN function writes to our RPC_IN_DATA channel
+func RPCWriteN(MAPI []byte, auxlen uint32, opnum byte) {
+	header := RTSHeader{Version: 0x05, VersionMinor: 0, Type: DCERPC_PKT_REQUEST, PFCFlags: 0x03, AuthLen: 0, CallID: uint32(callcounter)}
+	header.PackedDrep = 16
+	req := RTSRequest{}
+	req.Header = header
+
+	req.MaxRecv = 0x0000
+	req.Command = []byte{0x00, 0x00, opnum, 0x00} //command 10
+
+	pdu := PDUData{}
+	if opnum != 0x0a {
+		req.Command = []byte{0x00, 0x00, opnum, 0x00, 0x00, 0x00, 0x00, 0x00} //command 10
+		pdu.ContextHandle = AuthSession.ContextHandle
+	}
+	pdu.Data = MAPI
+	pdu.CbAuxIn = uint32(auxlen)
+	pdu.AuxOut = 0x000001008
+
+	req.PduData = pdu.Marshal() //MAPI
+	req.MaxFrag = uint16(len(pdu.Marshal()) + 24)
+	req.Header.FragLen = uint16(len(req.Marshal()))
+
+	if AuthSession.RPCNetworkAuthLevel == RPC_C_AUTHN_LEVEL_PKT_PRIVACY {
+		var data []byte
+		if opnum != 0x0a {
+			req.Command = []byte{0x01, 0x00, opnum, 0x00}
+			data = append([]byte{0x00, 0x00, 0x00, 0x00}, req.PduData...)
+		} else {
+			req.Command[0] = 0x01 //set CTX context id
+			data = req.PduData
+		}
+
+		//pad if necessary
+		pad := (4 - (len(data) % 4)) % 4
+
+		data = append(data, bytes.Repeat([]byte{0xBB}, pad)...)
+		req.PduData = data
+		req.Header.FragLen += 24 //account for AuthData
+
+		//add sectrailer
+		secTrail := RTSSec{}
+		secTrail.AuthLevel = AuthSession.RPCNetworkAuthLevel
+		secTrail.AuthType = AuthSession.RPCNetworkAuthType
+		secTrail.AuthPadLen = uint8(pad)
+		secTrail.AuthCTX = 0
+
+		req.SecTrailer = secTrail.Marshal()
+		req.Header.AuthLen = 16
+
+		//seal data, sign pdu
+		//Sign the whole pdu, but encrypt just the PduData, not the dcerpc header.
+		sealed, sign, _ := rpcntlmsession.SealV2(data, req.Marshal())
+
+		req.AuthData = sign
+		req.PduData = sealed
+	}
+	callcounter++
+	rpcInW.Write(req.Marshal())
+}
+
 //RPCWrite function writes to our RPC_IN_DATA channel
 func RPCWrite(data []byte) {
+
+	if AuthSession.RPCNetworkAuthLevel == RPC_C_AUTHN_LEVEL_PKT_PRIVACY {
+	}
 	callcounter++
 	rpcInW.Write(data)
 }
