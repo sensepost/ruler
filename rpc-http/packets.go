@@ -456,14 +456,21 @@ func (response *RPCResponse) Unmarshal(raw []byte) (int, error) {
 	response.Header.FragLen, pos = utils.ReadUint16(pos, raw)
 	response.Header.AuthLen, pos = utils.ReadUint16(pos, raw)
 	response.Header.CallID, pos = utils.ReadUint32(pos, raw)
-	if response.Header.AuthLen == 0 {
-		response.PDU, pos = utils.ReadBytes(pos, int(response.Header.FragLen)-pos, raw)
-	} else {
-		response.PDU, pos = utils.ReadBytes(pos, int(response.Header.FragLen-response.Header.AuthLen-24), raw)
-		response.SecTrailer, pos = utils.ReadBytes(pos, int(response.Header.AuthLen), raw)
-	}
 
-	//fmt.Printf("\n%x\n%x\n", response.PDU, response.SecTrailer)
+	if response.Header.AuthLen == 0 {
+		if len(raw) > int(response.Header.FragLen)-pos {
+			response.PDU, pos = utils.ReadBytes(pos, int(response.Header.FragLen)-pos, raw)
+		} else {
+			response.PDU, pos = utils.ReadBytes(pos, len(raw)-pos, raw)
+		}
+	} else {
+		if len(raw) > int(response.Header.FragLen-response.Header.AuthLen-24) {
+			response.PDU, pos = utils.ReadBytes(pos, int(response.Header.FragLen-response.Header.AuthLen-24), raw)
+			response.SecTrailer, pos = utils.ReadBytes(pos, int(response.Header.AuthLen), raw)
+		} else {
+
+		}
+	}
 	return pos, nil
 }
 
@@ -475,7 +482,6 @@ func (sec *RTSSec) Unmarshal(raw []byte, ln int) (int, error) {
 	sec.AuthPadLen, pos = utils.ReadByte(pos, raw)
 	sec.AuthRsvrd, pos = utils.ReadByte(pos, raw)
 	sec.AuthCTX, pos = utils.ReadUint32(pos, raw)
-	//sec.Data, pos = utils.ReadBytes(pos, ln, raw)
 	return pos, nil
 }
 
