@@ -233,7 +233,7 @@ func sendMessage(triggerword string) error {
 func connect(c *cli.Context) error {
 
 	//check that name, trigger and location were supplied
-	if c.GlobalString("username") == "" || (c.GlobalString("password") == "" && c.GlobalString("hash") == "") || c.GlobalString("email") == "" {
+	if (c.GlobalString("password") == "" && c.GlobalString("hash") == "") || (c.GlobalString("email") == "" && c.GlobalString("username") == "") {
 		return fmt.Errorf("Missing global argument. Use --domain, --username, (--password or --hash) and --email")
 	}
 

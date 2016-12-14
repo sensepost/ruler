@@ -2,7 +2,6 @@ package mapi
 
 import (
 	"bytes"
-	"encoding/binary"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -25,7 +24,7 @@ const RPC int = 2
 
 var cnt = 0
 
-//AuthSession a
+//AuthSession holds all our session related info
 var AuthSession *utils.Session
 
 //ExtractMapiURL extract the External mapi url from the autodiscover response
@@ -65,7 +64,7 @@ func Init(config *utils.Session, lid, URL, ABKURL string, transport int) {
 	AuthSession.LogonID = 0x09
 	AuthSession.Authenticated = false
 
-	if AuthSession.RPCEncrypt == true {
+	if AuthSession.RPCEncrypt == true { //only support NTLM auth for now
 		AuthSession.RPCNetworkAuthLevel = rpchttp.RPC_C_AUTHN_LEVEL_PKT_PRIVACY
 		AuthSession.RPCNetworkAuthType = rpchttp.RPC_C_AUTHN_WINNT
 	} else {
@@ -107,18 +106,16 @@ func sendMapiDisconnect(mapi DisconnectRequest) ([]byte, error) {
 //After the authentication is complete, we can simply use the mapiRequest
 //and the session cookies.
 func mapiRequestHTTP(URL, mapiType string, body []byte) ([]byte, error) {
-	if AuthSession.ClientSet == false {
-		AuthSession.Client = http.Client{
-			Transport: &httpntlm.NtlmTransport{
-				Domain:   AuthSession.Domain,
-				User:     AuthSession.User,
-				Password: AuthSession.Pass,
-				NTHash:   AuthSession.NTHash,
-				Insecure: AuthSession.Insecure,
-			},
-			Jar: AuthSession.CookieJar,
-		}
-		AuthSession.ClientSet = true
+
+	Client := http.Client{
+		Transport: &httpntlm.NtlmTransport{
+			Domain:   AuthSession.Domain,
+			User:     AuthSession.User,
+			Password: AuthSession.Pass,
+			NTHash:   AuthSession.NTHash,
+			Insecure: AuthSession.Insecure,
+		},
+		Jar: AuthSession.CookieJar,
 	}
 
 	req, err := http.NewRequest("POST", URL, bytes.NewReader(body))
@@ -126,7 +123,7 @@ func mapiRequestHTTP(URL, mapiType string, body []byte) ([]byte, error) {
 	req.SetBasicAuth(AuthSession.Email, AuthSession.Pass)
 
 	//request the auth url
-	resp, err := AuthSession.Client.Do(req)
+	resp, err := Client.Do(req)
 
 	if err != nil {
 		//check if this error was because of ntml auth when basic auth was expected.
@@ -254,16 +251,6 @@ func mapiRequestRPC(body ExecuteRequest) ([]byte, error) {
 	return resp, err
 }
 
-//switchEndian is used to change from BigEndian to LittleEndian when we need to
-//pad out the RPCPtr to ensure 4-byte alignment
-func switchEndian(val uint32) uint32 {
-	byteNum := new(bytes.Buffer)
-	var num uint32
-	binary.Write(byteNum, binary.BigEndian, val)
-	binary.Read(byteNum, binary.LittleEndian, &num)
-	return num
-}
-
 //isAuthenticated checks if we have a session
 func isAuthenticated() {
 	if AuthSession.CookieJar.Cookies(AuthSession.URL) == nil {
@@ -328,7 +315,7 @@ func AuthenticateRPC() (*RopLogonResponse, error) {
 		connRequest.Flags = uFlagsUser
 	}
 
-	connRequest.DNHash = hash(AuthSession.LID) //[]byte{0x32, 0x02, 0x03, 0x77} //7f 6f 24 b0
+	connRequest.DNHash = hash(AuthSession.LID) //calculate unique 32bit hash of LID
 	connRequest.CbLimit = 0x00
 	connRequest.DefaultCodePage = 1252
 	connRequest.LcidSort = 1033
@@ -343,8 +330,6 @@ func AuthenticateRPC() (*RopLogonResponse, error) {
 	if err != nil {
 		return nil, fmt.Errorf("[x] An error occurred setting up RPC.\n%s", err)
 	}
-
-	//Here we should check if the login worked
 
 	fmt.Println("[+] User DN: ", string(connRequest.UserDN))
 	fmt.Println("[*] Got Context, Doing ROPLogin")
@@ -401,14 +386,14 @@ func AuthenticateFetchMailbox(essdn []byte) (*RopLogonResponse, error) {
 	if AuthSession.Admin == true {
 		logonBody.OpenFlags = UseAdminPrivilege | TakeOwnership | UserPerMdbReplidMapping
 	} else {
-		logonBody.OpenFlags = UserPerMdbReplidMapping | HomeLogon | TakeOwnership //[]byte{0x0C, 0x04, 0x00, 0x21}
+		logonBody.OpenFlags = UserPerMdbReplidMapping | HomeLogon | TakeOwnership
 	}
 	logonBody.StoreState = 0
 	logonBody.Essdn = essdn
 	logonBody.EssdnSize = uint16(len(logonBody.Essdn))
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0xFF, 0xFF, 0xFF, 0xFF}
 	execRequest.RopBuffer.ROP.RopsList = logonBody.Marshal()
-	//fmt.Printf("\n\nLogon: %x \n%x\n", logonBody.Marshal(), execRequest.Marshal())
+
 	responseBody, err := sendMapiRequest("Execute", execRequest)
 
 	if err != nil {
@@ -539,12 +524,10 @@ func SendMessage(triggerWord string) (*RopSubmitMessageResponse, error) {
 	modRecipients.RecipientRows = make([]ModifyRecipientRow, modRecipients.RowCount)
 	modRecipients.RecipientRows[0] = ModifyRecipientRow{RowID: 0x00000001, RecipientType: 0x00000001}
 	modRecipients.RecipientRows[0].RecipientRow = RecipientRow{}
-	modRecipients.RecipientRows[0].RecipientRow.RecipientFlags = 0x0008 | 0x0003 | 0x0200 | 0x0010 | 0x3 | 0x0020 //| 0x0040 //| 0x0010 // | (0x1) | 0x0400 | 0x0200 //0x0651 //0x0040 | 0x0010 | 0x1007 | 0x0400 | 0x0100 //email address and display name
-	//modRecipients.RecipientRows[0].RecipientRow.AddressPrefixUsed = 0x5A
-	//modRecipients.RecipientRows[0].RecipientRow.DisplayType = 0x00
-	modRecipients.RecipientRows[0].RecipientRow.EmailAddress = utils.UniString(AuthSession.Email) //email address and display name
-	modRecipients.RecipientRows[0].RecipientRow.DisplayName = utils.UniString("Self")             //email address and display name
-	modRecipients.RecipientRows[0].RecipientRow.SimpleDisplayName = utils.UniString("Self")       //email address and display name
+	modRecipients.RecipientRows[0].RecipientRow.RecipientFlags = 0x0008 | 0x0003 | 0x0200 | 0x0010 | 0x3 | 0x0020
+	modRecipients.RecipientRows[0].RecipientRow.EmailAddress = utils.UniString(AuthSession.Email) //email address
+	modRecipients.RecipientRows[0].RecipientRow.DisplayName = utils.UniString("Self")             //Display name
+	modRecipients.RecipientRows[0].RecipientRow.SimpleDisplayName = utils.UniString("Self")       //Display name
 	modRecipients.RecipientRows[0].RecipientRow.RecipientColumnCount = modRecipients.ColumnCount
 
 	modRecipients.RecipientRows[0].RecipientRow.RecipientProperties = StandardPropertyRow{Flag: 0x00}
@@ -562,8 +545,6 @@ func SendMessage(triggerWord string) (*RopSubmitMessageResponse, error) {
 	modRecipients.RecipientRows[0].RecipientRowSize = uint16(len(utils.BodyToBytes(modRecipients.RecipientRows[0].RecipientRow)))
 	fullReq = append(fullReq, modRecipients.Marshal()...)
 
-	//submitMessage := RopSubmitMessageRequest{RopID: 0x32, LogonID: AuthSession.LogonID, InputHandle: 0x02, SubmitFlags: 0x00}
-	//fullReq = append(fullReq, submitMessage.Marshal()...)
 	submitMessage := RopSubmitMessageRequest{RopID: 0x32, LogonID: AuthSession.LogonID, InputHandle: 0x01, SubmitFlags: 0x00}
 	fullReq = append(fullReq, submitMessage.Marshal()...)
 
@@ -669,6 +650,88 @@ func SetMessageStatus(folderid, messageid []byte) (*RopSetMessageStatusResponse,
 
 //CreateMessage is used to create a message on the exchange server
 func CreateMessage(folderID []byte, properties []TaggedPropertyValue) (*RopSaveChangesMessageResponse, error) {
+	execRequest := ExecuteRequest{}
+	execRequest.Init()
+
+	createMessage := RopCreateMessageRequest{RopID: 0x06, LogonID: AuthSession.LogonID}
+	createMessage.InputHandle = 0x00
+	createMessage.OutputHandle = 0x01
+	createMessage.FolderID = folderID
+	createMessage.CodePageID = 0xFFF
+	createMessage.AssociatedFlag = 0
+
+	fullReq := createMessage.Marshal()
+
+	setProperties := RopSetPropertiesRequest{RopID: 0x0A, LogonID: AuthSession.LogonID}
+	setProperties.InputHandle = 0x01
+	setProperties.PropertValueCount = uint16(len(properties))
+
+	propertyTags := properties
+
+	setProperties.PropertyValues = propertyTags
+	propertySize := 0
+	for _, p := range propertyTags {
+		propertySize += len(utils.BodyToBytes(p))
+	}
+
+	setProperties.PropertValueSize = uint16(propertySize + 2)
+
+	fullReq = append(fullReq, setProperties.Marshal()...)
+
+	saveMessage := RopSaveChangesMessageRequest{RopID: 0x0C, LogonID: AuthSession.LogonID}
+	saveMessage.ResponseHandleIndex = 0x02
+	saveMessage.InputHandle = 0x01
+	saveMessage.SaveFlags = 0x02
+
+	fullReq = append(fullReq, saveMessage.Marshal()...)
+
+	ropRelease := RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandle: 0x01}
+	fullReq = append(fullReq, ropRelease.Marshal()...)
+
+	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
+	execRequest.RopBuffer.ROP.RopsList = fullReq
+
+	responseBody, err := sendMapiRequest("Execute", execRequest)
+
+	if err != nil {
+		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
+	}
+	execResponse := ExecuteResponse{}
+	execResponse.Unmarshal(responseBody)
+
+	if execResponse.StatusCode == 0 {
+		bufPtr := 10
+
+		createMessageResponse := RopCreateMessageResponse{}
+
+		p, e := createMessageResponse.Unmarshal(execResponse.RopBuffer[bufPtr:])
+		if e != nil {
+			return nil, fmt.Errorf("[x]An error occurred %s\n", e)
+		}
+		bufPtr += p
+
+		propertiesResponse := RopSetPropertiesResponse{}
+		p, e = propertiesResponse.Unmarshal(execResponse.RopBuffer[bufPtr:])
+		if e != nil {
+			return nil, fmt.Errorf("[x]An error occurred %s\n", e)
+		}
+
+		bufPtr += p
+
+		saveMessageResponse := RopSaveChangesMessageResponse{}
+		saveMessageResponse.Unmarshal(execResponse.RopBuffer[bufPtr:])
+
+		if err != nil {
+			return nil, err
+		}
+		return &saveMessageResponse, nil
+	}
+
+	return nil, fmt.Errorf("[x]Unspecified error occurred\n")
+}
+
+//CreateMessageFast is used to create a message on the exchange server through a the RopFastTransferSourceGetBufferRequest
+func CreateMessageFast(folderID []byte, properties []TaggedPropertyValue) (*RopSaveChangesMessageResponse, error) {
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
 
@@ -976,11 +1039,6 @@ func GetMessageFast(folderid, messageid []byte, columns []PropertyTag) (*RopFast
 
 	fullReq = append(fullReq, fastTransferBuffer.Marshal()...)
 
-	//queryRows := RopQueryRowsRequest{RopID: 0x15, LogonID: AuthSession.LogonID, InputHandle: 0x01, QueryRowsFlags: 0x00, ForwardRead: 0x01, RowCount: 0x32}
-	//k = append(k, queryRows.Marshal()...)
-	//ropRelease = RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandle: 0x01}
-	//fullReq = append(fullReq, ropRelease.Marshal()...)
-
 	execRequest.RopBuffer.ROP.RopsList = fullReq
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
 
@@ -994,9 +1052,7 @@ func GetMessageFast(folderid, messageid []byte, columns []PropertyTag) (*RopFast
 	execResponse.Unmarshal(responseBody)
 
 	if execResponse.StatusCode == 0 {
-		if execResponse.RopBuffer[2] == 0x05 { //compression
-			//decompress
-		}
+
 		bufPtr := 10
 
 		if execResponse.RopBuffer[bufPtr : bufPtr+1][0] != 0x03 {

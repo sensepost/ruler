@@ -19,6 +19,7 @@ import (
 //SessionConfig holds the configuration for this autodiscover session
 var SessionConfig *utils.Session
 var autodiscoverStep int
+var secondaryEmail string //a secondary email to use, edge case seen in office365
 
 //the xml for the autodiscover service
 const autodiscoverXML = `<?xml version="1.0" encoding="utf-8"?><Autodiscover xmlns="http://schemas.microsoft.com/exchange/autodiscover/outlook/requestschema/2006">
@@ -171,15 +172,16 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, error) {
 		}
 		SessionConfig.NTLMAuth = req.Header.Get("Authorization")
 		if SessionConfig.Verbose == true {
-
 			fmt.Println(string(body))
 		}
 		//check if we got a RedirectAddr ,
 		//if yes, get the new autodiscover url
 		if autodiscoverResp.Response.Account.Action == "redirectAddr" {
 			rediraddr := autodiscoverResp.Response.Account.RedirectAddr
-			rediraddr = regexp.MustCompile(".*@").Split(rediraddr, 2)[1]
-			red, err := redirectAutodiscover(rediraddr)
+			redirAddrs := strings.Split(rediraddr, "@") //regexp.MustCompile(".*@").Split(rediraddr, 2)
+			//fmt.Printf("secondary email: %s\n", redirAddrs)
+			secondaryEmail = fmt.Sprintf("%s@%s", redirAddrs[0], domain)
+			red, err := redirectAutodiscover(redirAddrs[1])
 			if err != nil {
 				return nil, err
 			}
@@ -188,6 +190,12 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, error) {
 		return &autodiscoverResp, nil
 	}
 	if resp.StatusCode == 401 || resp.StatusCode == 403 || resp.StatusCode == 404 {
+		//for office365 we might need to use a different email address, try this
+		if resp.StatusCode == 401 && secondaryEmail != "" {
+			fmt.Printf("[*] Authentication failed with primary email, trying secondary email [%s]\n", secondaryEmail)
+			SessionConfig.Email = secondaryEmail
+			return autodiscover(domain, mapi)
+		}
 		if autodiscoverStep < 2 {
 			autodiscoverStep++
 			return autodiscover(domain, mapi)
