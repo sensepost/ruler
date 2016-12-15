@@ -246,7 +246,7 @@ func mapiRequestRPC(body ExecuteRequest) ([]byte, error) {
 
 	//use RPC marshal for the body to ensure the sizes are calculated to take into account the 4-byte alignment padding
 	resp, err = rpchttp.EcDoRPCExt2(body.MarshalRPC(), body.AuxilliaryBufSize)
-	//fmt.Printf("%x\n", resp)
+
 	//we should do some proper responses here, rather than simply skipping 44 bytes ahead
 	return resp, err
 }
@@ -730,45 +730,26 @@ func CreateMessage(folderID []byte, properties []TaggedPropertyValue) (*RopSaveC
 	return nil, fmt.Errorf("[x]Unspecified error occurred\n")
 }
 
-//CreateMessageFast is used to create a message on the exchange server through a the RopFastTransferSourceGetBufferRequest
-func CreateMessageFast(folderID []byte, properties []TaggedPropertyValue) (*RopSaveChangesMessageResponse, error) {
+//SetPropertyFast is used to create a message on the exchange server through a the RopFastTransferSourceGetBufferRequest
+func SetPropertyFast(folderid []byte, messageid []byte, property TaggedPropertyValue) (*RopSaveChangesMessageResponse, error) {
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
 
-	createMessage := RopCreateMessageRequest{RopID: 0x06, LogonID: AuthSession.LogonID}
-	createMessage.InputHandle = 0x00
-	createMessage.OutputHandle = 0x01
-	createMessage.FolderID = folderID
-	createMessage.CodePageID = 0xFFF
-	createMessage.AssociatedFlag = 0
-
-	fullReq := createMessage.Marshal()
-
-	setProperties := RopSetPropertiesRequest{RopID: 0x0A, LogonID: AuthSession.LogonID}
-	setProperties.InputHandle = 0x01
-	setProperties.PropertValueCount = uint16(len(properties))
-
-	propertyTags := properties
-
-	setProperties.PropertyValues = propertyTags
-	propertySize := 0
-	for _, p := range propertyTags {
-		propertySize += len(utils.BodyToBytes(p))
-	}
-
-	setProperties.PropertValueSize = uint16(propertySize + 2)
-
-	fullReq = append(fullReq, setProperties.Marshal()...)
-
-	saveMessage := RopSaveChangesMessageRequest{RopID: 0x0C, LogonID: AuthSession.LogonID}
-	saveMessage.ResponseHandleIndex = 0x02
-	saveMessage.InputHandle = 0x01
-	saveMessage.SaveFlags = 0x02
-
-	fullReq = append(fullReq, saveMessage.Marshal()...)
-
 	ropRelease := RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandle: 0x01}
-	fullReq = append(fullReq, ropRelease.Marshal()...)
+	fullReq := ropRelease.Marshal()
+
+	getMessage := RopOpenMessageRequest{RopID: 0x03, LogonID: AuthSession.LogonID}
+	getMessage.InputHandle = 0x00
+	getMessage.OutputHandle = 0x01
+	getMessage.FolderID = folderid
+	getMessage.MessageID = messageid
+	getMessage.CodePageID = 0xFFF
+	getMessage.OpenModeFlags = 0x03
+
+	fullReq = append(fullReq, getMessage.Marshal()...)
+
+	fastTransfer := RopFastTransferDestinationConfigureRequest{RopID: 0x53, LogonID: AuthSession.LogonID, InputHandle: 0x01, OutputHandle: 0x02, SourceOperation: 0x01, CopyFlags: 0x01}
+	fullReq = append(fullReq, fastTransfer.Marshal()...)
 
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
 	execRequest.RopBuffer.ROP.RopsList = fullReq
@@ -782,23 +763,107 @@ func CreateMessageFast(folderID []byte, properties []TaggedPropertyValue) (*RopS
 	execResponse.Unmarshal(responseBody)
 
 	if execResponse.StatusCode == 0 {
+		//bufPtr := 10
+		/*
+			getMessageResponse := RopGetMessageResponse{}
+
+			_, e := getMessageResponse.Unmarshal(execResponse.RopBuffer[bufPtr:])
+			if e != nil {
+				return nil, fmt.Errorf("[x]An error occurred %s\n", e)
+			}
+		*/
+		//bufPtr += p
+		//we probably need to get the handles here to pass them down into the ServerObjectHandleTable
+		//
+		serverHandles := execResponse.RopBuffer[len(execResponse.RopBuffer)-8:]
+		messageHandles := serverHandles
+		fmt.Printf("Handles: %x\n", serverHandles)
+		props := utils.BodyToBytes(property) //setProperties.Marshal()
+
+		//lets split it..
+		index := 0
+		split := 900
+		piecescnt := len(props) / split
+		for kk := 0; kk < piecescnt; kk++ {
+			var body []byte
+			if index+split < len(props) {
+				body = props[index : index+split]
+			}
+			index += split
+			//fmt.Printf("%x\n", body)
+			execRequest := ExecuteRequest{}
+			execRequest.Init()
+			setFast := RopFastTransferDestinationPutBufferRequest{RopID: 0x54, LogonID: AuthSession.LogonID, InputHandle: 0x02, TransferDataSize: uint16(len(body)), TransferData: body}
+			fullReq := setFast.Marshal()
+
+			execRequest.RopBuffer.ROP.ServerObjectHandleTable = append([]byte{0x00, 0x00, 0x00, AuthSession.LogonID}, serverHandles...) //[]byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF} //
+			execRequest.RopBuffer.ROP.ServerObjectHandleTable = append(execRequest.RopBuffer.ROP.ServerObjectHandleTable, []byte{0xFF, 0xFF, 0xFF, 0xFF}...)
+			execRequest.RopBuffer.ROP.RopsList = fullReq
+
+			responseBody, err = sendMapiRequest("Execute", execRequest)
+
+			if err != nil {
+				return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
+			}
+			execResponse = ExecuteResponse{}
+			execResponse.Unmarshal(responseBody)
+			serverHandles = execResponse.RopBuffer[len(execResponse.RopBuffer)-8:]
+		}
+		if len(props) > split*piecescnt {
+			body := props[index:]
+			execRequest := ExecuteRequest{}
+			execRequest.Init()
+			setFast := RopFastTransferDestinationPutBufferRequest{RopID: 0x54, LogonID: AuthSession.LogonID, InputHandle: 0x02, TransferDataSize: uint16(len(body)), TransferData: body}
+			fullReq := setFast.Marshal()
+			//fmt.Printf("%x\n", body)
+			execRequest.RopBuffer.ROP.ServerObjectHandleTable = append([]byte{0x00, 0x00, 0x00, AuthSession.LogonID}, serverHandles...) //[]byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
+			execRequest.RopBuffer.ROP.ServerObjectHandleTable = append(execRequest.RopBuffer.ROP.ServerObjectHandleTable, []byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}...)
+			execRequest.RopBuffer.ROP.RopsList = fullReq
+
+			responseBody, err = sendMapiRequest("Execute", execRequest)
+
+			if err != nil {
+				return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
+			}
+			execResponse = ExecuteResponse{}
+			execResponse.Unmarshal(responseBody)
+
+			//serverHandles = execResponse.RopBuffer[len(execResponse.RopBuffer)-4:]
+		}
+		return SaveMessageFast(0x01, 0x02, messageHandles)
+	}
+
+	return nil, fmt.Errorf("[x]Unspecified error occurred\n")
+}
+
+func SaveMessageFast(inputHandle, responseHandle byte, serverHandles []byte) (*RopSaveChangesMessageResponse, error) {
+	execRequest := ExecuteRequest{}
+	execRequest.Init()
+
+	saveMessage := RopSaveChangesMessageRequest{RopID: 0x0C, LogonID: AuthSession.LogonID}
+	saveMessage.ResponseHandleIndex = responseHandle
+	saveMessage.InputHandle = inputHandle
+	saveMessage.SaveFlags = 0x02
+
+	fullReq := saveMessage.Marshal()
+
+	ropRelease := RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandle: inputHandle}
+	fullReq = append(fullReq, ropRelease.Marshal()...)
+
+	execRequest.RopBuffer.ROP.ServerObjectHandleTable = append([]byte{0x00, 0x00, 0x00, AuthSession.LogonID}, serverHandles...) //[]byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
+	execRequest.RopBuffer.ROP.ServerObjectHandleTable = append(execRequest.RopBuffer.ROP.ServerObjectHandleTable, []byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}...)
+	execRequest.RopBuffer.ROP.RopsList = fullReq
+
+	responseBody, err := sendMapiRequest("Execute", execRequest)
+
+	if err != nil {
+		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
+	}
+	execResponse := ExecuteResponse{}
+	execResponse.Unmarshal(responseBody)
+	fmt.Println("Complete")
+	if execResponse.StatusCode == 0 {
 		bufPtr := 10
-
-		createMessageResponse := RopCreateMessageResponse{}
-
-		p, e := createMessageResponse.Unmarshal(execResponse.RopBuffer[bufPtr:])
-		if e != nil {
-			return nil, fmt.Errorf("[x]An error occurred %s\n", e)
-		}
-		bufPtr += p
-
-		propertiesResponse := RopSetPropertiesResponse{}
-		p, e = propertiesResponse.Unmarshal(execResponse.RopBuffer[bufPtr:])
-		if e != nil {
-			return nil, fmt.Errorf("[x]An error occurred %s\n", e)
-		}
-
-		bufPtr += p
 
 		saveMessageResponse := RopSaveChangesMessageResponse{}
 		saveMessageResponse.Unmarshal(execResponse.RopBuffer[bufPtr:])

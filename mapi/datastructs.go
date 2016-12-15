@@ -227,6 +227,32 @@ type RopGetPropertiesSpecificResponse struct {
 	RowData           []PropertyRow
 }
 
+//RopFastTransferDestinationConfigureRequest used to configure a destination buffer for fast TransferBuffer
+type RopFastTransferDestinationConfigureRequest struct {
+	RopID           uint8 //0x53
+	LogonID         uint8
+	InputHandle     uint8
+	OutputHandle    uint8
+	SourceOperation uint8
+	CopyFlags       uint8
+}
+
+//RopFastTransferDestinationConfigureResponse used to configure a destination buffer for fast TransferBuffer
+type RopFastTransferDestinationConfigureResponse struct {
+	RopID        uint8 //0x53
+	OutputHandle uint8
+	ReturnValue  uint32
+}
+
+//RopFastTransferDestinationPutBufferRequest to actually upload the data
+type RopFastTransferDestinationPutBufferRequest struct {
+	RopID            uint8 //0x53
+	LogonID          uint8
+	InputHandle      uint8
+	TransferDataSize uint16
+	TransferData     []byte
+}
+
 //RopOpenFolderRequest struct used to open a folder
 type RopOpenFolderRequest struct {
 	RopID         uint8 //0x02
@@ -797,6 +823,16 @@ func (getProps RopFastTransferSourceCopyPropertiesRequest) Marshal() []byte {
 
 //Marshal turn RopFastTransferSourceGetBufferRequest into Bytes
 func (getBuff RopFastTransferSourceGetBufferRequest) Marshal() []byte {
+	return utils.BodyToBytes(getBuff)
+}
+
+//Marshal turn RopFastTransferDestinationConfigureRequest into Bytes
+func (getBuff RopFastTransferDestinationConfigureRequest) Marshal() []byte {
+	return utils.BodyToBytes(getBuff)
+}
+
+//Marshal turn RopFastTransferDestinationConfigureRequest into Bytes
+func (getBuff RopFastTransferDestinationPutBufferRequest) Marshal() []byte {
 	return utils.BodyToBytes(getBuff)
 }
 
