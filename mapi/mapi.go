@@ -777,12 +777,12 @@ func SetPropertyFast(folderid []byte, messageid []byte, property TaggedPropertyV
 		//
 		serverHandles := execResponse.RopBuffer[len(execResponse.RopBuffer)-8:]
 		messageHandles := serverHandles
-		fmt.Printf("Handles: %x\n", serverHandles)
+		//fmt.Printf("Handles: %x\n", serverHandles)
 		props := utils.BodyToBytes(property) //setProperties.Marshal()
 
 		//lets split it..
 		index := 0
-		split := 900
+		split := 9000
 		piecescnt := len(props) / split
 		for kk := 0; kk < piecescnt; kk++ {
 			var body []byte
@@ -815,7 +815,7 @@ func SetPropertyFast(folderid []byte, messageid []byte, property TaggedPropertyV
 			execRequest.Init()
 			setFast := RopFastTransferDestinationPutBufferRequest{RopID: 0x54, LogonID: AuthSession.LogonID, InputHandle: 0x02, TransferDataSize: uint16(len(body)), TransferData: body}
 			fullReq := setFast.Marshal()
-			//fmt.Printf("%x\n", body)
+
 			execRequest.RopBuffer.ROP.ServerObjectHandleTable = append([]byte{0x00, 0x00, 0x00, AuthSession.LogonID}, serverHandles...) //[]byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
 			execRequest.RopBuffer.ROP.ServerObjectHandleTable = append(execRequest.RopBuffer.ROP.ServerObjectHandleTable, []byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}...)
 			execRequest.RopBuffer.ROP.RopsList = fullReq
@@ -828,7 +828,6 @@ func SetPropertyFast(folderid []byte, messageid []byte, property TaggedPropertyV
 			execResponse = ExecuteResponse{}
 			execResponse.Unmarshal(responseBody)
 
-			//serverHandles = execResponse.RopBuffer[len(execResponse.RopBuffer)-4:]
 		}
 		return SaveMessageFast(0x01, 0x02, messageHandles)
 	}
@@ -861,7 +860,7 @@ func SaveMessageFast(inputHandle, responseHandle byte, serverHandles []byte) (*R
 	}
 	execResponse := ExecuteResponse{}
 	execResponse.Unmarshal(responseBody)
-	fmt.Println("Complete")
+	//fmt.Println("Complete")
 	if execResponse.StatusCode == 0 {
 		bufPtr := 10
 
@@ -1143,9 +1142,9 @@ func GetMessageFast(folderid, messageid []byte, columns []PropertyTag) (*RopFast
 		if err != nil {
 			return nil, err
 		}
-		fmt.Println("TransferStatus: ", pprops.TransferStatus) //0x0000 -- error 0x0001 -- partial
-		fmt.Println("TotalStepCount: ", pprops.TotalStepCount)
-		fmt.Println("InProgressCount: ", pprops.InProgressCount)
+		//fmt.Println("TransferStatus: ", pprops.TransferStatus) //0x0000 -- error 0x0001 -- partial
+		//fmt.Println("TotalStepCount: ", pprops.TotalStepCount)
+		//fmt.Println("InProgressCount: ", pprops.InProgressCount)
 
 		//Rop release if we are done.. otherwise get rest of stream
 		if pprops.TransferStatus == 0x0001 {
