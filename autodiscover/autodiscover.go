@@ -54,18 +54,18 @@ func createAutodiscover(domain string, https bool) string {
 }
 
 //Autodiscover function to retrieve mailbox details using the autodiscover mechanism from MS Exchange
-func Autodiscover(domain string) (*utils.AutodiscoverResp, error) {
+func Autodiscover(domain string) (*utils.AutodiscoverResp, string, error) {
 	return autodiscover(domain, false)
 }
 
 //MAPIDiscover function to do the autodiscover request but specify the MAPI header
 //indicating that the MAPI end-points should be returned
-func MAPIDiscover(domain string) (*utils.AutodiscoverResp, error) {
-	fmt.Println("[*] Doing Autodiscover for domain")
+func MAPIDiscover(domain string) (*utils.AutodiscoverResp, string, error) {
+	//fmt.Println("[*] Doing Autodiscover for domain")
 	return autodiscover(domain, true)
 }
 
-func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, error) {
+func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, string, error) {
 	//replace Email with the email from the config
 	r, _ := parseTemplate(autodiscoverXML)
 	autodiscoverResp := utils.AutodiscoverResp{}
@@ -108,7 +108,7 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, error) {
 		if autodiscoverStep == 2 {
 			autodiscoverURL = createAutodiscover(fmt.Sprintf("autodiscover.%s", domain), false)
 			if autodiscoverURL == "" {
-				return nil, fmt.Errorf("[x] Invalid domain or no autodiscover DNS record found")
+				return nil, "", fmt.Errorf("[x] Invalid domain or no autodiscover DNS record found")
 			}
 		}
 	}
@@ -139,7 +139,7 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, error) {
 			client = http.Client{}
 			resp, err = client.Do(req)
 			if err != nil {
-				return nil, err
+				return nil, "", err
 			}
 		} else {
 			if autodiscoverStep < 2 {
@@ -148,7 +148,7 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, error) {
 			}
 			//we've done all three steps of autodiscover and all three failed
 
-			return nil, err
+			return nil, "", err
 		}
 	}
 
@@ -156,7 +156,7 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, error) {
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	//check if we got a 200 response
@@ -168,7 +168,7 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, error) {
 				autodiscoverStep++
 				return autodiscover(domain, mapi)
 			}
-			return nil, fmt.Errorf("[x] Error in autodiscover response, %s", err)
+			return nil, "", fmt.Errorf("[x] Error in autodiscover response, %s", err)
 		}
 		SessionConfig.NTLMAuth = req.Header.Get("Authorization")
 		if SessionConfig.Verbose == true {
@@ -183,11 +183,11 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, error) {
 			secondaryEmail = fmt.Sprintf("%s@%s", redirAddrs[0], domain)
 			red, err := redirectAutodiscover(redirAddrs[1])
 			if err != nil {
-				return nil, err
+				return nil, "", err
 			}
 			return autodiscover(red, mapi)
 		}
-		return &autodiscoverResp, nil
+		return &autodiscoverResp, string(body), nil
 	}
 	if resp.StatusCode == 401 || resp.StatusCode == 403 || resp.StatusCode == 404 {
 		//for office365 we might need to use a different email address, try this
@@ -200,13 +200,13 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, error) {
 			autodiscoverStep++
 			return autodiscover(domain, mapi)
 		}
-		return nil, fmt.Errorf("[x] Permission Denied or URL not found: StatusCode [%d]\n", resp.StatusCode)
+		return nil, "", fmt.Errorf("[x] Permission Denied or URL not found: StatusCode [%d]\n", resp.StatusCode)
 	}
 	if autodiscoverStep < 2 {
 		autodiscoverStep++
 		return autodiscover(domain, mapi)
 	}
-	return nil, fmt.Errorf("[x] Got an unexpected result: StatusCode [%d] %s\n", resp.StatusCode, body)
+	return nil, "", fmt.Errorf("[x] Got an unexpected result: StatusCode [%d] %s\n", resp.StatusCode, body)
 }
 
 func redirectAutodiscover(redirdom string) (string, error) {

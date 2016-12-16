@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/hex"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"strings"
 	"time"
@@ -30,20 +31,21 @@ func exit(err error) {
 	os.Exit(exitcode)
 }
 
-func getMapiHTTP(autoURLPtr string) *utils.AutodiscoverResp {
-	var resp *utils.AutodiscoverResp
+func getMapiHTTP(autoURLPtr string, resp *utils.AutodiscoverResp) (*utils.AutodiscoverResp, string) {
+	//var resp *utils.AutodiscoverResp
 	var err error
+	var rawAutodiscover string
 	fmt.Println("[*] Retrieving MAPI/HTTP info")
-	if autoURLPtr == "" {
+	if autoURLPtr == "" && resp == nil {
 		//rather use the email address's domain here and --domain is the authentication domain
 		lastBin := strings.LastIndex(config.Email, "@")
 		if lastBin == -1 {
 			exit(fmt.Errorf("[x] The supplied email address seems to be incorrect.\n%s", err))
 		}
 		maildomain := config.Email[lastBin+1:]
-		resp, err = autodiscover.MAPIDiscover(maildomain)
-	} else {
-		resp, err = autodiscover.MAPIDiscover(autoURLPtr)
+		resp, rawAutodiscover, err = autodiscover.MAPIDiscover(maildomain)
+	} else if resp == nil {
+		resp, rawAutodiscover, err = autodiscover.MAPIDiscover(autoURLPtr)
 	}
 
 	if resp == nil || err != nil {
@@ -53,23 +55,25 @@ func getMapiHTTP(autoURLPtr string) *utils.AutodiscoverResp {
 	if resp.Response.Error != (utils.AutoError{}) {
 		exit(fmt.Errorf("[x] The autodiscover service responded with an error.\n%s", resp.Response.Error.Message))
 	}
-	return resp
+	return resp, rawAutodiscover
 }
 
-func getRPCHTTP(autoURLPtr string) *utils.AutodiscoverResp {
-	var resp *utils.AutodiscoverResp
+func getRPCHTTP(autoURLPtr string, resp *utils.AutodiscoverResp) (*utils.AutodiscoverResp, string) {
+	//var resp *utils.AutodiscoverResp
 	var err error
+	var rawAutodiscover string
+
 	fmt.Println("[*] Retrieving RPC/HTTP info")
-	if autoURLPtr == "" {
+	if autoURLPtr == "" && resp == nil {
 		//rather use the email address's domain here and --domain is the authentication domain
 		lastBin := strings.LastIndex(config.Email, "@")
 		if lastBin == -1 {
 			exit(fmt.Errorf("[x] The supplied email address seems to be incorrect.\n%s", err))
 		}
 		maildomain := config.Email[lastBin+1:]
-		resp, err = autodiscover.Autodiscover(maildomain)
-	} else {
-		resp, err = autodiscover.Autodiscover(autoURLPtr)
+		resp, rawAutodiscover, err = autodiscover.Autodiscover(maildomain)
+	} else if resp == nil {
+		resp, rawAutodiscover, err = autodiscover.Autodiscover(autoURLPtr)
 	}
 
 	if resp == nil || err != nil {
@@ -100,7 +104,54 @@ func getRPCHTTP(autoURLPtr string) *utils.AutodiscoverResp {
 	config.RPCURL = fmt.Sprintf("%s/rpc/rpcproxy.dll?%s:6001", url, user)
 	config.RPCMailbox = user
 	fmt.Printf("[+] RPC URL set: %s\n", config.RPCURL)
-	return resp
+	return resp, rawAutodiscover
+}
+
+func checkCache(email string) *utils.AutodiscoverResp {
+	//check the cache folder for a stored autodiscover record
+	email = strings.Replace(email, "@", "_", -1)
+	email = strings.Replace(email, ".", "_", -1)
+	path := fmt.Sprintf("./logs/%s.cache", email)
+
+	if _, err := os.Stat(path); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		fmt.Println("[x] Error ", err)
+		return nil
+	}
+	fmt.Println("[*] Found cached Autodiscover record. Using this (use --nocache to force new lookup)")
+	data, err := ioutil.ReadFile(path)
+	if err != nil {
+		fmt.Println("[x] Error reading stored record", err)
+		return nil
+	}
+	autodiscoverResp := utils.AutodiscoverResp{}
+	autodiscoverResp.Unmarshal(data)
+	return &autodiscoverResp
+}
+
+func createCache(email, autodiscover string) {
+	if autodiscover == "" { //no autodiscover record passed in, don't try write
+		return
+	}
+	email = strings.Replace(email, "@", "_", -1)
+	email = strings.Replace(email, ".", "_", -1)
+	path := fmt.Sprintf("./logs/%s.cache", email)
+	if _, err := os.Stat("./logs"); err != nil {
+		if os.IsNotExist(err) {
+			//create the logs directory
+			if err := os.MkdirAll("./logs", 0711); err != nil {
+				fmt.Println("[x] Couldn't create a cache directory")
+			}
+			//return nil
+		}
+	}
+	fout, _ := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0666)
+	_, err := fout.WriteString(autodiscover)
+	if err != nil {
+		fmt.Println("Couldn't write to file for some reason..", err)
+	}
 }
 
 //function to perform a bruteforce
@@ -255,8 +306,13 @@ func connect(c *cli.Context) error {
 	autodiscover.SessionConfig = &config
 
 	var resp *utils.AutodiscoverResp
+	var rawAutodiscover string
 
-	//check cache
+	//unless user specified nocache, check cache for existing autodiscover
+	if c.GlobalBool("nocache") == false {
+		resp = checkCache(config.Email)
+	}
+
 	//var err error
 	//try connect to MAPI/HTTP first -- this is faster and the code-base is more stable
 	//unless of course the global "RPC" flag has been set, which specifies we should just use
@@ -264,28 +320,31 @@ func connect(c *cli.Context) error {
 	if !c.GlobalBool("rpc") {
 		var mapiURL, abkURL, userDN string
 
-		resp = getMapiHTTP(url)
+		resp, rawAutodiscover = getMapiHTTP(url, resp)
 		mapiURL = mapi.ExtractMapiURL(resp)
 		abkURL = mapi.ExtractMapiAddressBookURL(resp)
 		userDN = resp.Response.User.LegacyDN
 
 		if mapiURL == "" { //try RPC
 			fmt.Println("[x] No MAPI URL found. Trying RPC/HTTP")
-			resp = getRPCHTTP(url)
+			resp, rawAutodiscover = getRPCHTTP(url, resp)
 			if resp.Response.User.LegacyDN == "" {
 				return fmt.Errorf("[x] Both MAPI/HTTP and RPC/HTTP failed. Are the credentials valid? \n%s", resp.Response.Error)
 			}
 			mapi.Init(&config, resp.Response.User.LegacyDN, "", "", mapi.RPC)
+			createCache(config.Email, rawAutodiscover) //store the autodiscover for future use
 		} else {
 			fmt.Println("[+] MAPI URL found: ", mapiURL)
 			fmt.Println("[+] MAPI AddressBook URL found: ", abkURL)
 			mapi.Init(&config, userDN, mapiURL, abkURL, mapi.HTTP)
+			createCache(config.Email, rawAutodiscover) //store the autodiscover for future use
 		}
 
 	} else {
 		fmt.Println("[*] RPC/HTTP forced, trying RPC/HTTP")
-		resp = getRPCHTTP(url)
+		resp, rawAutodiscover = getRPCHTTP(url, resp)
 		mapi.Init(&config, resp.Response.User.LegacyDN, "", "", mapi.RPC)
+		createCache(config.Email, rawAutodiscover) //store the autodiscover for future use
 	}
 
 	//now we should do the login
@@ -295,7 +354,6 @@ func connect(c *cli.Context) error {
 		exit(err)
 	} else if logon.MailboxGUID != nil {
 		fmt.Println("[*] And we are authenticated")
-		//fmt.Printf("[+] Mailbox GUID: %x\n", logon.MailboxGUID)
 		fmt.Println("[*] Openning the Inbox")
 
 		propertyTags := make([]mapi.PropertyTag, 2)
@@ -366,6 +424,10 @@ A tool by @sensepost to abuse Exchange Services.`
 		cli.BoolFlag{
 			Name:  "admin",
 			Usage: "Login as an admin",
+		},
+		cli.BoolFlag{
+			Name:  "nocache",
+			Usage: "Don't use the cached autodiscover record",
 		},
 		cli.BoolFlag{
 			Name:  "rpc",
