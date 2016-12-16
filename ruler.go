@@ -255,6 +255,8 @@ func connect(c *cli.Context) error {
 	autodiscover.SessionConfig = &config
 
 	var resp *utils.AutodiscoverResp
+
+	//check cache
 	//var err error
 	//try connect to MAPI/HTTP first -- this is faster and the code-base is more stable
 	//unless of course the global "RPC" flag has been set, which specifies we should just use

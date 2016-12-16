@@ -763,18 +763,8 @@ func SetPropertyFast(folderid []byte, messageid []byte, property TaggedPropertyV
 	execResponse.Unmarshal(responseBody)
 
 	if execResponse.StatusCode == 0 {
-		//bufPtr := 10
-		/*
-			getMessageResponse := RopGetMessageResponse{}
 
-			_, e := getMessageResponse.Unmarshal(execResponse.RopBuffer[bufPtr:])
-			if e != nil {
-				return nil, fmt.Errorf("[x]An error occurred %s\n", e)
-			}
-		*/
-		//bufPtr += p
 		//we probably need to get the handles here to pass them down into the ServerObjectHandleTable
-		//
 		serverHandles := execResponse.RopBuffer[len(execResponse.RopBuffer)-8:]
 		messageHandles := serverHandles
 		//fmt.Printf("Handles: %x\n", serverHandles)
