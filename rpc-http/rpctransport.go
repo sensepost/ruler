@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/sensepost/ruler/utils"
 	"github.com/staaldraad/go-ntlm/ntlm"
@@ -407,9 +408,6 @@ func RPCWriteN(MAPI []byte, auxlen uint32, opnum byte) {
 
 //RPCWrite function writes to our RPC_IN_DATA channel
 func RPCWrite(data []byte) {
-
-	if AuthSession.RPCNetworkAuthLevel == RPC_C_AUTHN_LEVEL_PKT_PRIVACY {
-	}
 	callcounter++
 	rpcInW.Write(data)
 }
@@ -423,15 +421,26 @@ func RPCOutWrite(data []byte) {
 //RPCRead function takes a call ID and searches for the response in
 //our list of received responses. Blocks until it finds a response
 func RPCRead(callID int) (RPCResponse, error) {
-	for {
-		for k, v := range responses {
-			if v.Header.CallID == uint32(callID) {
-				responses = append(responses[:k], responses[k+1:]...)
-				return v, nil
-				//				resp <- v
-				//			return
+	c := make(chan RPCResponse, 1)
+	go func() {
+		stop := false
+		for stop != true {
+			for k, v := range responses {
+				if v.Header.CallID == uint32(callID) {
+					responses = append(responses[:k], responses[k+1:]...)
+					stop = true
+					c <- v
+					break
+				}
 			}
 		}
+	}()
+
+	select {
+	case resp := <-c:
+		return resp, nil
+	case <-time.After(time.Second * 10): // call timed out
+		return RPCResponse{}, fmt.Errorf("[x] Time-out reading from RPC")
 	}
 
 }
