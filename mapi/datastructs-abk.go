@@ -98,6 +98,36 @@ type QueryRowsResponse struct {
 	AuxiliaryBuffer     []byte
 }
 
+//SeekEntriesRequest struct used to get list of addressbooks
+type SeekEntriesRequest struct {
+	Reserved            uint32 //0x000000000
+	HasState            byte
+	State               []byte //36 bytes if hasstate
+	HasTarget           byte
+	Target              AddressBookTaggedPropertyValue
+	HasExplicitTable    byte
+	ExplicitTableCount  []byte //optional uint32
+	ExplicitTable       []byte //array of MinimalEntryID
+	HasColumns          byte
+	Columns             LargePropertyTagArray //array of LargePropertyTagArray if hascolumns is set
+	AuxiliaryBufferSize uint32
+	AuxiliaryBuffer     []byte
+}
+
+//SeekEntriesResponse struct
+type SeekEntriesResponse struct {
+	StatusCode          uint32
+	ErrorCode           uint32
+	HasState            byte
+	State               []byte //36 bytes if hasState enabled
+	HasColsAndRows      byte
+	Columns             LargePropertyTagArray //array of LargePropertyTagArray //set if HasColsAndRows is set
+	RowCount            uint32                //if HasColsAndRows is non-zero
+	RowData             []AddressBookPropertyRow
+	AuxiliaryBufferSize uint32
+	AuxiliaryBuffer     []byte
+}
+
 //AddressBookPropertyValueList used to list addressbook
 type AddressBookPropertyValueList struct {
 	PropertyValueCount uint32
@@ -147,6 +177,11 @@ func (dntominid DnToMinIDRequest) Marshal() []byte {
 
 //Marshal turn QueryRowsRequest into Bytes
 func (qrows QueryRowsRequest) Marshal() []byte {
+	return utils.BodyToBytes(qrows)
+}
+
+//Marshal turn SeekEntriesRequest into Bytes
+func (qrows SeekEntriesRequest) Marshal() []byte {
 	return utils.BodyToBytes(qrows)
 }
 

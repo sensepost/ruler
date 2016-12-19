@@ -35,8 +35,9 @@ func getMapiHTTP(autoURLPtr string, resp *utils.AutodiscoverResp) (*utils.Autodi
 	//var resp *utils.AutodiscoverResp
 	var err error
 	var rawAutodiscover string
-	fmt.Println("[*] Retrieving MAPI/HTTP info")
+
 	if autoURLPtr == "" && resp == nil {
+		fmt.Println("[*] Retrieving MAPI/HTTP info")
 		//rather use the email address's domain here and --domain is the authentication domain
 		lastBin := strings.LastIndex(config.Email, "@")
 		if lastBin == -1 {
@@ -63,8 +64,8 @@ func getRPCHTTP(autoURLPtr string, resp *utils.AutodiscoverResp) (*utils.Autodis
 	var err error
 	var rawAutodiscover string
 
-	fmt.Println("[*] Retrieving RPC/HTTP info")
 	if autoURLPtr == "" && resp == nil {
+		fmt.Println("[*] Retrieving RPC/HTTP info")
 		//rather use the email address's domain here and --domain is the authentication domain
 		lastBin := strings.LastIndex(config.Email, "@")
 		if lastBin == -1 {
@@ -188,9 +189,8 @@ func brute(c *cli.Context) error {
 
 //Function to add new rule
 func addRule(c *cli.Context) error {
-
 	fmt.Println("[*] Adding Rule")
-	//delete message on delivery
+
 	res, err := mapi.ExecuteMailRuleAdd(c.String("name"), c.String("trigger"), c.String("location"), true)
 	if res.StatusCode != 0 {
 		return fmt.Errorf("[x] Failed to create rule. %s", err)
@@ -205,7 +205,7 @@ func addRule(c *cli.Context) error {
 	}
 	fmt.Printf("[+] Found %d rules\n", len(rules))
 	for _, v := range rules {
-		fmt.Printf("Rule: %s RuleID: %x\n", string(v.RuleName), v.RuleID)
+		fmt.Printf("Rule Name: %s RuleID: %x\n", string(v.RuleName), v.RuleID)
 	}
 
 	if c.Bool("send") {
@@ -326,7 +326,7 @@ func connect(c *cli.Context) error {
 		userDN = resp.Response.User.LegacyDN
 
 		if mapiURL == "" { //try RPC
-			fmt.Println("[x] No MAPI URL found. Trying RPC/HTTP")
+			//fmt.Println("[x] No MAPI URL found. Trying RPC/HTTP")
 			resp, rawAutodiscover = getRPCHTTP(url, resp)
 			if resp.Response.User.LegacyDN == "" {
 				return fmt.Errorf("[x] Both MAPI/HTTP and RPC/HTTP failed. Are the credentials valid? \n%s", resp.Response.Error)
@@ -353,13 +353,45 @@ func connect(c *cli.Context) error {
 	if err != nil {
 		exit(err)
 	} else if logon.MailboxGUID != nil {
-		fmt.Println("[*] And we are authenticated")
-		fmt.Println("[*] Openning the Inbox")
-
+		if c.GlobalBool("verbose") {
+			fmt.Println("[*] And we are authenticated")
+			fmt.Println("[*] Openning the Inbox")
+		}
 		propertyTags := make([]mapi.PropertyTag, 2)
 		propertyTags[0] = mapi.PidTagDisplayName
 		propertyTags[1] = mapi.PidTagSubfolders
 		mapi.GetFolder(mapi.INBOX, propertyTags) //Open Inbox
+	}
+	return nil
+}
+
+//Function to display all rules
+func abkList(c *cli.Context) error {
+	if config.Transport == mapi.RPC {
+		return fmt.Errorf("[x] Address book support is currently limited to MAPI/HTTP")
+	}
+	fmt.Println("[*] Let's play addressbook")
+	mapi.BindAddressBook()
+	columns := make([]mapi.PropertyTag, 2)
+	columns[0] = mapi.PidTagSMTPAddress
+	columns[1] = mapi.PidTagDisplayName
+	rows, _ := mapi.QueryRows(10, columns) //pull first 255 entries
+	fmt.Println("[*] Found the following entries: ")
+	for k := 0; k < int(rows.RowCount); k++ {
+		for v := 0; v < int(rows.Columns.PropertyTagCount); v++ {
+			//value, p = mapi.ReadPropertyValue(rows.RowData[k].ValueArray[p:], rows.Columns.PropertyTags[v].PropertyType)
+			fmt.Printf("%s :: ", rows.RowData[k].AddressBookPropertyValue[v].Value)
+		}
+		fmt.Println("")
+	}
+	rows, _ = mapi.QueryRows(10, columns) //pull first 255 entries
+	fmt.Println("[*] Found the following entries: ")
+	for k := 0; k < int(rows.RowCount); k++ {
+		for v := 0; v < int(rows.Columns.PropertyTagCount); v++ {
+			//value, p = mapi.ReadPropertyValue(rows.RowData[k].ValueArray[p:], rows.Columns.PropertyTags[v].PropertyType)
+			fmt.Printf("%s :: ", rows.RowData[k].AddressBookPropertyValue[v].Value)
+		}
+		fmt.Println("")
 	}
 	return nil
 }
@@ -524,7 +556,11 @@ A tool by @sensepost to abuse Exchange Services.`
 			Aliases: []string{"c"},
 			Usage:   "Check if the credentials work and we can interact with the mailbox",
 			Action: func(c *cli.Context) error {
-				fmt.Println("completed task: ", c.Args().First())
+				err := connect(c)
+				if err != nil {
+					return cli.NewExitError(err, 1)
+				}
+				fmt.Println("[*] Looks like we are good to go!")
 				return nil
 			},
 		},
@@ -568,12 +604,10 @@ A tool by @sensepost to abuse Exchange Services.`
 				},
 			},
 			Action: func(c *cli.Context) error {
-
 				err := brute(c)
 				if err != nil {
 					return cli.NewExitError(err, 1)
 				}
-				//fmt.Println("completed task: ", c.String("users"))
 				return nil
 			},
 		},
@@ -585,7 +619,14 @@ A tool by @sensepost to abuse Exchange Services.`
 					Name:  "list",
 					Usage: "list the entries of the GAL",
 					Action: func(c *cli.Context) error {
-						fmt.Println("new task template: ", c.Args().First())
+						err := connect(c)
+						if err != nil {
+							return cli.NewExitError(err, 1)
+						}
+						err = abkList(c)
+						if err != nil {
+							return cli.NewExitError(err, 1)
+						}
 						return nil
 					},
 				},
