@@ -3,6 +3,9 @@ package main
 import (
 	"encoding/hex"
 	"fmt"
+	"net/http"
+	"net/http/cookiejar"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -249,6 +252,26 @@ func connect(c *cli.Context) error {
 	config.Verbose = c.GlobalBool("verbose")
 	config.Admin = c.GlobalBool("admin")
 	config.RPCEncrypt = c.GlobalBool("encrypt")
+	config.CookieJar, _ = cookiejar.New(nil)
+
+	//add supplied cookie to the cookie jar
+	if c.GlobalString("cookie") != "" {
+		//split into cookies and then into name : value
+		cookies := strings.Split(c.GlobalString("cookie"), ";")
+		cookieJarTmp := make([]*http.Cookie, len(cookies))
+
+		for _, v := range cookies {
+			cookie := strings.Split(v, "=")
+			c := &http.Cookie{
+				Name:   cookie[0],
+				Value:  cookie[1],
+				Path:   "/",
+				Domain: "outlook.com",
+			}
+			cookieJarTmp = append(cookieJarTmp, c)
+		}
+		config.CookieJar.SetCookies(&url.URL{Path: "outlook.com"}, cookieJarTmp)
+	}
 
 	url := c.GlobalString("url")
 
@@ -343,6 +366,11 @@ A tool by @sensepost to abuse Exchange Services.`
 			Name:  "email,e",
 			Value: "",
 			Usage: "The target's email address",
+		},
+		cli.StringFlag{
+			Name:  "cookie",
+			Value: "",
+			Usage: "Any third party cookies such as SSO that are needed",
 		},
 		cli.StringFlag{
 			Name:  "url",

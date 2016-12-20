@@ -83,6 +83,7 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, error) {
 				NTHash:   SessionConfig.NTHash,
 				Insecure: SessionConfig.Insecure,
 			},
+			Jar: SessionConfig.CookieJar,
 		}
 	}
 

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"net/http/cookiejar"
 	"net/url"
 	"regexp"
 	"runtime"
@@ -51,7 +50,7 @@ func ExtractRPCURL(resp *utils.AutodiscoverResp) string {
 func Init(config *utils.Session, lid, URL, ABKURL string, transport int) {
 	AuthSession = config
 	AuthSession.LID = lid
-	AuthSession.CookieJar, _ = cookiejar.New(nil)
+	//AuthSession.CookieJar, _ = cookiejar.New(nil)
 	if transport == HTTP {
 		AuthSession.URL, _ = url.Parse(URL)
 		AuthSession.ABKURL, _ = url.Parse(ABKURL)
