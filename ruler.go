@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/howeyc/gopass"
 	"github.com/sensepost/ruler/autodiscover"
 	"github.com/sensepost/ruler/mapi"
 	"github.com/sensepost/ruler/utils"
@@ -283,18 +284,34 @@ func sendMessage(triggerword string) error {
 
 //Function to connect to the Exchange server
 func connect(c *cli.Context) error {
-
+	var err error
 	//check that name, trigger and location were supplied
-	if (c.GlobalString("password") == "" && c.GlobalString("hash") == "") || (c.GlobalString("email") == "" && c.GlobalString("username") == "") {
-		return fmt.Errorf("Missing global argument. Use --domain, --username, (--password or --hash) and --email")
+	if c.GlobalString("email") == "" && c.GlobalString("username") == "" {
+		return fmt.Errorf("Missing global argument. Use --domain (if needed), --username and --email")
 	}
+	//if no password or hash was supplied, read from stdin
+	if c.GlobalString("password") == "" && c.GlobalString("hash") == "" {
+		fmt.Printf("Password: ")
+		var pass []byte
+		pass, err = gopass.GetPasswd()
+		if err != nil {
+			// Handle gopass.ErrInterrupted or getch() read error
+			return fmt.Errorf("[x] Password or hash required. Supply NTLM hash with --hash")
+		}
+		config.Pass = string(pass)
+	} else {
+		config.Pass = c.GlobalString("password")
+		if config.NTHash, err = hex.DecodeString(c.GlobalString("hash")); err != nil {
+			return fmt.Errorf("[x] Invalid hash provided. Hex decode failed")
+		}
 
+	}
 	//setup our autodiscover service
 	config.Domain = c.GlobalString("domain")
 	config.User = c.GlobalString("username")
-	config.Pass = c.GlobalString("password")
+
 	config.Email = c.GlobalString("email")
-	config.NTHash, _ = hex.DecodeString(c.GlobalString("hash"))
+
 	config.Basic = c.GlobalBool("basic")
 	config.Insecure = c.GlobalBool("insecure")
 	config.Verbose = c.GlobalBool("verbose")
