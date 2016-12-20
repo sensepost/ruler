@@ -258,7 +258,14 @@ func connect(c *cli.Context) error {
 	if c.GlobalString("cookie") != "" {
 		//split into cookies and then into name : value
 		cookies := strings.Split(c.GlobalString("cookie"), ";")
-		cookieJarTmp := make([]*http.Cookie, len(cookies))
+		var cookieJarTmp []*http.Cookie
+		var cdomain string
+		//split and get the domain from the email
+		if eparts := strings.Split(c.GlobalString("email"), "@"); len(eparts) == 2 {
+			cdomain = eparts[1]
+		} else {
+			return fmt.Errorf("[x] Invalid email address")
+		}
 
 		for _, v := range cookies {
 			cookie := strings.Split(v, "=")
@@ -266,11 +273,12 @@ func connect(c *cli.Context) error {
 				Name:   cookie[0],
 				Value:  cookie[1],
 				Path:   "/",
-				Domain: "outlook.com",
+				Domain: cdomain,
 			}
 			cookieJarTmp = append(cookieJarTmp, c)
 		}
-		config.CookieJar.SetCookies(&url.URL{Path: "outlook.com"}, cookieJarTmp)
+		u, _ := url.Parse(fmt.Sprintf("https://%s/", cdomain))
+		config.CookieJar.SetCookies(u, cookieJarTmp)
 	}
 
 	url := c.GlobalString("url")
