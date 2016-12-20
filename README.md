@@ -43,6 +43,7 @@ git clone https://github.com/sensepost/ruler.git
 Ensure you have the dependencies (go get is the easiest option, otherwise clone the repos into your GOPATH):
 ```
 go get github.com/urfave/cli
+go get github.com/howeyc/gopass 
 go get github.com/staaldraad/go-ntlm/ntlm
 ```
 Then build it
