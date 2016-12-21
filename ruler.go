@@ -320,6 +320,10 @@ func connect(c *cli.Context) error {
 
 	url := c.GlobalString("url")
 
+	if c.GlobalBool("o365") == true {
+		url = "https://autodiscover-s.outlook.com/autodiscover/autodiscover.xml"
+	}
+
 	autodiscover.SessionConfig = &config
 
 	var resp *utils.AutodiscoverResp
@@ -432,6 +436,10 @@ A tool by @sensepost to abuse Exchange Services.`
 			Name:  "domain,d",
 			Value: "",
 			Usage: "A domain for the user (usually required for domain\\username)",
+		},
+		cli.BoolFlag{
+			Name:  "o365",
+			Usage: "We know the target is on office365, so authenticate directly against that.",
 		},
 		cli.StringFlag{
 			Name:  "username,u",
