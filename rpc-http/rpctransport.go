@@ -117,7 +117,9 @@ func setupHTTPNTLM(rpctype string, URL string) (net.Conn, error) {
 		request = fmt.Sprintf("%sContent-Length: 76\r\n", request)
 	}
 	request = fmt.Sprintf("%sAuthorization: NTLM %s\r\n\r\n", request, utils.EncBase64(authenticate.Bytes()))
-
+	if cookiestr != "" {
+		request = fmt.Sprintf("%sCookie: %s\r\n", request, cookiestr)
+	}
 	connection.Write([]byte(request))
 
 	return connection, nil
