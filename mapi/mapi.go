@@ -108,11 +108,12 @@ func mapiRequestHTTP(URL, mapiType string, body []byte) ([]byte, error) {
 
 	Client := http.Client{
 		Transport: &httpntlm.NtlmTransport{
-			Domain:   AuthSession.Domain,
-			User:     AuthSession.User,
-			Password: AuthSession.Pass,
-			NTHash:   AuthSession.NTHash,
-			Insecure: AuthSession.Insecure,
+			Domain:    AuthSession.Domain,
+			User:      AuthSession.User,
+			Password:  AuthSession.Pass,
+			NTHash:    AuthSession.NTHash,
+			Insecure:  AuthSession.Insecure,
+			CookieJar: AuthSession.CookieJar,
 		},
 		Jar: AuthSession.CookieJar,
 	}
