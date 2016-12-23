@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"net/http/cookiejar"
 	"net/url"
 	"regexp"
 	"runtime"
@@ -51,7 +50,7 @@ func ExtractRPCURL(resp *utils.AutodiscoverResp) string {
 func Init(config *utils.Session, lid, URL, ABKURL string, transport int) {
 	AuthSession = config
 	AuthSession.LID = lid
-	AuthSession.CookieJar, _ = cookiejar.New(nil)
+	//AuthSession.CookieJar, _ = cookiejar.New(nil)
 	if transport == HTTP {
 		AuthSession.URL, _ = url.Parse(URL)
 		AuthSession.ABKURL, _ = url.Parse(ABKURL)
@@ -109,11 +108,12 @@ func mapiRequestHTTP(URL, mapiType string, body []byte) ([]byte, error) {
 
 	Client := http.Client{
 		Transport: &httpntlm.NtlmTransport{
-			Domain:   AuthSession.Domain,
-			User:     AuthSession.User,
-			Password: AuthSession.Pass,
-			NTHash:   AuthSession.NTHash,
-			Insecure: AuthSession.Insecure,
+			Domain:    AuthSession.Domain,
+			User:      AuthSession.User,
+			Password:  AuthSession.Pass,
+			NTHash:    AuthSession.NTHash,
+			Insecure:  AuthSession.Insecure,
+			CookieJar: AuthSession.CookieJar,
 		},
 		Jar: AuthSession.CookieJar,
 	}
