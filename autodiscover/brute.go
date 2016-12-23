@@ -19,7 +19,7 @@ type Result struct {
 	Error    error
 }
 
-//var autodiscoverStep int = 0
+var concurrency = 5 //limit the number of consecutive attempts
 
 func autodiscoverDomain(domain string) string {
 	var autodiscoverURL string
@@ -93,9 +93,6 @@ func BruteForce(domain, usersFile, passwordsFile string, basic, insecure, stopSu
 	}
 
 	attempts := 0
-
-	concurrency := 6
-	//stop := make(chan bool, 1)
 
 	for _, p := range passwords {
 		if p != "" {
