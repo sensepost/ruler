@@ -13,6 +13,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"net/http/cookiejar"
 	"strings"
 	"time"
 
@@ -22,11 +23,12 @@ import (
 
 // NtlmTransport is implementation of http.RoundTripper interface
 type NtlmTransport struct {
-	Domain   string
-	User     string
-	Password string
-	NTHash   []byte
-	Insecure bool
+	Domain    string
+	User      string
+	Password  string
+	NTHash    []byte
+	Insecure  bool
+	CookieJar *cookiejar.Jar
 }
 
 // RoundTrip method send http request and tries to perform NTLM authentication
@@ -52,7 +54,7 @@ func (t NtlmTransport) RoundTrip(req *http.Request) (res *http.Response, err err
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: t.Insecure},
 	}
 
-	client := http.Client{Transport: tr, Timeout: time.Second * 30}
+	client := http.Client{Transport: tr, Timeout: time.Minute * 30, Jar: t.CookieJar}
 	resp, err := client.Do(r)
 
 	if err != nil {

@@ -4,6 +4,9 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io/ioutil"
+	"net/http"
+	"net/http/cookiejar"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -134,6 +137,7 @@ func checkCache(email string) *utils.AutodiscoverResp {
 }
 
 func createCache(email, autodiscover string) {
+
 	if autodiscover == "" { //no autodiscover record passed in, don't try write
 		return
 	}
@@ -317,6 +321,35 @@ func connect(c *cli.Context) error {
 	config.Admin = c.GlobalBool("admin")
 	config.RPCEncrypt = c.GlobalBool("encrypt")
 
+	config.CookieJar, _ = cookiejar.New(nil)
+
+	//add supplied cookie to the cookie jar
+	if c.GlobalString("cookie") != "" {
+		//split into cookies and then into name : value
+		cookies := strings.Split(c.GlobalString("cookie"), ";")
+		var cookieJarTmp []*http.Cookie
+		var cdomain string
+		//split and get the domain from the email
+		if eparts := strings.Split(c.GlobalString("email"), "@"); len(eparts) == 2 {
+			cdomain = eparts[1]
+		} else {
+			return fmt.Errorf("[x] Invalid email address")
+		}
+
+		for _, v := range cookies {
+			cookie := strings.Split(v, "=")
+			c := &http.Cookie{
+				Name:   cookie[0],
+				Value:  cookie[1],
+				Path:   "/",
+				Domain: cdomain,
+			}
+			cookieJarTmp = append(cookieJarTmp, c)
+		}
+		u, _ := url.Parse(fmt.Sprintf("https://%s/", cdomain))
+		config.CookieJar.SetCookies(u, cookieJarTmp)
+	}
+
 	url := c.GlobalString("url")
 
 	if c.GlobalBool("o365") == true {
@@ -347,7 +380,7 @@ func connect(c *cli.Context) error {
 
 		if mapiURL == "" { //try RPC
 			//fmt.Println("[x] No MAPI URL found. Trying RPC/HTTP")
-			resp, rawAutodiscover = getRPCHTTP(url, resp)
+			resp, _ = getRPCHTTP(url, resp)
 			if resp.Response.User.LegacyDN == "" {
 				return fmt.Errorf("[x] Both MAPI/HTTP and RPC/HTTP failed. Are the credentials valid? \n%s", resp.Response.Error)
 			}
@@ -459,6 +492,11 @@ A tool by @sensepost to abuse Exchange Services.`
 			Name:  "email,e",
 			Value: "",
 			Usage: "The target's email address",
+		},
+		cli.StringFlag{
+			Name:  "cookie",
+			Value: "",
+			Usage: "Any third party cookies such as SSO that are needed",
 		},
 		cli.StringFlag{
 			Name:  "url",

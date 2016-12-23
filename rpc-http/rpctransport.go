@@ -47,6 +47,14 @@ func setupHTTPNTLM(rpctype string, URL string) (net.Conn, error) {
 	request = fmt.Sprintf("%sAccept: application/rpc\r\n", request)
 	request = fmt.Sprintf("%sConnection: keep-alive\r\n", request)
 
+	//add cookies
+	cookiestr := ""
+	for _, c := range AuthSession.CookieJar.Cookies(u) {
+		cookiestr = fmt.Sprintf("%s%s=%s; ", cookiestr, c.Name, c.Value)
+	}
+	if cookiestr != "" {
+		request = fmt.Sprintf("%sCookie: %s\r\n", request, cookiestr)
+	}
 	//we should probably extract the NTLM type from the server response and use appropriate
 	session, err := ntlm.CreateClientSession(ntlm.Version2, ntlm.ConnectionlessMode)
 	b, _ := session.GenerateNegotiateMessage()
@@ -110,7 +118,9 @@ func setupHTTPNTLM(rpctype string, URL string) (net.Conn, error) {
 		request = fmt.Sprintf("%sContent-Length: 76\r\n", request)
 	}
 	request = fmt.Sprintf("%sAuthorization: NTLM %s\r\n\r\n", request, utils.EncBase64(authenticate.Bytes()))
-
+	if cookiestr != "" {
+		request = fmt.Sprintf("%sCookie: %s\r\n", request, cookiestr)
+	}
 	connection.Write([]byte(request))
 
 	return connection, nil
