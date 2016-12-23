@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+    "net/http/cookiejar"
 	"regexp"
 	"strings"
 	"time"
@@ -214,7 +215,7 @@ func readFile(filename string) []string {
 
 func connect(autodiscoverURL, user, password string, basic, insecure bool) Result {
 	result := Result{user, password, -1, -1, nil}
-
+    cookie, _ := cookiejar.New(nil)
 	client := http.Client{}
 	if basic == false {
 		//check if this is a first request or a redirect
@@ -225,6 +226,7 @@ func connect(autodiscoverURL, user, password string, basic, insecure bool) Resul
 				User:     user,
 				Password: password,
 				Insecure: insecure,
+                CookieJar: cookie,
 			},
 		}
 	}
