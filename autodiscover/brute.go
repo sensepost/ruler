@@ -95,13 +95,14 @@ func BruteForce(domain, usersFile, passwordsFile string, basic, insecure, stopSu
 	}
 
 	attempts := 0
+	stp := false
 
 	for _, p := range passwords {
 		if p != "" {
 			attempts++
 		}
 		sem := make(chan bool, concurrency)
-		stop := make(chan bool, concurrency)
+
 		for ui, u := range usernames {
 			if u == "" || p == "" {
 				continue
@@ -125,21 +126,15 @@ func BruteForce(domain, usersFile, passwordsFile string, basic, insecure, stopSu
 					//remove username from username list (we don't need to brute something we know)
 					usernames = append(usernames[:out.Index], usernames[out.Index+1:]...)
 					if stopSuccess == true {
-						stop <- true
-					}
-				}
+						stp = true
 
-			}(u, p, ui)
-			for i := 0; i < cap(stop); i++ {
-				select {
-				case s := <-stop:
-					if s == true {
-						return
 					}
-				default:
-					continue
 				}
-			}
+			}(u, p, ui)
+
+		}
+		if stp == true {
+			return
 		}
 		for i := 0; i < cap(sem); i++ {
 			sem <- true
@@ -168,7 +163,7 @@ func UserPassBruteForce(domain, userpassFile string, basic, insecure, stopSucces
 
 	count := 0
 	sem := make(chan bool, concurrency)
-	stop := make(chan bool, concurrency)
+	stp := false
 	for _, up := range userpass {
 		count++
 		if up == "" {
@@ -203,19 +198,13 @@ func UserPassBruteForce(domain, userpassFile string, basic, insecure, stopSucces
 				fmt.Printf("\033[96m[+] Success: %s:%s\033[0m\n", out.Username, out.Password)
 			}
 			if out.Status == 200 && stopSuccess == true {
-				stop <- true
+				stp = true
 			}
 		}(u, p)
-		for i := 0; i < cap(stop); i++ {
-			select {
-			case s := <-stop:
-				if s == true {
-					return
-				}
-			default:
-				continue
-			}
-		}
+
+	}
+	if stp == true {
+		return
 	}
 	for i := 0; i < cap(sem); i++ {
 		sem <- true
