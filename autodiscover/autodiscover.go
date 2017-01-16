@@ -166,6 +166,9 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, string, er
 
 		err := autodiscoverResp.Unmarshal(body)
 		if err != nil {
+			if SessionConfig.Verbose == true {
+				fmt.Printf("[x] Error: %s\n", err)
+			}
 			if autodiscoverStep < 2 {
 				autodiscoverStep++
 				return autodiscover(domain, mapi)
@@ -174,7 +177,7 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, string, er
 		}
 		SessionConfig.NTLMAuth = req.Header.Get("Authorization")
 		if SessionConfig.Verbose == true {
-			fmt.Println(string(body))
+			//fmt.Println(string(body))
 		}
 		//check if we got a RedirectAddr ,
 		//if yes, get the new autodiscover url
@@ -198,11 +201,17 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, string, er
 			SessionConfig.Email = secondaryEmail
 			return autodiscover(domain, mapi)
 		}
+		if SessionConfig.Verbose == true {
+			fmt.Printf("[x] Failed, StatusCode [%d]\n", resp.StatusCode)
+		}
 		if autodiscoverStep < 2 {
 			autodiscoverStep++
 			return autodiscover(domain, mapi)
 		}
 		return nil, "", fmt.Errorf("[x] Permission Denied or URL not found: StatusCode [%d]\n", resp.StatusCode)
+	}
+	if SessionConfig.Verbose == true {
+		fmt.Printf("[x] Failed, StatusCode [%d]\n", resp.StatusCode)
 	}
 	if autodiscoverStep < 2 {
 		autodiscoverStep++

@@ -460,24 +460,24 @@ func main() {
 	app.Name = "ruler"
 	app.Usage = "A tool to abuse Exchange Services"
 	app.Version = "2.0"
-	app.Author = "Etienne Stalmans <etienne@sensepost.com>"
+	app.Author = "Etienne Stalmans <etienne@sensepost.com>, @_staaldraad"
 	app.Description = `         _
  _ __ _   _| | ___ _ __
 | '__| | | | |/ _ \ '__|
 | |  | |_| | |  __/ |
 |_|   \__,_|_|\___|_|
 
-A tool by @sensepost to abuse Exchange Services.`
+A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 
 	app.Flags = []cli.Flag{
 		cli.StringFlag{
 			Name:  "domain,d",
 			Value: "",
-			Usage: "A domain for the user (usually required for domain\\username)",
+			Usage: "A domain for the user (optional in most cases. Otherwise allows: domain\\username)",
 		},
 		cli.BoolFlag{
 			Name:  "o365",
-			Usage: "We know the target is on office365, so authenticate directly against that.",
+			Usage: "We know the target is on Office365, so authenticate directly against that.",
 		},
 		cli.StringFlag{
 			Name:  "username,u",
@@ -492,7 +492,7 @@ A tool by @sensepost to abuse Exchange Services.`
 		cli.StringFlag{
 			Name:  "hash",
 			Value: "",
-			Usage: "A NT hash for pass the hash (NTLMv1)",
+			Usage: "A NT hash for pass the hash",
 		},
 		cli.StringFlag{
 			Name:  "email,e",

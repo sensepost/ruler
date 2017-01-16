@@ -54,7 +54,7 @@ func (t NtlmTransport) RoundTrip(req *http.Request) (res *http.Response, err err
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: t.Insecure},
 	}
 
-	client := http.Client{Transport: tr, Timeout: time.Minute * 30, Jar: t.CookieJar}
+	client := http.Client{Transport: tr, Timeout: time.Minute, Jar: t.CookieJar}
 	resp, err := client.Do(r)
 
 	if err != nil {
