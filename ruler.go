@@ -153,7 +153,7 @@ func createCache(email, autodiscover string) {
 			//return nil
 		}
 	}
-	fout, _ := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0666)
+	fout, _ := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0666)
 	_, err := fout.WriteString(autodiscover)
 	if err != nil {
 		fmt.Println("Couldn't write to file for some reason..", err)
@@ -385,19 +385,25 @@ func connect(c *cli.Context) error {
 				return fmt.Errorf("[x] Both MAPI/HTTP and RPC/HTTP failed. Are the credentials valid? \n%s", resp.Response.Error)
 			}
 			mapi.Init(&config, resp.Response.User.LegacyDN, "", "", mapi.RPC)
-			createCache(config.Email, rawAutodiscover) //store the autodiscover for future use
+			if c.GlobalBool("nocache") == false {
+				createCache(config.Email, rawAutodiscover) //store the autodiscover for future use
+			}
 		} else {
 			fmt.Println("[+] MAPI URL found: ", mapiURL)
 			fmt.Println("[+] MAPI AddressBook URL found: ", abkURL)
 			mapi.Init(&config, userDN, mapiURL, abkURL, mapi.HTTP)
-			createCache(config.Email, rawAutodiscover) //store the autodiscover for future use
+			if c.GlobalBool("nocache") == false {
+				createCache(config.Email, rawAutodiscover) //store the autodiscover for future use
+			}
 		}
 
 	} else {
 		fmt.Println("[*] RPC/HTTP forced, trying RPC/HTTP")
 		resp, rawAutodiscover = getRPCHTTP(url, resp)
 		mapi.Init(&config, resp.Response.User.LegacyDN, "", "", mapi.RPC)
-		createCache(config.Email, rawAutodiscover) //store the autodiscover for future use
+		if c.GlobalBool("nocache") == false {
+			createCache(config.Email, rawAutodiscover) //store the autodiscover for future use
+		}
 	}
 
 	//now we should do the login

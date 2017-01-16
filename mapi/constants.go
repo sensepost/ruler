@@ -101,6 +101,9 @@ var PidTagRuleProviderData = PropertyTag{PtypBinary, 0x6684}
 //PidTagRuleLevel the TaggedPropertyValue for rule level
 var PidTagRuleLevel = PropertyTag{PtypInteger32, 0x6683}
 
+//PidTagRuleUserFlags the TaggedPropertyValue for rule user flags
+var PidTagRuleUserFlags = PropertyTag{PtypInteger32, 0x6678}
+
 //PidTagParentFolderID Contains a value that contains the Folder ID
 var PidTagParentFolderID = PropertyTag{PtypInteger64, 0x6749}
 
