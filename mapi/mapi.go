@@ -121,7 +121,7 @@ func mapiRequestHTTP(URL, mapiType string, body []byte) ([]byte, error) {
 	req, err := http.NewRequest("POST", URL, bytes.NewReader(body))
 	addMapiHeaders(req, mapiType)
 	req.SetBasicAuth(AuthSession.Email, AuthSession.Pass)
-
+	req.Close = true
 	//request the auth url
 	resp, err := Client.Do(req)
 
@@ -131,16 +131,20 @@ func mapiRequestHTTP(URL, mapiType string, body []byte) ([]byte, error) {
 			AuthSession.Client = http.Client{Jar: AuthSession.CookieJar}
 			resp, err = AuthSession.Client.Do(req)
 		} else {
-			fmt.Println(err)
-			return nil, nil
+			return nil, err
 		}
+	}
+	if resp == nil {
+		return nil, fmt.Errorf("[x] HTTP error")
 	}
 	rbody, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		fmt.Println(err)
-		return nil, nil
+		return nil, err
 	}
 	responseBody, err := readResponse(resp.Header, rbody)
+	if resp != nil {
+		defer resp.Body.Close()
+	}
 	return responseBody, err
 }
 
@@ -330,10 +334,10 @@ func AuthenticateRPC() (*RopLogonResponse, error) {
 	if err != nil {
 		return nil, fmt.Errorf("[x] An error occurred setting up RPC.\n%s", err)
 	}
-
-	fmt.Println("[+] User DN: ", string(connRequest.UserDN))
-	fmt.Println("[*] Got Context, Doing ROPLogin")
-
+	if AuthSession.Verbose == true {
+		fmt.Println("[+] User DN: ", string(connRequest.UserDN))
+		fmt.Println("[*] Got Context, Doing ROPLogin")
+	}
 	AuthSession.UserDN = append([]byte(AuthSession.LID), []byte{0x00}...)
 	return AuthenticateFetchMailbox(AuthSession.UserDN) //connRequest.UserDN)
 
@@ -450,6 +454,9 @@ func ReleaseObject(inputHandle byte) (*RopReleaseResponse, error) {
 		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
 	}
 	execResponse := ExecuteResponse{}
+	if len(responseBody) <= 0 {
+		return nil, fmt.Errorf("")
+	}
 	execResponse.Unmarshal(responseBody)
 
 	if execResponse.StatusCode == 0 {
@@ -1423,7 +1430,7 @@ func CreateFolder(folderName string, hidden bool) (*RopCreateFolderResponse, err
 		createFolder := RopCreateFolderResponse{}
 		_, err = createFolder.Unmarshal(execResponse.RopBuffer[bufPtr:])
 		if err != nil {
-			fmt.Println(err)
+			//fmt.Println(err)
 			return nil, err
 		}
 		if hidden == true {

@@ -27,7 +27,7 @@ var rpcntlmsession ntlm.ClientSession
 //AuthSession Keep track of session data
 var AuthSession *utils.Session
 
-func setupHTTPNTLM(rpctype string, URL string) (net.Conn, error) {
+func setupHTTPNTLM(rpctype string, URL string, full bool) (net.Conn, error) {
 	u, err := url.Parse(URL)
 	var connection net.Conn
 	if u.Scheme == "http" {
@@ -40,8 +40,14 @@ func setupHTTPNTLM(rpctype string, URL string) (net.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
+	var request string
 
-	request := fmt.Sprintf("%s %s HTTP/1.1\r\nHost: %s\r\n", rpctype, u.String(), u.Host)
+	if full == true {
+		request = fmt.Sprintf("%s %s HTTP/1.1\r\nHost: %s\r\n", rpctype, u.String(), u.Host)
+	} else {
+		request = fmt.Sprintf("%s %s HTTP/1.1\r\nHost: %s\r\n", rpctype, u.RequestURI(), u.Host)
+	}
+
 	request = fmt.Sprintf("%sUser-Agent: MSRPC\r\n", request)
 	request = fmt.Sprintf("%sCache-Control: no-cache\r\n", request)
 	request = fmt.Sprintf("%sAccept: application/rpc\r\n", request)
@@ -71,7 +77,11 @@ func setupHTTPNTLM(rpctype string, URL string) (net.Conn, error) {
 	connection.Write([]byte(requestInit))
 	//read response
 	data := make([]byte, 2048)
-	connection.Read(data)
+	_, err = connection.Read(data)
+	if err != nil {
+		fmt.Println("[x] Failed with initial setup, trying again...")
+		return setupHTTPNTLM(rpctype, URL, false)
+	}
 
 	parts := strings.Split(string(data), "\r\n")
 	ntlmChallengeHeader := ""
@@ -87,7 +97,8 @@ func setupHTTPNTLM(rpctype string, URL string) (net.Conn, error) {
 	ntlmChallengeString := strings.Replace(ntlmChallengeHeader, "NTLM ", "", 1)
 	challengeBytes, err := utils.DecBase64(ntlmChallengeString)
 	if err != nil {
-		return nil, err
+		fmt.Println("[x] Failed with initial setup, trying again...")
+		return setupHTTPNTLM(rpctype, URL, false)
 	}
 
 	session.SetUserInfo(AuthSession.User, AuthSession.Pass, AuthSession.Domain)
@@ -132,7 +143,7 @@ func RPCOpen(URL string, readySignal chan bool, errOccurred chan error) (err err
 	//can't find a way to keep the write channel open (other than going over to http/2, which isn't valid here)
 	//so this is some damn messy code, but screw it
 
-	rpcInConn, err = setupHTTPNTLM("RPC_IN_DATA", URL)
+	rpcInConn, err = setupHTTPNTLM("RPC_IN_DATA", URL, true)
 
 	if err != nil {
 		readySignal <- false
@@ -162,7 +173,7 @@ func RPCOpen(URL string, readySignal chan bool, errOccurred chan error) (err err
 //starts our listening "loop" which scans for new responses and pushes
 //these to our list of recieved responses
 func RPCOpenOut(URL string, readySignal chan bool, errOccurred chan error) (err error) {
-	rpcOutConn, err = setupHTTPNTLM("RPC_OUT_DATA", URL)
+	rpcOutConn, err = setupHTTPNTLM("RPC_OUT_DATA", URL, true)
 	if err != nil {
 		readySignal <- false
 		errOccurred <- err
@@ -275,6 +286,9 @@ func EcDoRPCExt2(MAPI []byte, auxLen uint32) ([]byte, error) {
 
 	//decrypt response PDU
 	if AuthSession.RPCNetworkAuthLevel == RPC_C_AUTHN_LEVEL_PKT_PRIVACY {
+		if len(resp.PDU) < 20 {
+			return nil, fmt.Errorf("[x] Invalid response received. Please try again")
+		}
 		dec, _ := rpcntlmsession.UnSeal(resp.PDU[8:])
 		sec := RTSSec{}
 		sec.Unmarshal(resp.SecTrailer, int(resp.Header.AuthLen))

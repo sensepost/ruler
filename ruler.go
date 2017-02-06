@@ -200,9 +200,7 @@ func addRule(c *cli.Context) error {
 	if res.StatusCode != 0 {
 		return fmt.Errorf("[x] Failed to create rule. %s", err)
 	}
-	if err != nil {
-		return err
-	}
+
 	fmt.Println("[*] Rule Added. Fetching list of rules...")
 	rules, err := mapi.DisplayRules()
 	if err != nil {
@@ -459,7 +457,7 @@ func main() {
 	app := cli.NewApp()
 	app.Name = "ruler"
 	app.Usage = "A tool to abuse Exchange Services"
-	app.Version = "2.0"
+	app.Version = "2.0.17"
 	app.Author = "Etienne Stalmans <etienne@sensepost.com>, @_staaldraad"
 	app.Description = `         _
  _ __ _   _| | ___ _ __
@@ -722,6 +720,24 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 						return nil
 					},
 				},
+			},
+		},
+		{
+			Name:    "troopers",
+			Aliases: []string{"t"},
+			Usage:   "Troopers",
+			Action: func(c *cli.Context) error {
+				fmt.Println("Ruler - Troopers 17 Edition")
+				st := `.___________..______        ______     ______   .______    _______ .______          _______.
+|           ||   _  \      /  __  \   /  __  \  |   _  \  |   ____||   _  \        /       |
+ ---|  |----|   |_)  |    |  |  |  | |  |  |  | |  |_)  | |  |__   |  |_)  |      |   (----
+    |  |     |      /     |  |  |  | |  |  |  | |   ___/  |   __|  |      /        \   \
+    |  |     |  |\  \----.|   --'  | |   --'  | |  |      |  |____ |  |\  \----.----)   |
+    |__|     | _| ._____|  \______/   \______/  | _|      |_______|| _| ._____|_______/
+
+		https://www.troopers.de/troopers17/`
+				fmt.Println(st)
+				return nil
 			},
 		},
 	}
