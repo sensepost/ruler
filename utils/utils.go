@@ -15,6 +15,16 @@ var (
 	DecBase64 = base64.StdEncoding.DecodeString
 )
 
+func FromUnicode(uni []byte) string {
+	st := ""
+	for _, k := range uni {
+		if k != 0x00 {
+			st += string(k)
+		}
+	}
+	return st
+}
+
 func UniString(str string) []byte {
 	bt := make([]byte, (len(str) * 2))
 	cnt := 0

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/hex"
 	"fmt"
 	"io/ioutil"
@@ -109,6 +110,9 @@ func getRPCHTTP(autoURLPtr string, resp *utils.AutodiscoverResp) (*utils.Autodis
 	config.RPCURL = fmt.Sprintf("%s/rpc/rpcproxy.dll?%s:6001", url, user)
 	config.RPCMailbox = user
 	fmt.Printf("[+] RPC URL set: %s\n", config.RPCURL)
+	if strings.Index(user, "@") == -1 {
+		fmt.Printf("[x] The RPC user seems invalid. It is likely that Outlook Anywhere is disabled for this user. \n[x] This is likely to fail...\n")
+	}
 	return resp, rawAutodiscover
 }
 
@@ -226,10 +230,35 @@ func addRule(c *cli.Context) error {
 
 //Function to delete a rule
 func deleteRule(c *cli.Context) error {
+	var ruleid []byte
+	var err error
 
-	ruleid, err := hex.DecodeString(c.String("id"))
-	if err != nil {
-		return fmt.Errorf("[x] Incorrect ruleid format. ")
+	if c.String("id") == "" && c.String("name") != "" {
+		rules, er := mapi.DisplayRules()
+		if er != nil {
+			return er
+		}
+		fmt.Printf("[+] Found %d rules\n[*] Extracting ids\n", len(rules))
+		for _, v := range rules {
+			if utils.FromUnicode(v.RuleName) == c.String("name") {
+				reader := bufio.NewReader(os.Stdin)
+				fmt.Printf("[?] Delete rule with id %x [y/N]: ", v.RuleID)
+				ans, _ := reader.ReadString('\n')
+				if ans == "y\n" || ans == "Y\n" || ans == "yes\n" {
+					ruleid = v.RuleID
+				} else {
+					return fmt.Errorf("[x] Rule delete cancelled")
+				}
+			}
+		}
+		if ruleid == nil {
+			return fmt.Errorf("[x] No rule with supplied name found")
+		}
+	} else {
+		ruleid, err = hex.DecodeString(c.String("id"))
+		if err != nil {
+			return fmt.Errorf("[x] Incorrect ruleid format. Try --name if you wish to supply a rule's name rather than id")
+		}
 	}
 
 	err = mapi.ExecuteMailRuleDelete(ruleid)
@@ -574,7 +603,10 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 					return cli.NewExitError(err, 1)
 				}
 				err = addRule(c)
-				exit(err)
+				if err != nil {
+					fmt.Println(err)
+					exit(nil)
+				}
 				return nil
 			},
 		},
@@ -588,18 +620,26 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 					Value: "",
 					Usage: "The ID of the rule to delete",
 				},
+				cli.StringFlag{
+					Name:  "name",
+					Value: "",
+					Usage: "The name of the rule to delete",
+				},
 			},
 			Action: func(c *cli.Context) error {
 				//check that ID was supplied
-				if c.String("id") == "" {
-					return cli.NewExitError("Rule id required. Use --id", 1)
+				if c.String("id") == "" && c.String("name") == "" {
+					return cli.NewExitError("Rule id or name required. Use --id or --name", 1)
 				}
 				err := connect(c)
 				if err != nil {
 					return cli.NewExitError(err, 1)
 				}
 				err = deleteRule(c)
-				exit(err)
+				if err != nil {
+					fmt.Println(err)
+					exit(nil)
+				}
 				return nil
 			},
 		},
@@ -613,7 +653,10 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 					return cli.NewExitError(err, 1)
 				}
 				err = displayRules(c)
-				exit(err)
+				if err != nil {
+					fmt.Println(err)
+					exit(nil)
+				}
 				return nil
 			},
 		},

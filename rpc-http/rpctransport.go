@@ -79,7 +79,10 @@ func setupHTTPNTLM(rpctype string, URL string, full bool) (net.Conn, error) {
 	data := make([]byte, 2048)
 	_, err = connection.Read(data)
 	if err != nil {
-		fmt.Println("[x] Failed with initial setup, trying again...")
+		if full == false {
+			return nil, fmt.Errorf("Failed with initial setup for %s : %s\n", rpctype, err)
+		}
+		fmt.Printf("[x] Failed with initial setup for %s trying again...\n", rpctype)
 		return setupHTTPNTLM(rpctype, URL, false)
 	}
 
@@ -97,7 +100,10 @@ func setupHTTPNTLM(rpctype string, URL string, full bool) (net.Conn, error) {
 	ntlmChallengeString := strings.Replace(ntlmChallengeHeader, "NTLM ", "", 1)
 	challengeBytes, err := utils.DecBase64(ntlmChallengeString)
 	if err != nil {
-		fmt.Println("[x] Failed with initial setup, trying again...")
+		if full == false {
+			return nil, fmt.Errorf("Failed with initial setup for %s : %s\n", rpctype, err)
+		}
+		fmt.Printf("[x] Failed with initial setup for %s trying again...\n", rpctype)
 		return setupHTTPNTLM(rpctype, URL, false)
 	}
 
@@ -313,7 +319,9 @@ func DoConnectExRequest(MAPI []byte, auxLen uint32) ([]byte, error) {
 	RPCWriteN(MAPI, auxLen, 0x0a)
 
 	resp, err := RPCRead(callcounter - 1)
-
+	if err == nil && len(resp.PDU) < 20 {
+		resp, err = RPCRead(callcounter - 1)
+	}
 	if err != nil {
 		return nil, err
 	}
