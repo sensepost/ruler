@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 	"text/template"
@@ -119,6 +120,7 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, string, er
 	}
 	req, err := http.NewRequest("POST", autodiscoverURL, strings.NewReader(r))
 	req.Header.Add("Content-Type", "text/xml")
+	req.Header.Add("User-Agent", "ruler")
 
 	if mapi == true {
 		req.Header.Add("X-MapiHttpCapability", "1")            //we want MAPI info
@@ -138,7 +140,7 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, string, er
 	if err != nil {
 		//check if this error was because of ntml auth when basic auth was expected.
 		if m, _ := regexp.Match("illegal base64", []byte(err.Error())); m == true {
-			client = http.Client{}
+			client = http.Client{Transport: InsecureRedirects{}}
 			resp, err = client.Do(req)
 			if err != nil {
 				return nil, "", err
@@ -194,6 +196,7 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, string, er
 		}
 		return &autodiscoverResp, string(body), nil
 	}
+
 	if resp.StatusCode == 401 || resp.StatusCode == 403 || resp.StatusCode == 404 {
 		//for office365 we might need to use a different email address, try this
 		if resp.StatusCode == 401 && secondaryEmail != "" {
@@ -234,4 +237,47 @@ func redirectAutodiscover(redirdom string) (string, error) {
 	fmt.Printf("[*] Authenticating through: %s\n", string(resp.Header.Get("Location")))
 	//return the new autodiscover server location
 	return resp.Header.Get("Location"), nil
+}
+
+//InsecureRedirects allows forwarding the Authorization header even when we shouldn't
+type InsecureRedirects struct {
+	Transport http.RoundTripper
+}
+
+//RoundTrip custom redirector that allows us to forward the auth header, even when the domain changes.
+//This is needed as some office365 domains will redirect from autodiscover.domain.com to autodiscover.outlook.com
+//and Go does not forward Sensitive headers such as Authorization (https://golang.org/src/net/http/client.go#41)
+func (l InsecureRedirects) RoundTrip(req *http.Request) (resp *http.Response, err error) {
+	t := l.Transport
+	if t == nil {
+		t = http.DefaultTransport
+	}
+	resp, err = t.RoundTrip(req)
+	if err != nil {
+		return
+	}
+	switch resp.StatusCode {
+	case http.StatusMovedPermanently, http.StatusFound, http.StatusSeeOther, http.StatusTemporaryRedirect:
+		if SessionConfig.Verbose == true {
+			fmt.Printf("[*] Request for %s redirected. Following to %s\n", req.URL, resp.Header.Get("Location"))
+		}
+
+		URL, _ := url.Parse(resp.Header.Get("Location"))
+		r, _ := parseTemplate(autodiscoverXML)
+		//if the domains are different, we need to force the auth cookie to be passed along.. this is for redirects to office365
+		client := http.Client{}
+		req, err = http.NewRequest("POST", URL.String(), strings.NewReader(r))
+		req.Header.Add("Content-Type", "text/xml")
+		req.Header.Add("User-Agent", "ruler")
+
+		req.Header.Add("X-MapiHttpCapability", "1")            //we want MAPI info
+		req.Header.Add("X-AnchorMailbox", SessionConfig.Email) //we want MAPI info
+
+		req.URL, _ = url.Parse(resp.Header.Get("Location"))
+		req.SetBasicAuth(SessionConfig.Email, SessionConfig.Pass)
+
+		resp, err = client.Do(req)
+
+	}
+	return
 }
