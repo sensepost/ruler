@@ -959,7 +959,7 @@ func (execResponse *ExecuteResponse) Unmarshal(resp []byte) error {
 
 	execResponse.StatusCode, pos = utils.ReadUint32(pos, resp)
 
-	if execResponse.StatusCode != 0 { //error occurred..
+	if execResponse.StatusCode == 255 { //error occurred..
 		execResponse.AuxilliaryBufSize, pos = utils.ReadUint32(pos, resp)
 		execResponse.AuxilliaryBuf = resp[8 : 8+execResponse.AuxilliaryBufSize]
 	} else {

@@ -110,9 +110,9 @@ func getRPCHTTP(autoURLPtr string, resp *utils.AutodiscoverResp) (*utils.Autodis
 	config.RPCURL = fmt.Sprintf("%s/rpc/rpcproxy.dll?%s:6001", url, user)
 	config.RPCMailbox = user
 	fmt.Printf("[+] RPC URL set: %s\n", config.RPCURL)
-	if strings.Index(user, "@") == -1 {
-		fmt.Printf("[x] The RPC user seems invalid. It is likely that Outlook Anywhere is disabled for this user. \n[x] This is likely to fail...\n")
-	}
+	//if strings.Index(user, "@") == -1 {
+	//		fmt.Printf("[x] The RPC user seems invalid. It is likely that Outlook Anywhere is disabled for this user. \n[x] This is likely to fail...\n")
+	//}
 	return resp, rawAutodiscover
 }
 
@@ -655,8 +655,8 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 				err = displayRules(c)
 				if err != nil {
 					fmt.Println(err)
-					exit(nil)
 				}
+				exit(nil)
 				return nil
 			},
 		},
