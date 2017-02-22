@@ -473,7 +473,7 @@ func ReleaseObject(inputHandle byte) (*RopReleaseResponse, error) {
 
 //SendMessage func to create a new message on the Exchange server
 //and then sends an email to the target using their own email
-func SendMessage(triggerWord string) (*RopSubmitMessageResponse, error) {
+func SendMessage(triggerWord, body string) (*RopSubmitMessageResponse, error) {
 
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
@@ -492,7 +492,7 @@ func SendMessage(triggerWord string) (*RopSubmitMessageResponse, error) {
 	setProperties.PropertValueCount = 8
 
 	propertyTags := make([]TaggedPropertyValue, setProperties.PropertValueCount)
-	propertyTags[0] = TaggedPropertyValue{PidTagBody, utils.UniString("This is the body.\n\r")}
+	propertyTags[0] = TaggedPropertyValue{PidTagBody, utils.UniString(fmt.Sprintf("%s\n\r", body))}
 	propertyTags[1] = TaggedPropertyValue{PropertyTag{PtypString, 0x001A}, utils.UniString("IPM.Note")}
 	propertyTags[2] = TaggedPropertyValue{PidTagMessageFlags, []byte{0x00, 0x00, 0x00, 0x08}} //unsent
 	propertyTags[3] = TaggedPropertyValue{PidTagConversationTopic, utils.UniString(triggerWord)}

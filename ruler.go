@@ -219,10 +219,15 @@ func addRule(c *cli.Context) error {
 		fmt.Println("[*] Auto Send enabled, wait 30 seconds before sending email (synchronisation)")
 		//initate a ping sequence, just incase we are on RPC/HTTP
 		//we need to keep the socket open
-		//go mapi.Ping()
+		go mapi.Ping()
 		time.Sleep(time.Second * (time.Duration)(30))
 		fmt.Println("[*] Sending email")
-		sendMessage(c.String("trigger"))
+		if c.String("subject") == "" {
+			sendMessage(c.String("trigger"), c.String("body"))
+		} else {
+			sendMessage(c.String("subject"), c.String("body"))
+		}
+
 	}
 
 	return nil
@@ -246,8 +251,10 @@ func deleteRule(c *cli.Context) error {
 				ans, _ := reader.ReadString('\n')
 				if ans == "y\n" || ans == "Y\n" || ans == "yes\n" {
 					ruleid = v.RuleID
-				} else {
-					return fmt.Errorf("[x] Rule delete cancelled")
+					err = mapi.ExecuteMailRuleDelete(ruleid)
+					if err != nil {
+						fmt.Printf("[x] Failed to delete rule")
+					}
 				}
 			}
 		}
@@ -259,11 +266,14 @@ func deleteRule(c *cli.Context) error {
 		if err != nil {
 			return fmt.Errorf("[x] Incorrect ruleid format. Try --name if you wish to supply a rule's name rather than id")
 		}
+		err = mapi.ExecuteMailRuleDelete(ruleid)
+		if err != nil {
+			fmt.Printf("[x] Failed to delete rule")
+		}
 	}
 
-	err = mapi.ExecuteMailRuleDelete(ruleid)
 	if err == nil {
-		fmt.Println("[*] Rule deleted. Fetching list of remaining rules...")
+		fmt.Println("[*] Fetching list of remaining rules...")
 		rules, er := mapi.DisplayRules()
 		if er != nil {
 			return er
@@ -293,7 +303,7 @@ func displayRules(c *cli.Context) error {
 	return er
 }
 
-func sendMessage(triggerword string) error {
+func sendMessage(subject, body string) error {
 
 	propertyTags := make([]mapi.PropertyTag, 1)
 	propertyTags[0] = mapi.PidTagDisplayName
@@ -302,7 +312,7 @@ func sendMessage(triggerword string) error {
 	if er != nil {
 		return er
 	}
-	_, er = mapi.SendMessage(triggerword)
+	_, er = mapi.SendMessage(subject, body)
 	if er != nil {
 		return er
 	}
@@ -590,6 +600,16 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 					Name:  "send,s",
 					Usage: "Trigger the rule by sending an email to the target",
 				},
+				cli.StringFlag{
+					Name:  "body,b",
+					Value: "**Automated account check - please ignore**\r\n\r\nMicrosoft Exchange has run an automated test on your account.\r\nEverything seems to be configured correctly.",
+					Usage: "The email body you may wish to use",
+				},
+				cli.StringFlag{
+					Name:  "subject",
+					Value: "",
+					Usage: "The subject you wish to use, this should contain your trigger word.",
+				},
 			},
 			Action: func(c *cli.Context) error {
 				//check that name, trigger and location were supplied
@@ -636,7 +656,7 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 				}
 				err = deleteRule(c)
 				if err != nil {
-					fmt.Println(err)
+					//fmt.Println(err)
 					exit(err)
 				}
 				exit(nil)
@@ -679,21 +699,26 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 			Usage:   "Send an email to trigger an existing rule. This uses the target user's own account.",
 			Flags: []cli.Flag{
 				cli.StringFlag{
-					Name:  "trigger,t",
+					Name:  "subject,s",
 					Value: "",
-					Usage: "A trigger word or phrase to use",
+					Usage: "A subject to use, this should contain our trigger word",
+				},
+				cli.StringFlag{
+					Name:  "body,b",
+					Value: "**Automated account check - please ignore**\r\nMicrosoft Exchange has run an automated test on your account.\r\nEverything seems to be configured correctly.",
+					Usage: "The email body you may wish to use",
 				},
 			},
 			Action: func(c *cli.Context) error {
 				//check that trigger word was supplied
-				if c.String("trigger") == "" {
-					return cli.NewExitError("The trigger word/phrase is required. Use --trigger", 1)
+				if c.String("subject") == "" {
+					return cli.NewExitError("The subject is required. Use --subject", 1)
 				}
 				err := connect(c)
 				if err != nil {
 					return cli.NewExitError(err, 1)
 				}
-				sendMessage(c.String("trigger"))
+				sendMessage(c.String("subject"), c.String("body"))
 				return nil
 			},
 		},
