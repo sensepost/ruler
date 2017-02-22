@@ -110,7 +110,7 @@ type Protocol struct {
 	ASUrl                   string
 	EWSUrl                  string
 	EMWSUrl                 string
-	SharingUrl              string
+	SharingURL              string
 	ECPUrl                  string
 	OOFUrl                  string
 	UMUrl                   string
@@ -142,14 +142,14 @@ type ProtoInternal struct {
 
 //MailStore structure for unmarshal
 type MailStore struct {
-	InternalUrl string
-	ExternalUrl string
+	InternalURL string
+	ExternalURL string
 }
 
 //AddressBook structure for unmarshal
 type AddressBook struct {
-	InternalUrl string
-	ExternalUrl string
+	InternalURL string
+	ExternalURL string
 }
 
 //PublicFolderInformation structure for unmarshal

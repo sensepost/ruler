@@ -30,7 +30,7 @@ var AuthSession *utils.Session
 func ExtractMapiURL(resp *utils.AutodiscoverResp) string {
 	for _, v := range resp.Response.Account.Protocol {
 		if v.TypeAttr == "mapiHttp" {
-			return v.MailStore.ExternalUrl
+			return v.MailStore.ExternalURL
 		}
 	}
 	return ""
@@ -40,7 +40,7 @@ func ExtractMapiURL(resp *utils.AutodiscoverResp) string {
 func ExtractRPCURL(resp *utils.AutodiscoverResp) string {
 	for _, v := range resp.Response.Account.Protocol {
 		if v.TypeAttr == "rpcHttp" {
-			return v.MailStore.ExternalUrl
+			return v.MailStore.ExternalURL
 		}
 	}
 	return ""
@@ -208,7 +208,6 @@ func mapiConnectRPC(body ConnectRequestRPC) ([]byte, error) {
 	AuthSession.RPCSet = true
 
 	return resp, err
-
 }
 
 func mapiDisconnectRPC() ([]byte, error) {
@@ -319,7 +318,7 @@ func AuthenticateRPC() (*RopLogonResponse, error) {
 		connRequest.Flags = uFlagsUser
 	}
 
-	connRequest.DNHash = hash(AuthSession.LID) //calculate unique 32bit hash of LID
+	connRequest.DNHash = utils.Hash(AuthSession.LID) //calculate unique 32bit hash of LID
 	connRequest.CbLimit = 0x00
 	connRequest.DefaultCodePage = 1252
 	connRequest.LcidSort = 1033
@@ -425,7 +424,14 @@ func AuthenticateFetchMailbox(essdn []byte) (*RopLogonResponse, error) {
 //Disconnect function to be nice and disconnect us from the server
 //This is strictly necessary but hey... lets follow protocol
 func Disconnect() (int, error) {
-	fmt.Println("[*] And disconnecting from server")
+	//check if we actually authenticated and need to close our session
+	if AuthSession == nil || AuthSession.Authenticated == false {
+		return -1, nil //no session
+	}
+
+	if AuthSession.Verbose == true {
+		fmt.Println("[*] And disconnecting from server")
+	}
 
 	disconnectBody := DisconnectRequest{}
 	disconnectBody.AuxilliaryBufSize = 0
@@ -433,7 +439,7 @@ func Disconnect() (int, error) {
 	_, err := sendMapiDisconnect(disconnectBody)
 
 	if err != nil {
-		return -1, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
+		return -1, fmt.Errorf("[x] A server side error occurred while disconnecting.\n %s", err)
 	}
 
 	return 0, nil

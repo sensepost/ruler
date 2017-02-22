@@ -23,11 +23,11 @@ import (
 var config utils.Session
 
 func exit(err error) {
-	//we had an error and we don't have a MAPI session
+	//we had an error
 	if err != nil {
 		fmt.Println(err)
-		os.Exit(-1)
 	}
+
 	//let's disconnect from the MAPI session
 	exitcode, err := mapi.Disconnect()
 	if err != nil {
@@ -622,10 +622,8 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 					return cli.NewExitError(err, 1)
 				}
 				err = addRule(c)
-				if err != nil {
-					exit(err)
-				}
-				exit(nil)
+				exit(err)
+
 				return nil
 			},
 		},
@@ -655,11 +653,9 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 					return cli.NewExitError(err, 1)
 				}
 				err = deleteRule(c)
-				if err != nil {
-					//fmt.Println(err)
-					exit(err)
-				}
-				exit(nil)
+
+				exit(err)
+
 				return nil
 			},
 		},
@@ -673,10 +669,8 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 					return cli.NewExitError(err, 1)
 				}
 				err = displayRules(c)
-				if err != nil {
-					fmt.Println(err)
-				}
-				exit(nil)
+				exit(err)
+
 				return nil
 			},
 		},
@@ -718,7 +712,8 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 				if err != nil {
 					return cli.NewExitError(err, 1)
 				}
-				sendMessage(c.String("subject"), c.String("body"))
+				err = sendMessage(c.String("subject"), c.String("body"))
+				exit(err)
 				return nil
 			},
 		},

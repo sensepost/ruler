@@ -241,8 +241,8 @@ var PidTagInstanceNum = PropertyTag{PtypInteger32, 0x674E}
 //PidTagMid is the message id of a message in a store
 var PidTagMid = PropertyTag{PtypInteger64, 0x674A}
 
-//PidTagBodyHtml is the message id of a message in a store
-var PidTagBodyHtml = PropertyTag{PtypBinary, 0x1013}
+//PidTagBodyHTML is the message id of a message in a store
+var PidTagBodyHTML = PropertyTag{PtypBinary, 0x1013}
 
-//PidTagHtmlBody is the same as above?
-var PidTagHtmlBody = PropertyTag{PtypString, 0x1013}
+//PidTagHTMLBody is the same as above?
+var PidTagHTMLBody = PropertyTag{PtypString, 0x1013}

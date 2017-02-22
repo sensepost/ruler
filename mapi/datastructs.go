@@ -2,16 +2,9 @@ package mapi
 
 import (
 	"fmt"
-	"hash/fnv"
 
 	"github.com/sensepost/ruler/utils"
 )
-
-func hash(s string) uint32 {
-	h := fnv.New32()
-	h.Write([]byte(s))
-	return h.Sum32()
-}
 
 //ConnectRequest struct
 type ConnectRequest struct {
@@ -24,6 +17,7 @@ type ConnectRequest struct {
 	AuxilliaryBuf     []byte
 }
 
+//ConnectRequestRPC ConnectRequest structure for RPC
 type ConnectRequestRPC struct {
 	DNLen               uint32
 	Reserved            uint32
@@ -60,6 +54,7 @@ type ExecuteRequest struct {
 	AuxilliaryBuf     []byte
 }
 
+//ExecuteRequestRPC struct for RPC ExecuteRequest, slightly different from MAPI/HTTP
 type ExecuteRequestRPC struct {
 	Flags         uint32 //[]byte //lets stick to ropFlagsNoXorMagic
 	RopBufferSize uint32
@@ -71,7 +66,7 @@ type ExecuteRequestRPC struct {
 type ExecuteResponse struct {
 	StatusCode        uint32 //if 0x00000 --> failure and we only have AuzilliaryBufferSize and AuxilliaryBuffer
 	ErrorCode         uint32
-	Flags             []byte //0x00000000
+	Flags             uint32 //0x00000000 always
 	RopBufferSize     uint32
 	RopBuffer         []byte //struct{}
 	AuxilliaryBufSize uint32
@@ -739,6 +734,7 @@ type RopBuffer interface {
 	Unmarshal([]byte) error
 }
 
+//Request interface type
 type Request interface {
 	Marshal() []byte
 }
@@ -749,7 +745,7 @@ func (execRequest ExecuteRequest) Marshal() []byte {
 	return utils.BodyToBytes(execRequest)
 }
 
-//Marshal turn ExecuteRequest into Bytes
+//MarshalRPC turn ExecuteRequest into Bytes
 func (execRequest ExecuteRequest) MarshalRPC() []byte {
 	execRequest.CalcSizes(true)
 	return utils.BodyToBytes(execRequest)
@@ -952,22 +948,26 @@ func (logonResponse *RopLogonResponse) Unmarshal(resp []byte) error {
 	return nil
 }
 
-//Unmarshal func
+//Unmarshal for ExecuteResponse
+//the output seems to vary for MAPIHTTP and RPC
+//MAPIHTTP StatusCode,ErrorCode,Flags,RopBufferSize
+//RPC StatusCode,RopBufferSize,Flags,RopBufferSize
 func (execResponse *ExecuteResponse) Unmarshal(resp []byte) error {
 	pos := 0
 	var buf []byte
 
 	execResponse.StatusCode, pos = utils.ReadUint32(pos, resp)
 
+	//for MAPIHTTP, none-zero value indicates error. Should be same for RPC/HTTP but have encountered servers that return value 3
 	if execResponse.StatusCode == 255 { //error occurred..
 		execResponse.AuxilliaryBufSize, pos = utils.ReadUint32(pos, resp)
 		execResponse.AuxilliaryBuf = resp[8 : 8+execResponse.AuxilliaryBufSize]
 	} else {
-		execResponse.ErrorCode, pos = utils.ReadUint32(pos, resp)
-		execResponse.Flags, pos = utils.ReadBytes(pos, 4, resp)
+		execResponse.ErrorCode, pos = utils.ReadUint32(pos, resp) //error code if MAPIHTTP else this is also the buffer size
+		execResponse.Flags, pos = utils.ReadUint32(pos, resp)
 		execResponse.RopBufferSize, pos = utils.ReadUint32(pos, resp)
 		buf, pos = utils.ReadBytes(pos, int(execResponse.RopBufferSize), resp)
-		execResponse.RopBuffer = buf //decodeLogonRopResponse(buf)
+		execResponse.RopBuffer = buf
 		execResponse.AuxilliaryBufSize, _ = utils.ReadUint32(pos, resp)
 		//execResponse.AuxilliaryBuf, _ = utils.ReadBytes(pos, int(execResponse.AuxilliaryBufSize), resp)
 	}

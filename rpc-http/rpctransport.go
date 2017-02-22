@@ -318,13 +318,6 @@ func EcDoRPCExt2(MAPI []byte, auxLen uint32) ([]byte, error) {
 	}
 	return resp.PDU[28:], err
 }
-func obfuscate(data []byte) []byte {
-	bnew := make([]byte, len(data))
-	for k := range data {
-		bnew[k] = data[k] ^ 0xA5
-	}
-	return bnew
-}
 
 //DoConnectExRequest makes our connection request. After this we can use
 //EcDoRPCExt2 to make our MAPI requests
