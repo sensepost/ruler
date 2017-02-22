@@ -566,7 +566,7 @@ func SendMessage(triggerWord string) (*RopSubmitMessageResponse, error) {
 	execResponse := ExecuteResponse{}
 	execResponse.Unmarshal(responseBody)
 
-	if execResponse.StatusCode == 0 {
+	if execResponse.StatusCode != 255 {
 
 		bufPtr := 10
 
@@ -976,7 +976,7 @@ func GetFolder(folderid int, columns []PropertyTag) (*RopOpenFolderResponse, err
 	execResponse := ExecuteResponse{}
 	execResponse.Unmarshal(responseBody)
 
-	if execResponse.StatusCode == 0 {
+	if execResponse.StatusCode != 255 {
 		bufPtr := 10
 		openFolder := RopOpenFolderResponse{}
 		_, err := openFolder.Unmarshal(execResponse.RopBuffer[bufPtr:])
@@ -1635,7 +1635,7 @@ func ExecuteMailRuleDelete(ruleid []byte) error {
 	execResponse := ExecuteResponse{}
 	execResponse.Unmarshal(responseBody)
 
-	if execResponse.StatusCode == 0 {
+	if execResponse.StatusCode != 255 {
 		return nil
 	}
 	return fmt.Errorf("[x] A server side error occurred while deleting the rule. Check ruleid")

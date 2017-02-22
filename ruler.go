@@ -201,7 +201,7 @@ func addRule(c *cli.Context) error {
 	fmt.Println("[*] Adding Rule")
 
 	res, err := mapi.ExecuteMailRuleAdd(c.String("name"), c.String("trigger"), c.String("location"), true)
-	if res.StatusCode != 0 {
+	if err != nil || res.StatusCode == 255 {
 		return fmt.Errorf("[x] Failed to create rule. %s", err)
 	}
 
@@ -219,7 +219,7 @@ func addRule(c *cli.Context) error {
 		fmt.Println("[*] Auto Send enabled, wait 30 seconds before sending email (synchronisation)")
 		//initate a ping sequence, just incase we are on RPC/HTTP
 		//we need to keep the socket open
-		go mapi.Ping()
+		//go mapi.Ping()
 		time.Sleep(time.Second * (time.Duration)(30))
 		fmt.Println("[*] Sending email")
 		sendMessage(c.String("trigger"))
@@ -300,7 +300,6 @@ func sendMessage(triggerword string) error {
 
 	_, er := mapi.GetFolder(mapi.OUTBOX, nil) //propertyTags)
 	if er != nil {
-		fmt.Println(er)
 		return er
 	}
 	_, er = mapi.SendMessage(triggerword)
@@ -604,9 +603,9 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 				}
 				err = addRule(c)
 				if err != nil {
-					fmt.Println(err)
-					exit(nil)
+					exit(err)
 				}
+				exit(nil)
 				return nil
 			},
 		},
@@ -638,8 +637,9 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 				err = deleteRule(c)
 				if err != nil {
 					fmt.Println(err)
-					exit(nil)
+					exit(err)
 				}
+				exit(nil)
 				return nil
 			},
 		},
