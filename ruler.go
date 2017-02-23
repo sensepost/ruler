@@ -206,14 +206,8 @@ func addRule(c *cli.Context) error {
 	}
 
 	fmt.Println("[*] Rule Added. Fetching list of rules...")
-	rules, err := mapi.DisplayRules()
-	if err != nil {
-		return err
-	}
-	fmt.Printf("[+] Found %d rules\n", len(rules))
-	for _, v := range rules {
-		fmt.Printf("Rule Name: %s RuleID: %x\n", string(v.RuleName), v.RuleID)
-	}
+
+	printRules()
 
 	if c.Bool("send") {
 		fmt.Println("[*] Auto Send enabled, wait 30 seconds before sending email (synchronisation)")
@@ -274,15 +268,10 @@ func deleteRule(c *cli.Context) error {
 
 	if err == nil {
 		fmt.Println("[*] Fetching list of remaining rules...")
-		rules, er := mapi.DisplayRules()
+		er := printRules()
 		if er != nil {
 			return er
 		}
-		fmt.Printf("[+] Found %d rules\n", len(rules))
-		for _, v := range rules {
-			fmt.Printf("Rule: %s RuleID: %x\n", string(v.RuleName), v.RuleID)
-		}
-		return nil
 	}
 	return err
 }
@@ -290,16 +279,7 @@ func deleteRule(c *cli.Context) error {
 //Function to display all rules
 func displayRules(c *cli.Context) error {
 	fmt.Println("[+] Retrieving Rules")
-	rules, er := mapi.DisplayRules()
-
-	if er != nil {
-		return er
-	}
-
-	fmt.Printf("[+] Found %d rules\n", len(rules))
-	for _, v := range rules {
-		fmt.Printf("Rule: %s RuleID: %x\n", string(v.RuleName), v.RuleID)
-	}
+	er := printRules()
 	return er
 }
 
@@ -456,6 +436,37 @@ func connect(c *cli.Context) error {
 		propertyTags[0] = mapi.PidTagDisplayName
 		propertyTags[1] = mapi.PidTagSubfolders
 		mapi.GetFolder(mapi.INBOX, propertyTags) //Open Inbox
+	}
+	return nil
+}
+
+func printRules() error {
+	rules, er := mapi.DisplayRules()
+
+	if er != nil {
+		return er
+	}
+
+	if len(rules) > 0 {
+		fmt.Printf("[+] Found %d rules\n", len(rules))
+		maxwidth := 30
+
+		for _, v := range rules {
+			if len(string(v.RuleName)) > maxwidth {
+				maxwidth = len(string(v.RuleName))
+			}
+		}
+		maxwidth -= 10
+		fmstr1 := fmt.Sprintf("%%-%ds | %%-s\n", maxwidth)
+		fmstr2 := fmt.Sprintf("%%-%ds | %%x\n", maxwidth)
+		fmt.Printf(fmstr1, "Rule Name", "Rule ID")
+		fmt.Printf("%s|%s\n", (strings.Repeat("-", maxwidth+1)), strings.Repeat("-", 18))
+		for _, v := range rules {
+			fmt.Printf(fmstr2, string(utils.FromUnicode(v.RuleName)), v.RuleID)
+		}
+		fmt.Println()
+	} else {
+		fmt.Printf("[+] No Rules Found\n")
 	}
 	return nil
 }

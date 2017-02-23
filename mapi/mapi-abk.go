@@ -17,7 +17,7 @@ func sendAddressBookRequest(mapiType string, mapi []byte) ([]byte, error) {
 func ExtractMapiAddressBookURL(resp *utils.AutodiscoverResp) string {
 	for _, v := range resp.Response.Account.Protocol {
 		if v.TypeAttr == "mapiHttp" {
-			return v.AddressBook.ExternalURL
+			return v.AddressBook.ExternalUrl
 		}
 	}
 	return ""

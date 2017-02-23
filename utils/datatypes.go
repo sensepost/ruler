@@ -142,14 +142,14 @@ type ProtoInternal struct {
 
 //MailStore structure for unmarshal
 type MailStore struct {
-	InternalURL string
-	ExternalURL string
+	InternalUrl string
+	ExternalUrl string
 }
 
 //AddressBook structure for unmarshal
 type AddressBook struct {
-	InternalURL string
-	ExternalURL string
+	InternalUrl string
+	ExternalUrl string
 }
 
 //PublicFolderInformation structure for unmarshal

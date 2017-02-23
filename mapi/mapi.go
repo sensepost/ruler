@@ -30,7 +30,7 @@ var AuthSession *utils.Session
 func ExtractMapiURL(resp *utils.AutodiscoverResp) string {
 	for _, v := range resp.Response.Account.Protocol {
 		if v.TypeAttr == "mapiHttp" {
-			return v.MailStore.ExternalURL
+			return v.MailStore.ExternalUrl
 		}
 	}
 	return ""
@@ -40,7 +40,7 @@ func ExtractMapiURL(resp *utils.AutodiscoverResp) string {
 func ExtractRPCURL(resp *utils.AutodiscoverResp) string {
 	for _, v := range resp.Response.Account.Protocol {
 		if v.TypeAttr == "rpcHttp" {
-			return v.MailStore.ExternalURL
+			return v.MailStore.ExternalUrl
 		}
 	}
 	return ""
@@ -361,7 +361,7 @@ func AuthenticateHTTP() (*RopLogonResponse, error) {
 	responseBody, err := sendMapiConnectRequestHTTP(connRequest)
 
 	if err != nil {
-		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
+		return nil, fmt.Errorf("[x] A Server Side error occurred.\n %s", err)
 	}
 	connResponse := ConnectResponse{}
 	connResponse.Unmarshal(responseBody)
@@ -400,7 +400,7 @@ func AuthenticateFetchMailbox(essdn []byte) (*RopLogonResponse, error) {
 	responseBody, err := sendMapiRequest("Execute", execRequest)
 
 	if err != nil {
-		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
+		return nil, fmt.Errorf("[x] A Server Side error occurred.\n %s", err)
 	}
 
 	execResponse := ExecuteResponse{}
@@ -457,7 +457,7 @@ func ReleaseObject(inputHandle byte) (*RopReleaseResponse, error) {
 	responseBody, err := sendMapiRequest("Execute", execRequest)
 
 	if err != nil {
-		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
+		return nil, fmt.Errorf("[x] A Server Side error occurred.\n %s", err)
 	}
 	execResponse := ExecuteResponse{}
 	if len(responseBody) <= 0 {
@@ -567,7 +567,7 @@ func SendMessage(triggerWord, body string) (*RopSubmitMessageResponse, error) {
 	responseBody, err := sendMapiRequest("Execute", execRequest)
 
 	if err != nil {
-		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
+		return nil, fmt.Errorf("[x] A Server Side error occurred.\n %s", err)
 	}
 	execResponse := ExecuteResponse{}
 	execResponse.Unmarshal(responseBody)
@@ -640,7 +640,7 @@ func SetMessageStatus(folderid, messageid []byte) (*RopSetMessageStatusResponse,
 	responseBody, err := sendMapiRequest("Execute", execRequest)
 
 	if err != nil {
-		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
+		return nil, fmt.Errorf("[x] A Server Side error occurred.\n %s", err)
 	}
 	execResponse := ExecuteResponse{}
 	execResponse.Unmarshal(responseBody)
@@ -707,7 +707,7 @@ func CreateMessage(folderID []byte, properties []TaggedPropertyValue) (*RopSaveC
 	responseBody, err := sendMapiRequest("Execute", execRequest)
 
 	if err != nil {
-		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
+		return nil, fmt.Errorf("[x] A Server Side error occurred.\n %s", err)
 	}
 	execResponse := ExecuteResponse{}
 	execResponse.Unmarshal(responseBody)
@@ -770,7 +770,7 @@ func SetPropertyFast(folderid []byte, messageid []byte, property TaggedPropertyV
 	responseBody, err := sendMapiRequest("Execute", execRequest)
 
 	if err != nil {
-		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
+		return nil, fmt.Errorf("[x] A Server Side error occurred.\n %s", err)
 	}
 	execResponse := ExecuteResponse{}
 	execResponse.Unmarshal(responseBody)
@@ -806,7 +806,7 @@ func SetPropertyFast(folderid []byte, messageid []byte, property TaggedPropertyV
 			responseBody, err = sendMapiRequest("Execute", execRequest)
 
 			if err != nil {
-				return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
+				return nil, fmt.Errorf("[x] A Server Side error occurred.\n %s", err)
 			}
 			execResponse = ExecuteResponse{}
 			execResponse.Unmarshal(responseBody)
@@ -826,7 +826,7 @@ func SetPropertyFast(folderid []byte, messageid []byte, property TaggedPropertyV
 			responseBody, err = sendMapiRequest("Execute", execRequest)
 
 			if err != nil {
-				return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
+				return nil, fmt.Errorf("[x] A Server Side error occurred.\n %s", err)
 			}
 			execResponse = ExecuteResponse{}
 			execResponse.Unmarshal(responseBody)
@@ -860,7 +860,7 @@ func SaveMessageFast(inputHandle, responseHandle byte, serverHandles []byte) (*R
 	responseBody, err := sendMapiRequest("Execute", execRequest)
 
 	if err != nil {
-		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
+		return nil, fmt.Errorf("[x] A Server Side error occurred.\n %s", err)
 	}
 	execResponse := ExecuteResponse{}
 	execResponse.Unmarshal(responseBody)
@@ -911,7 +911,7 @@ func DeleteMessages(folderid []byte, messageIDCount int, messageIDs []byte) (*Ro
 	responseBody, err := sendMapiRequest("Execute", execRequest)
 
 	if err != nil {
-		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
+		return nil, fmt.Errorf("[x] A Server Side error occurred.\n %s", err)
 	}
 	execResponse := ExecuteResponse{}
 	execResponse.Unmarshal(responseBody)
@@ -977,7 +977,7 @@ func GetFolder(folderid int, columns []PropertyTag) (*RopOpenFolderResponse, err
 	responseBody, err := sendMapiRequest("Execute", execRequest)
 
 	if err != nil {
-		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
+		return nil, fmt.Errorf("[x] A Server Side error occurred.\n %s", err)
 	}
 	execResponse := ExecuteResponse{}
 	execResponse.Unmarshal(responseBody)
@@ -1039,7 +1039,7 @@ func GetMessage(folderid, messageid []byte, columns []PropertyTag) (*RopGetPrope
 	responseBody, err := sendMapiRequest("Execute", execRequest)
 
 	if err != nil {
-		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
+		return nil, fmt.Errorf("[x] A Server Side error occurred.\n %s", err)
 	}
 	execResponse := ExecuteResponse{}
 	execResponse.Unmarshal(responseBody)
@@ -1114,7 +1114,7 @@ func GetMessageFast(folderid, messageid []byte, columns []PropertyTag) (*RopFast
 	responseBody, err := sendMapiRequest("Execute", execRequest)
 
 	if err != nil {
-		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
+		return nil, fmt.Errorf("[x] A Server Side error occurred.\n %s", err)
 	}
 	execResponse := ExecuteResponse{}
 	execResponse.Unmarshal(responseBody)
@@ -1184,7 +1184,7 @@ func FastTransferFetchStep(handles []byte) ([]byte, error) {
 	responseBody, err := sendMapiRequest("Execute", execRequest)
 
 	if err != nil {
-		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
+		return nil, fmt.Errorf("[x] A Server Side error occurred.\n %s", err)
 	}
 	execResponse := ExecuteResponse{}
 	execResponse.Unmarshal(responseBody)
@@ -1250,7 +1250,7 @@ func GetContentsTable(folderid []byte) (*RopGetContentsTableResponse, []byte, er
 	responseBody, err := sendMapiRequest("Execute", execRequest)
 
 	if err != nil {
-		return nil, nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
+		return nil, nil, fmt.Errorf("[x] A Server Side error occurred.\n %s", err)
 	}
 
 	execResponse := ExecuteResponse{}
@@ -1304,7 +1304,7 @@ func GetFolderHierarchy(folderid []byte) (*RopGetHierarchyTableResponse, []byte,
 	responseBody, err := sendMapiRequest("Execute", execRequest)
 
 	if err != nil {
-		return nil, nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
+		return nil, nil, fmt.Errorf("[x] A Server Side error occurred.\n %s", err)
 	}
 	execResponse := ExecuteResponse{}
 	execResponse.Unmarshal(responseBody)
@@ -1359,7 +1359,7 @@ func GetSubFolders(folderid []byte) (*RopQueryRowsResponse, error) {
 	responseBody, err := sendMapiRequest("Execute", execRequest)
 
 	if err != nil {
-		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
+		return nil, fmt.Errorf("[x] A Server Side error occurred.\n %s", err)
 	}
 	execResponse := ExecuteResponse{}
 	execResponse.Unmarshal(responseBody)
@@ -1426,7 +1426,7 @@ func CreateFolder(folderName string, hidden bool) (*RopCreateFolderResponse, err
 	responseBody, err := sendMapiRequest("Execute", execRequest)
 
 	if err != nil {
-		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
+		return nil, fmt.Errorf("[x] A Server Side error occurred.\n %s", err)
 	}
 	execResponse := ExecuteResponse{}
 	execResponse.Unmarshal(responseBody)
@@ -1485,7 +1485,7 @@ func GetContents(folderid []byte) (*RopQueryRowsResponse, error) {
 	responseBody, err := sendMapiRequest("Execute", execRequest)
 
 	if err != nil {
-		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
+		return nil, fmt.Errorf("[x] A Server Side error occurred.\n %s", err)
 	}
 	execResponse := ExecuteResponse{}
 	execResponse.Unmarshal(responseBody)
@@ -1544,7 +1544,7 @@ func DisplayRules() ([]Rule, error) {
 	responseBody, err := sendMapiRequest("Execute", execRequest)
 
 	if err != nil {
-		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
+		return nil, fmt.Errorf("[x] A Server Side error occurred.\n %s", err)
 	}
 	execResponse := ExecuteResponse{}
 	execResponse.Unmarshal(responseBody)
@@ -1608,7 +1608,7 @@ func ExecuteMailRuleAdd(rulename, triggerword, triggerlocation string, delete bo
 	responseBody, err := sendMapiRequest("Execute", execRequest)
 
 	if err != nil {
-		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
+		return nil, fmt.Errorf("[x] A Server Side error occurred.\n %s", err)
 	}
 	execResponse := ExecuteResponse{}
 	execResponse.Unmarshal(responseBody)
@@ -1636,7 +1636,7 @@ func ExecuteMailRuleDelete(ruleid []byte) error {
 	responseBody, err := sendMapiRequest("Execute", execRequest)
 
 	if err != nil {
-		return fmt.Errorf("[x] A HTTP server side error occurred while deleting the rule.\n %s", err)
+		return fmt.Errorf("[x] A Server Side error occurred while deleting the rule.\n %s", err)
 	}
 	execResponse := ExecuteResponse{}
 	execResponse.Unmarshal(responseBody)
@@ -1702,14 +1702,12 @@ func DecodeRulesResponse(resp []byte, properties []PropertyTag) ([]Rule, []byte)
 	pos += tpos
 
 	if err != nil {
-		fmt.Println("Bad SetColumns")
 		return nil, nil
 	}
 
 	rows := RopQueryRowsResponse{}
 	tpos, err = rows.Unmarshal(resp[pos:], properties)
 	if err != nil {
-		fmt.Println("Bad QueryRows")
 		return nil, nil
 	}
 	pos += tpos
