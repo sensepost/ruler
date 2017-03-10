@@ -1,0 +1,113 @@
+package main
+
+import (
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
+	"flag"
+	"fmt"
+	"log"
+	"net/http"
+	"os"
+	"time"
+
+	"golang.org/x/net/webdav"
+)
+
+var dir string
+var commonName = "*.sensepost.com"
+
+func genCert() {
+	if _, err := os.Stat(fmt.Sprintf("%s/cert.pem", dir)); err == nil {
+		if _, er := os.Stat(fmt.Sprintf("%s/key.pem", dir)); er == nil {
+			fmt.Println("[*] Found certificate files in directory. Using these.")
+			return
+		}
+	}
+	fmt.Println("[*] No certificate files found in directory. Generating new...")
+	s, _ := rand.Prime(rand.Reader, 1024)
+	ca := &x509.Certificate{
+		SerialNumber: s,
+		Subject: pkix.Name{
+			Country:      []string{"UK"},
+			Organization: []string{"Sensepost"},
+			CommonName:   commonName,
+		},
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().AddDate(10, 0, 0),
+		SubjectKeyId:          []byte{1, 2, 3, 4, 6},
+		BasicConstraintsValid: true,
+		IsCA:        true,
+		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
+		KeyUsage:    x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
+	}
+
+	priv, _ := rsa.GenerateKey(rand.Reader, 1024)
+	pub := &priv.PublicKey
+	caB, err := x509.CreateCertificate(rand.Reader, ca, ca, pub, priv)
+	if err != nil {
+		fmt.Println("create ca failed", err)
+	}
+
+	kpemfile, err := os.Create("key.pem")
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	cpemfile, err := os.Create("cert.pem")
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	var pemkey = &pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: x509.MarshalPKCS1PrivateKey(priv)}
+	err = pem.Encode(kpemfile, pemkey)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	kpemfile.Close()
+	pem.Encode(cpemfile, &pem.Block{Type: "CERTIFICATE", Bytes: caB})
+	cpemfile.Close()
+
+	fmt.Println("[*] Certificate files generated")
+}
+
+func main() {
+
+	dirFlag := flag.String("d", "./", "Directory to serve from. Default is CWD")
+	httpPort := flag.Int("p", 80, "Port to serve on (Plain HTTP)")
+	httpsPort := flag.Int("ps", 443, "Port to serve TLS on")
+	serveSecure := flag.Bool("s", false, "Serve HTTPS. Default false")
+	commonname := flag.String("common", "", "CommonName for the TLS Certificate")
+
+	flag.Parse()
+
+	dir = *dirFlag
+
+	srv := &webdav.Handler{
+		FileSystem: webdav.Dir(dir),
+		LockSystem: webdav.NewMemLS(),
+		Logger: func(r *http.Request, err error) {
+			log.Printf("WEBDAV: %v, ERROR: %v", r, err)
+		},
+	}
+	http.Handle("/", srv)
+	if *serveSecure == true {
+		if *commonname != "" {
+			commonName = *commonname
+		}
+		genCert()
+		go http.ListenAndServeTLS(fmt.Sprintf(":%d", *httpsPort), "cert.pem", "key.pem", nil)
+	}
+	if err := http.ListenAndServe(fmt.Sprintf(":%d", *httpPort), nil); err != nil {
+		log.Fatalf("Error with WebDAV server: %v", err)
+	}
+
+}
