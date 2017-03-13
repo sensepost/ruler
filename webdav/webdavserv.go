@@ -34,6 +34,7 @@ func main() {
 			}
 		},
 	}
+
 	http.Handle("/", srv)
 
 	if *serveSecure == true {

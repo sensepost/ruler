@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"encoding/hex"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
@@ -34,134 +33,6 @@ func exit(err error) {
 		fmt.Println(err)
 	}
 	os.Exit(exitcode)
-}
-
-func getMapiHTTP(autoURLPtr string, resp *utils.AutodiscoverResp) (*utils.AutodiscoverResp, string) {
-	//var resp *utils.AutodiscoverResp
-	var err error
-	var rawAutodiscover string
-
-	if autoURLPtr == "" && resp == nil {
-		fmt.Println("[*] Retrieving MAPI/HTTP info")
-		//rather use the email address's domain here and --domain is the authentication domain
-		lastBin := strings.LastIndex(config.Email, "@")
-		if lastBin == -1 {
-			exit(fmt.Errorf("[x] The supplied email address seems to be incorrect.\n%s", err))
-		}
-		maildomain := config.Email[lastBin+1:]
-		resp, rawAutodiscover, err = autodiscover.MAPIDiscover(maildomain)
-	} else if resp == nil {
-		resp, rawAutodiscover, err = autodiscover.MAPIDiscover(autoURLPtr)
-	}
-
-	if resp == nil || err != nil {
-		exit(fmt.Errorf("[x] The autodiscover service request did not complete.\n%s", err))
-	}
-	//check if the autodiscover service responded with an error
-	if resp.Response.Error != (utils.AutoError{}) {
-		exit(fmt.Errorf("[x] The autodiscover service responded with an error.\n%s", resp.Response.Error.Message))
-	}
-	return resp, rawAutodiscover
-}
-
-func getRPCHTTP(autoURLPtr string, resp *utils.AutodiscoverResp) (*utils.AutodiscoverResp, string) {
-	//var resp *utils.AutodiscoverResp
-	var err error
-	var rawAutodiscover string
-
-	if autoURLPtr == "" && resp == nil {
-		fmt.Println("[*] Retrieving RPC/HTTP info")
-		//rather use the email address's domain here and --domain is the authentication domain
-		lastBin := strings.LastIndex(config.Email, "@")
-		if lastBin == -1 {
-			exit(fmt.Errorf("[x] The supplied email address seems to be incorrect.\n%s", err))
-		}
-		maildomain := config.Email[lastBin+1:]
-		resp, rawAutodiscover, err = autodiscover.Autodiscover(maildomain)
-	} else if resp == nil {
-		resp, rawAutodiscover, err = autodiscover.Autodiscover(autoURLPtr)
-	}
-
-	if resp == nil || err != nil {
-		exit(fmt.Errorf("[x] The autodiscover service request did not complete.\n%s", err))
-	}
-	//check if the autodiscover service responded with an error
-	if resp.Response.Error != (utils.AutoError{}) {
-		exit(fmt.Errorf("[x] The autodiscover service responded with an error.\n%s", resp.Response.Error.Message))
-	}
-
-	url := ""
-	user := ""
-	for _, v := range resp.Response.Account.Protocol {
-		if v.Type == "EXPR" {
-			if v.SSL == "Off" {
-				url = "http://" + v.Server
-			} else {
-				url = "https://" + v.Server
-			}
-			if v.AuthPackage == "Ntlm" { //set the encryption on if the server specifies NTLM auth
-				config.RPCEncrypt = true
-			}
-		}
-		if v.Type == "EXCH" {
-			user = v.Server
-		}
-	}
-	config.RPCURL = fmt.Sprintf("%s/rpc/rpcproxy.dll?%s:6001", url, user)
-	config.RPCMailbox = user
-	fmt.Printf("[+] RPC URL set: %s\n", config.RPCURL)
-	//if strings.Index(user, "@") == -1 {
-	//		fmt.Printf("[x] The RPC user seems invalid. It is likely that Outlook Anywhere is disabled for this user. \n[x] This is likely to fail...\n")
-	//}
-	return resp, rawAutodiscover
-}
-
-func checkCache(email string) *utils.AutodiscoverResp {
-	//check the cache folder for a stored autodiscover record
-	email = strings.Replace(email, "@", "_", -1)
-	email = strings.Replace(email, ".", "_", -1)
-	path := fmt.Sprintf("./logs/%s.cache", email)
-
-	if _, err := os.Stat(path); err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		fmt.Println("[x] Error ", err)
-		return nil
-	}
-	fmt.Println("[*] Found cached Autodiscover record. Using this (use --nocache to force new lookup)")
-	data, err := ioutil.ReadFile(path)
-	if err != nil {
-		fmt.Println("[x] Error reading stored record", err)
-		return nil
-	}
-	autodiscoverResp := utils.AutodiscoverResp{}
-	autodiscoverResp.Unmarshal(data)
-	return &autodiscoverResp
-}
-
-func createCache(email, autodiscover string) {
-
-	if autodiscover == "" { //no autodiscover record passed in, don't try write
-		return
-	}
-	email = strings.Replace(email, "@", "_", -1)
-	email = strings.Replace(email, ".", "_", -1)
-	path := fmt.Sprintf("./logs/%s.cache", email)
-	if _, err := os.Stat("./logs"); err != nil {
-		if os.IsNotExist(err) {
-			//create the logs directory
-			if err := os.MkdirAll("./logs", 0711); err != nil {
-				fmt.Println("[x] Couldn't create a cache directory")
-			}
-			//return nil
-		}
-	}
-	fout, _ := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0666)
-	_, err := fout.WriteString(autodiscover)
-	if err != nil {
-		fmt.Println("Couldn't write to file for some reason..", err)
-	}
 }
 
 //function to perform a bruteforce
@@ -379,7 +250,7 @@ func connect(c *cli.Context) error {
 
 	//unless user specified nocache, check cache for existing autodiscover
 	if c.GlobalBool("nocache") == false {
-		resp = checkCache(config.Email)
+		resp = autodiscover.CheckCache(config.Email)
 	}
 
 	//var err error
@@ -389,36 +260,47 @@ func connect(c *cli.Context) error {
 	if !c.GlobalBool("rpc") {
 		var mapiURL, abkURL, userDN string
 
-		resp, rawAutodiscover = getMapiHTTP(url, resp)
+		resp, rawAutodiscover, err = autodiscover.GetMapiHTTP(config.Email, url, resp)
+		if err != nil {
+			exit(err)
+		}
 		mapiURL = mapi.ExtractMapiURL(resp)
 		abkURL = mapi.ExtractMapiAddressBookURL(resp)
 		userDN = resp.Response.User.LegacyDN
 
 		if mapiURL == "" { //try RPC
 			//fmt.Println("[x] No MAPI URL found. Trying RPC/HTTP")
-			resp, _ = getRPCHTTP(url, resp)
+			resp, _, config.RPCURL, config.RPCMailbox, config.RPCEncrypt, err = autodiscover.GetRPCHTTP(config.Email, url, resp)
+			if err != nil {
+				exit(err)
+			}
 			if resp.Response.User.LegacyDN == "" {
 				return fmt.Errorf("[x] Both MAPI/HTTP and RPC/HTTP failed. Are the credentials valid? \n%s", resp.Response.Error)
 			}
 			mapi.Init(&config, resp.Response.User.LegacyDN, "", "", mapi.RPC)
 			if c.GlobalBool("nocache") == false {
-				createCache(config.Email, rawAutodiscover) //store the autodiscover for future use
+				autodiscover.CreateCache(config.Email, rawAutodiscover) //store the autodiscover for future use
 			}
 		} else {
-			fmt.Println("[+] MAPI URL found: ", mapiURL)
-			fmt.Println("[+] MAPI AddressBook URL found: ", abkURL)
+			if c.GlobalBool("verbose") == true {
+				fmt.Println("[+] MAPI URL found: ", mapiURL)
+				fmt.Println("[+] MAPI AddressBook URL found: ", abkURL)
+			}
 			mapi.Init(&config, userDN, mapiURL, abkURL, mapi.HTTP)
 			if c.GlobalBool("nocache") == false {
-				createCache(config.Email, rawAutodiscover) //store the autodiscover for future use
+				autodiscover.CreateCache(config.Email, rawAutodiscover) //store the autodiscover for future use
 			}
 		}
 
 	} else {
 		fmt.Println("[*] RPC/HTTP forced, trying RPC/HTTP")
-		resp, rawAutodiscover = getRPCHTTP(url, resp)
+		resp, rawAutodiscover, config.RPCURL, config.RPCMailbox, config.RPCEncrypt, err = autodiscover.GetRPCHTTP(config.Email, url, resp)
+		if err != nil {
+			exit(err)
+		}
 		mapi.Init(&config, resp.Response.User.LegacyDN, "", "", mapi.RPC)
 		if c.GlobalBool("nocache") == false {
-			createCache(config.Email, rawAutodiscover) //store the autodiscover for future use
+			autodiscover.CreateCache(config.Email, rawAutodiscover) //store the autodiscover for future use
 		}
 	}
 

@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"regexp"
 	"strings"
 	"text/template"
@@ -52,6 +53,138 @@ func createAutodiscover(domain string, https bool) string {
 		return fmt.Sprintf("https://%s/autodiscover/autodiscover.xml", domain)
 	}
 	return fmt.Sprintf("http://%s/autodiscover/autodiscover.xml", domain)
+}
+
+//GetMapiHTTP gets the details for MAPI/HTTP
+func GetMapiHTTP(email, autoURLPtr string, resp *utils.AutodiscoverResp) (*utils.AutodiscoverResp, string, error) {
+	//var resp *utils.AutodiscoverResp
+	var err error
+	var rawAutodiscover string
+
+	if autoURLPtr == "" && resp == nil {
+		fmt.Println("[*] Retrieving MAPI/HTTP info")
+		//rather use the email address's domain here and --domain is the authentication domain
+		lastBin := strings.LastIndex(email, "@")
+		if lastBin == -1 {
+			return nil, "", fmt.Errorf("[x] The supplied email address seems to be incorrect.\n%s", err)
+		}
+		maildomain := email[lastBin+1:]
+		resp, rawAutodiscover, err = MAPIDiscover(maildomain)
+	} else if resp == nil {
+		resp, rawAutodiscover, err = MAPIDiscover(autoURLPtr)
+	}
+
+	if resp == nil || err != nil {
+		return nil, "", fmt.Errorf("[x] The autodiscover service request did not complete.\n%s", err)
+	}
+	//check if the autodiscover service responded with an error
+	if resp.Response.Error != (utils.AutoError{}) {
+		return nil, "", fmt.Errorf("[x] The autodiscover service responded with an error.\n%s", resp.Response.Error.Message)
+	}
+	return resp, rawAutodiscover, nil
+}
+
+//GetRPCHTTP exports the RPC details for RPC/HTTP
+func GetRPCHTTP(email, autoURLPtr string, resp *utils.AutodiscoverResp) (*utils.AutodiscoverResp, string, string, string, bool, error) {
+	//var resp *utils.AutodiscoverResp
+	var err error
+	var rawAutodiscover string
+
+	if autoURLPtr == "" && resp == nil {
+		fmt.Println("[*] Retrieving RPC/HTTP info")
+		//rather use the email address's domain here and --domain is the authentication domain
+		lastBin := strings.LastIndex(email, "@")
+		if lastBin == -1 {
+			return nil, "", "", "", false, fmt.Errorf("[x] The supplied email address seems to be incorrect.\n%s", err)
+		}
+		maildomain := email[lastBin+1:]
+		resp, rawAutodiscover, err = Autodiscover(maildomain)
+	} else if resp == nil {
+		resp, rawAutodiscover, err = Autodiscover(autoURLPtr)
+	}
+
+	if resp == nil || err != nil {
+		return nil, "", "", "", false, fmt.Errorf("[x] The autodiscover service request did not complete.\n%s", err)
+	}
+	//check if the autodiscover service responded with an error
+	if resp.Response.Error != (utils.AutoError{}) {
+		return nil, "", "", "", false, fmt.Errorf("[x] The autodiscover service responded with an error.\n%s", resp.Response.Error.Message)
+	}
+
+	url := ""
+	user := ""
+	encrypt := false
+	for _, v := range resp.Response.Account.Protocol {
+		if v.Type == "EXPR" {
+			if v.SSL == "Off" {
+				url = "http://" + v.Server
+			} else {
+				url = "https://" + v.Server
+			}
+			if v.AuthPackage == "Ntlm" { //set the encryption on if the server specifies NTLM auth
+				encrypt = true
+			}
+		}
+		if v.Type == "EXCH" {
+			user = v.Server
+		}
+	}
+	RPCURL := fmt.Sprintf("%s/rpc/rpcproxy.dll?%s:6001", url, user)
+	//config.RPCMailbox = user
+	if SessionConfig.Verbose == true {
+		fmt.Printf("[+] RPC URL set: %s\n", RPCURL)
+	}
+
+	return resp, rawAutodiscover, RPCURL, user, encrypt, nil
+}
+
+//CheckCache checks to see if there is a stored copy of the autodiscover record
+func CheckCache(email string) *utils.AutodiscoverResp {
+	//check the cache folder for a stored autodiscover record
+	email = strings.Replace(email, "@", "_", -1)
+	email = strings.Replace(email, ".", "_", -1)
+	path := fmt.Sprintf("./logs/%s.cache", email)
+
+	if _, err := os.Stat(path); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		fmt.Println("[x] Error ", err)
+		return nil
+	}
+	fmt.Println("[*] Found cached Autodiscover record. Using this (use --nocache to force new lookup)")
+	data, err := ioutil.ReadFile(path)
+	if err != nil {
+		fmt.Println("[x] Error reading stored record", err)
+		return nil
+	}
+	autodiscoverResp := utils.AutodiscoverResp{}
+	autodiscoverResp.Unmarshal(data)
+	return &autodiscoverResp
+}
+
+func CreateCache(email, autodiscover string) {
+
+	if autodiscover == "" { //no autodiscover record passed in, don't try write
+		return
+	}
+	email = strings.Replace(email, "@", "_", -1)
+	email = strings.Replace(email, ".", "_", -1)
+	path := fmt.Sprintf("./logs/%s.cache", email)
+	if _, err := os.Stat("./logs"); err != nil {
+		if os.IsNotExist(err) {
+			//create the logs directory
+			if err := os.MkdirAll("./logs", 0711); err != nil {
+				fmt.Println("[x] Couldn't create a cache directory")
+			}
+			//return nil
+		}
+	}
+	fout, _ := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0666)
+	_, err := fout.WriteString(autodiscover)
+	if err != nil {
+		fmt.Println("Couldn't write to file for some reason..", err)
+	}
 }
 
 //Autodiscover function to retrieve mailbox details using the autodiscover mechanism from MS Exchange
