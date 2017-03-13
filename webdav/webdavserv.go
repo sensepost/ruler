@@ -35,6 +35,7 @@ func main() {
 		},
 	}
 	http.Handle("/", srv)
+
 	if *serveSecure == true {
 		if _, err := os.Stat("./cert.pem"); err != nil {
 			fmt.Println("[x] No cert.pem in current directory. Please provide a valid cert")
