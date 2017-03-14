@@ -35,7 +35,7 @@ func BindAddressBook() (*BindResponse, error) {
 	responseBody, err := sendAddressBookRequest("BIND", bindReq.Marshal())
 
 	if err != nil {
-		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
+		return nil, fmt.Errorf("A HTTP server side error occurred.\n %s", err)
 	}
 	bindResp := BindResponse{}
 	_, err = bindResp.Unmarshal(responseBody)
@@ -44,7 +44,7 @@ func BindAddressBook() (*BindResponse, error) {
 	}
 	return &bindResp, nil
 
-	//return nil, fmt.Errorf("[x] unexpected error occurred")
+	//return nil, fmt.Errorf("unexpected error occurred")
 }
 
 //GetSpecialTable function to get special table from addressbook provider
@@ -61,7 +61,7 @@ func GetSpecialTable() (*GetSpecialTableResponse, error) {
 	responseBody, err := sendAddressBookRequest("GetSpecialTable", gstReq.Marshal())
 
 	if err != nil {
-		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
+		return nil, fmt.Errorf("A HTTP server side error occurred.\n %s", err)
 	}
 	gstResp := GetSpecialTableResponse{}
 	_, err = gstResp.Unmarshal(responseBody)
@@ -85,7 +85,7 @@ func DnToMinID() (*DnToMinIDResponse, error) {
 
 	if err != nil {
 		fmt.Println(err)
-		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
+		return nil, fmt.Errorf("A HTTP server side error occurred.\n %s", err)
 	}
 	gstResp := DnToMinIDResponse{}
 	_, err = gstResp.Unmarshal(responseBody)
@@ -127,7 +127,7 @@ func QueryRows(rowCount int, columns []PropertyTag) (*QueryRowsResponse, error) 
 	responseBody, err := sendAddressBookRequest("QueryRows", qRows.Marshal())
 
 	if err != nil {
-		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
+		return nil, fmt.Errorf("A HTTP server side error occurred.\n %s", err)
 	}
 	qrResp := QueryRowsResponse{}
 	_, err = qrResp.Unmarshal(responseBody)
@@ -159,7 +159,7 @@ func SeekEntries(entryStart string, columns []PropertyTag) (*QueryRowsResponse, 
 	responseBody, err := sendAddressBookRequest("SeekEntries", qRows.Marshal())
 
 	if err != nil {
-		return nil, fmt.Errorf("[x] A HTTP server side error occurred.\n %s", err)
+		return nil, fmt.Errorf("A HTTP server side error occurred.\n %s", err)
 	}
 	qrResp := QueryRowsResponse{}
 	_, err = qrResp.Unmarshal(responseBody)

