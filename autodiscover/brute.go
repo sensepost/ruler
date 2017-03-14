@@ -52,7 +52,7 @@ func autodiscoverDomain(domain string) string {
 		}
 	}
 
-	utils.Trace.Printf("[*] Autodiscover step %d - URL: %s\n", autodiscoverStep, autodiscoverURL)
+	utils.Trace.Printf("Autodiscover step %d - URL: %s\n", autodiscoverStep, autodiscoverURL)
 
 	req, err := http.NewRequest("GET", autodiscoverURL, nil)
 	req.Header.Add("Content-Type", "text/xml")
@@ -123,7 +123,7 @@ func BruteForce(domain, usersFile, passwordsFile string, basic, insecure, stopSu
 					}
 				}
 				if out.Status == 200 {
-					utils.Info.Printf("\033[96m[+] Success: %s:%s\033[0m\n", out.Username, out.Password)
+					utils.Info.Printf("\033[96mSuccess: %s:%s\033[0m\n", out.Username, out.Password)
 					//remove username from username list (we don't need to brute something we know)
 					usernames = append(usernames[:out.Index], usernames[out.Index+1:]...)
 					if stopSuccess == true {

@@ -157,7 +157,7 @@ func mapiConnectRPC(body ConnectRequestRPC) ([]byte, error) {
 	//there will currently be a deadlock here if something goes wrong
 	go rpchttp.RPCOpen(AuthSession.RPCURL, ready, chanError)
 
-	utils.Trace.Println("[+] Setting up channels")
+	utils.Trace.Println("Setting up channels")
 
 	//wait for channels to be setup
 	if v := <-ready; v == false { //check if the setup was successful or premission Denied

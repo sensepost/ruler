@@ -109,11 +109,11 @@ func deleteRule(c *cli.Context) error {
 		if er != nil {
 			return er
 		}
-		utils.Info.Printf("Found %d rules\nExtracting ids\n", len(rules))
+		utils.Info.Printf("Found %d rules. Extracting ids\n", len(rules))
 		for _, v := range rules {
 			if utils.FromUnicode(v.RuleName) == c.String("name") {
 				reader := bufio.NewReader(os.Stdin)
-				utils.Info.Printf("[?] Delete rule with id %x [y/N]: ", v.RuleID)
+				utils.Question.Printf("Delete rule with id %x [y/N]: ", v.RuleID)
 				ans, _ := reader.ReadString('\n')
 				if ans == "y\n" || ans == "Y\n" || ans == "yes\n" {
 					ruleid = v.RuleID
