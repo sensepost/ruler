@@ -315,6 +315,40 @@ type RopCreateFolderResponse struct {
 	Servers          []byte //only if IsGhosted == true
 }
 
+//RopEmptyFolderRequest used to delete all messages and subfolders from a folder
+type RopEmptyFolderRequest struct {
+	RopID                uint8 //0x58
+	LogonID              uint8
+	InputHandle          uint8
+	WantAsynchronous     uint8
+	WantDeleteAssociated uint8
+}
+
+//RopEmptyFolderResponse to emptying a folder
+type RopEmptyFolderResponse struct {
+	RopID           uint8 //0x58
+	InputHandle     uint8
+	ReturnValue     uint32
+	PartialComplete uint8
+}
+
+//RopDeleteFolderRequest used to delete a folder
+type RopDeleteFolderRequest struct {
+	RopID             uint8 //0x1D
+	LogonID           uint8
+	InputHandle       uint8
+	DeleteFolderFlags uint8
+	FolderID          []byte
+}
+
+//RopDeleteFolderResponse to delete a folder
+type RopDeleteFolderResponse struct {
+	RopID           uint8 //0x1D
+	InputHandle     uint8
+	ReturnValue     uint32
+	PartialComplete uint8
+}
+
 //RopCreateMessageRequest struct used to open handle to new email message
 type RopCreateMessageRequest struct {
 	RopID          uint8 //0x32
@@ -907,6 +941,16 @@ func (modRecipients RopModifyRecipientsRequest) Marshal() []byte {
 	return utils.BodyToBytes(modRecipients)
 }
 
+//Marshal turn RopFastTransferSourceCopyPropertiesRequest into Bytes
+func (emptyFolder RopEmptyFolderRequest) Marshal() []byte {
+	return utils.BodyToBytes(emptyFolder)
+}
+
+//Marshal turn RopDeleteFolderRequest into Bytes
+func (deleteFolder RopDeleteFolderRequest) Marshal() []byte {
+	return utils.BodyToBytes(deleteFolder)
+}
+
 //Unmarshal function to convert response into ConnectResponse struct
 func (connResponse *ConnectResponse) Unmarshal(resp []byte) error {
 	pos := 0
@@ -1058,6 +1102,34 @@ func (deleteMessageResponse *RopDeleteMessagesResponse) Unmarshal(resp []byte) (
 	return pos, nil
 }
 
+//Unmarshal function to produce RopEmptyFolderResponse struct
+func (emptyFolderResponse *RopEmptyFolderResponse) Unmarshal(resp []byte) (int, error) {
+	pos := 0
+
+	emptyFolderResponse.RopID, pos = utils.ReadByte(pos, resp)
+	emptyFolderResponse.InputHandle, pos = utils.ReadByte(pos, resp)
+	emptyFolderResponse.ReturnValue, pos = utils.ReadUint32(pos, resp)
+	emptyFolderResponse.PartialComplete, pos = utils.ReadByte(pos, resp)
+	if emptyFolderResponse.ReturnValue != 0 {
+		return pos, fmt.Errorf("non-zero return code %x", emptyFolderResponse.ReturnValue)
+	}
+	return pos, nil
+}
+
+//Unmarshal function to produce RopDeleteFolderResponse struct
+func (deleteFolderResponse *RopDeleteFolderResponse) Unmarshal(resp []byte) (int, error) {
+	pos := 0
+
+	deleteFolderResponse.RopID, pos = utils.ReadByte(pos, resp)
+	deleteFolderResponse.InputHandle, pos = utils.ReadByte(pos, resp)
+	deleteFolderResponse.ReturnValue, pos = utils.ReadUint32(pos, resp)
+	deleteFolderResponse.PartialComplete, pos = utils.ReadByte(pos, resp)
+	if deleteFolderResponse.ReturnValue != 0 {
+		return pos, fmt.Errorf("non-zero return code %x", deleteFolderResponse.ReturnValue)
+	}
+	return pos, nil
+}
+
 //Unmarshal function to produce RopCreateMessageResponse struct
 func (modRecipientsResponse *RopModifyRecipientsResponse) Unmarshal(resp []byte) (int, error) {
 	pos := 0
@@ -1111,7 +1183,7 @@ func (setPropertiesResponse *RopSetPropertiesResponse) Unmarshal(resp []byte) (i
 	if setPropertiesResponse.ReturnValue == 0 {
 		setPropertiesResponse.PropertProblemCount, pos = utils.ReadUint16(pos, resp)
 		if setPropertiesResponse.PropertProblemCount > 0 {
-			fmt.Println(setPropertiesResponse.PropertProblemCount)
+			//fmt.Println(setPropertiesResponse.PropertProblemCount)
 		}
 	} else {
 		return pos, fmt.Errorf("non-zero return code %x", setPropertiesResponse.ReturnValue)

@@ -22,6 +22,7 @@ const HTTP int = 1
 const RPC int = 2
 
 var cnt = 0
+var client http.Client
 
 //AuthSession holds all our session related info
 var AuthSession *utils.Session
@@ -54,6 +55,17 @@ func Init(config *utils.Session, lid, URL, ABKURL string, transport int) {
 	if transport == HTTP {
 		AuthSession.URL, _ = url.Parse(URL)
 		AuthSession.ABKURL, _ = url.Parse(ABKURL)
+		client = http.Client{
+			Transport: &httpntlm.NtlmTransport{
+				Domain:    AuthSession.Domain,
+				User:      AuthSession.User,
+				Password:  AuthSession.Pass,
+				NTHash:    AuthSession.NTHash,
+				Insecure:  AuthSession.Insecure,
+				CookieJar: AuthSession.CookieJar,
+			},
+			Jar: AuthSession.CookieJar,
+		}
 	} else {
 		AuthSession.Host = URL
 	}
@@ -70,6 +82,7 @@ func Init(config *utils.Session, lid, URL, ABKURL string, transport int) {
 	//AuthSession.RPCNetworkAuthLevel = rpchttp.RPC_C_AUTHN_LEVEL_NONE
 	//AuthSession.RPCNetworkAuthType = rpchttp.RPC_C_AUTHN_NONE
 	//}
+
 }
 
 func addMapiHeaders(req *http.Request, mapiType string) {
@@ -106,24 +119,12 @@ func sendMapiDisconnect(mapi DisconnectRequest) ([]byte, error) {
 //and the session cookies.
 func mapiRequestHTTP(URL, mapiType string, body []byte) ([]byte, error) {
 
-	Client := http.Client{
-		Transport: &httpntlm.NtlmTransport{
-			Domain:    AuthSession.Domain,
-			User:      AuthSession.User,
-			Password:  AuthSession.Pass,
-			NTHash:    AuthSession.NTHash,
-			Insecure:  AuthSession.Insecure,
-			CookieJar: AuthSession.CookieJar,
-		},
-		Jar: AuthSession.CookieJar,
-	}
-
 	req, err := http.NewRequest("POST", URL, bytes.NewReader(body))
 	addMapiHeaders(req, mapiType)
 	req.SetBasicAuth(AuthSession.Email, AuthSession.Pass)
 	req.Close = true
 	//request the auth url
-	resp, err := Client.Do(req)
+	resp, err := client.Do(req)
 
 	if err != nil {
 		//check if this error was because of ntml auth when basic auth was expected.
@@ -877,7 +878,7 @@ func SaveMessageFast(inputHandle, responseHandle byte, serverHandles []byte) (*R
 	return nil, fmt.Errorf("Unspecified error occurred\n")
 }
 
-//DeleteMessages is used to create a message on the exchange server
+//DeleteMessages is used to delete a message on the exchange server
 func DeleteMessages(folderid []byte, messageIDCount int, messageIDs []byte) (*RopDeleteMessagesResponse, error) {
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
@@ -929,6 +930,98 @@ func DeleteMessages(folderid []byte, messageIDCount int, messageIDs []byte) (*Ro
 		}
 
 		return &deleteMessageResponse, nil
+	}
+
+	return nil, fmt.Errorf("Unspecified error occurred\n")
+}
+
+//EmptyFolder is used to delete all contents of a folder
+func EmptyFolder(folderid []byte) (*RopEmptyFolderResponse, error) {
+	execRequest := ExecuteRequest{}
+	execRequest.Init()
+
+	getFolder := RopOpenFolderRequest{RopID: 0x02, LogonID: AuthSession.LogonID}
+	getFolder.InputHandle = 0x00
+	getFolder.OutputHandle = 0x01
+	getFolder.FolderID = folderid
+	getFolder.OpenModeFlags = 0x00
+
+	fullReq := getFolder.Marshal()
+
+	emptyFolder := RopEmptyFolderRequest{RopID: 0x58, LogonID: AuthSession.LogonID}
+	emptyFolder.InputHandle = 0x01
+	emptyFolder.WantAsynchronous = 255
+	emptyFolder.WantDeleteAssociated = 255
+
+	fullReq = append(fullReq, emptyFolder.Marshal()...)
+
+	ropRelease := RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandle: 0x01}
+	fullReq = append(fullReq, ropRelease.Marshal()...)
+
+	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
+	execRequest.RopBuffer.ROP.RopsList = fullReq
+
+	responseBody, err := sendMapiRequest("Execute", execRequest)
+
+	if err != nil {
+		return nil, fmt.Errorf("A Server Side error occurred.\n %s", err)
+	}
+	execResponse := ExecuteResponse{}
+	execResponse.Unmarshal(responseBody)
+
+	if execResponse.StatusCode == 0 {
+		bufPtr := 10
+		openFolder := RopOpenFolderResponse{}
+		p, err := openFolder.Unmarshal(execResponse.RopBuffer[bufPtr:])
+		if err != nil {
+			return nil, err
+		}
+		bufPtr += p
+		emptyFolderResponse := RopEmptyFolderResponse{}
+
+		_, e := emptyFolderResponse.Unmarshal(execResponse.RopBuffer[bufPtr:])
+		if e != nil {
+			return nil, fmt.Errorf("An error occurred %s\n", e)
+		}
+
+		return &emptyFolderResponse, nil
+	}
+
+	return nil, fmt.Errorf("Unspecified error occurred\n")
+}
+
+//DeleteFolder is used to delete  a folder
+func DeleteFolder(folderid []byte) (*RopDeleteFolderResponse, error) {
+	execRequest := ExecuteRequest{}
+	execRequest.Init()
+
+	deleteFolder := RopDeleteFolderRequest{RopID: 0x1D, LogonID: AuthSession.LogonID}
+	deleteFolder.InputHandle = 0x00
+	deleteFolder.FolderID = folderid
+	deleteFolder.DeleteFolderFlags = 0x05
+
+	fullReq := deleteFolder.Marshal()
+
+	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
+	execRequest.RopBuffer.ROP.RopsList = fullReq
+
+	responseBody, err := sendMapiRequest("Execute", execRequest)
+
+	if err != nil {
+		return nil, fmt.Errorf("A Server Side error occurred.\n %s", err)
+	}
+	execResponse := ExecuteResponse{}
+	execResponse.Unmarshal(responseBody)
+
+	if execResponse.StatusCode == 0 {
+		bufPtr := 10
+		deleteFolder := RopDeleteFolderResponse{}
+		_, err := deleteFolder.Unmarshal(execResponse.RopBuffer[bufPtr:])
+		if err != nil {
+			return nil, err
+		}
+
+		return &deleteFolder, nil
 	}
 
 	return nil, fmt.Errorf("Unspecified error occurred\n")
@@ -1347,7 +1440,7 @@ func GetSubFolders(folderid []byte) (*RopQueryRowsResponse, error) {
 	setColumns.PropertyTags[1] = PidTagFolderID
 
 	fullReq := setColumns.Marshal()
-	//fmt.Println(folderHeirarchy.RowCount)
+
 	queryRows := RopQueryRowsRequest{RopID: 0x15, LogonID: AuthSession.LogonID, InputHandle: 0x01, QueryRowsFlags: 0x00, ForwardRead: 0x01, RowCount: uint16(folderHeirarchy.RowCount)}
 	fullReq = append(fullReq, queryRows.Marshal()...)
 	execRequest.RopBuffer.ROP.RopsList = fullReq
