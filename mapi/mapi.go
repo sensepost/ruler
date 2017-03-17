@@ -1214,9 +1214,7 @@ func GetMessageFast(folderid, messageid []byte, columns []PropertyTag) (*RopFast
 			return nil, e
 		}
 
-		utils.Trace.Println("TransferStatus: ", pprops.TransferStatus) //0x0000 -- error 0x0001 -- partial
-		utils.Trace.Println("TotalStepCount: ", pprops.TotalStepCount)
-		utils.Trace.Println("InProgressCount: ", pprops.InProgressCount)
+		utils.Trace.Printf("Doing Chunked Transfer. Chunks [%d]", pprops.TotalStepCount)
 
 		//Rop release if we are done.. otherwise get rest of stream
 		if pprops.TransferStatus == 0x0001 {
@@ -1269,9 +1267,8 @@ func FastTransferFetchStep(handles []byte) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		utils.Trace.Println("TransferStatus: ", pprops.TransferStatus) //0x0000 -- error 0x0001 -- partial
-		utils.Trace.Println("TotalStepCount: ", pprops.TotalStepCount)
-		utils.Trace.Println("InProgressCount: ", pprops.InProgressCount)
+
+		utils.Trace.Printf("Large transfer in progress. Status: %d ", pprops.TransferStatus)
 
 		//Rop release if we are done.. otherwise get rest of stream
 		//fmt.Printf("%x\n", pprops.TransferBuffer)
