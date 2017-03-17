@@ -13,7 +13,7 @@ type ErrorCode struct {
 }
 
 func (e *ErrorCode) Error() string {
-	return fmt.Sprintf("mapi: non-zero return value. ERROR_CODE: %x", e.ErrorCode)
+	return fmt.Sprintf("mapi: non-zero return value. ERROR_CODE: %x - %s", e.ErrorCode, ErrorMapiCode{mapicode(e.ErrorCode)})
 }
 
 //TransportError returns the mapi error code encountered
@@ -102,6 +102,275 @@ const (
 	MSRemoteDownload = 0x00001000
 	MSInConflict     = 0x00000800
 	MSRemoteDelete   = 0x00002000
+)
+
+type mapicode uint32
+
+func (e mapicode) String() string {
+	switch e {
+	case MAPI_E_INTERFACE_NOT_SUPPORTED:
+		return "MAPI_E_INTERFACE_NOT_SUPPORTED"
+	case MAPI_E_CALL_FAILED:
+		return "MAPI_E_CALL_FAILED"
+	case MAPI_E_NO_ACCESS:
+		return "MAPI_E_NO_ACCESS"
+	case MAPI_E_NOT_ENOUGH_MEMORY:
+		return "MAPI_E_NOT_ENOUGH_MEMORY"
+	case MAPI_E_INVALID_PARAMETER:
+		return "MAPI_E_INVALID_PARAMETER"
+	case MAPI_E_NO_SUPPORT:
+		return "MAPI_E_NO_SUPPORT"
+	case MAPI_E_BAD_CHARWIDTH:
+		return "MAPI_E_BAD_CHARWIDTH"
+	case MAPI_E_STRING_TOO_LONG:
+		return "MAPI_E_STRING_TOO_LONG"
+	case MAPI_E_UNKNOWN_FLAGS:
+		return "MAPI_E_UNKNOWN_FLAGS"
+	case MAPI_E_INVALID_ENTRYID:
+		return "MAPI_E_INVALID_ENTRYID"
+	case MAPI_E_INVALID_OBJECT:
+		return "MAPI_E_INVALID_OBJECT"
+	case MAPI_E_OBJECT_CHANGED:
+		return "MAPI_E_OBJECT_CHANGED"
+	case MAPI_E_OBJECT_DELETED:
+		return "MAPI_E_OBJECT_DELETED"
+	case MAPI_E_BUSY:
+		return "MAPI_E_BUSY"
+	case MAPI_E_NOT_ENOUGH_DISK:
+		return "MAPI_E_NOT_ENOUGH_DISK"
+	case MAPI_E_NOT_ENOUGH_RESOURCES:
+		return "MAPI_E_NOT_ENOUGH_RESOURCES"
+	case MAPI_E_NOT_FOUND:
+		return "MAPI_E_NOT_FOUND"
+	case MAPI_E_VERSION:
+		return "MAPI_E_VERSION"
+	case MAPI_E_LOGON_FAILED:
+		return "MAPI_E_LOGON_FAILED"
+	case MAPI_E_SESSION_LIMIT:
+		return "MAPI_E_SESSION_LIMIT"
+	case MAPI_E_USER_CANCEL:
+		return "MAPI_E_USER_CANCEL"
+	case MAPI_E_UNABLE_TO_ABORT:
+		return "MAPI_E_UNABLE_TO_ABORT"
+	case MAPI_E_NETWORK_ERROR:
+		return "MAPI_E_NETWORK_ERROR"
+	case MAPI_E_DISK_ERROR:
+		return "MAPI_E_DISK_ERROR"
+	case MAPI_E_TOO_COMPLEX:
+		return "MAPI_E_TOO_COMPLEX"
+	case MAPI_E_BAD_COLUMN:
+		return "MAPI_E_BAD_COLUMN"
+	case MAPI_E_EXTENDED_ERROR:
+		return "MAPI_E_EXTENDED_ERROR"
+	case MAPI_E_COMPUTED:
+		return "MAPI_E_COMPUTED"
+	case MAPI_E_CORRUPT_DATA:
+		return "MAPI_E_CORRUPT_DATA"
+	case MAPI_E_UNCONFIGURED:
+		return "MAPI_E_UNCONFIGURED"
+	case MAPI_E_FAILONEPROVIDER:
+		return "MAPI_E_FAILONEPROVIDER"
+	case MAPI_E_UNKNOWN_CPID:
+		return "MAPI_E_UNKNOWN_CPID"
+	case MAPI_E_UNKNOWN_LCID:
+		return "MAPI_E_UNKNOWN_LCID"
+	case MAPI_E_PASSWORD_CHANGE_REQUIRED:
+		return "MAPI_E_PASSWORD_CHANGE_REQUIRED"
+	case MAPI_E_PASSWORD_EXPIRED:
+		return "MAPI_E_PASSWORD_EXPIRED"
+	case MAPI_E_INVALID_WORKSTATION_ACCOUNT:
+		return "MAPI_E_INVALID_WORKSTATION_ACCOUNT"
+	case MAPI_E_INVALID_ACCESS_TIME:
+		return "MAPI_E_INVALID_ACCESS_TIME"
+	case MAPI_E_ACCOUNT_DISABLED:
+		return "MAPI_E_ACCOUNT_DISABLED"
+	case MAPI_E_END_OF_SESSION:
+		return "MAPI_E_END_OF_SESSION"
+	case MAPI_E_UNKNOWN_ENTRYID:
+		return "MAPI_E_UNKNOWN_ENTRYID"
+	case MAPI_E_MISSING_REQUIRED_COLUMN:
+		return "MAPI_E_MISSING_REQUIRED_COLUMN"
+	case MAPI_W_NO_SERVICE:
+		return "MAPI_W_NO_SERVICE"
+	case MAPI_E_BAD_VALUE:
+		return "MAPI_E_BAD_VALUE"
+	case MAPI_E_INVALID_TYPE:
+		return "MAPI_E_INVALID_TYPE"
+	case MAPI_E_TYPE_NO_SUPPORT:
+		return "MAPI_E_TYPE_NO_SUPPORT"
+	case MAPI_E_UNEXPECTED_TYPE:
+		return "MAPI_E_UNEXPECTED_TYPE"
+	case MAPI_E_TOO_BIG:
+		return "MAPI_E_TOO_BIG"
+	case MAPI_E_DECLINE_COPY:
+		return "MAPI_E_DECLINE_COPY"
+	case MAPI_E_UNEXPECTED_ID:
+		return "MAPI_E_UNEXPECTED_ID"
+	case MAPI_W_ERRORS_RETURNED:
+		return "MAPI_W_ERRORS_RETURNED"
+	case MAPI_E_UNABLE_TO_COMPLETE:
+		return "MAPI_E_UNABLE_TO_COMPLETE"
+	case MAPI_E_TIMEOUT:
+		return "MAPI_E_TIMEOUT"
+	case MAPI_E_TABLE_EMPTY:
+		return "MAPI_E_TABLE_EMPTY"
+	case MAPI_E_TABLE_TOO_BIG:
+		return "MAPI_E_TABLE_TOO_BIG"
+	case MAPI_E_INVALID_BOOKMARK:
+		return "MAPI_E_INVALID_BOOKMARK"
+	case MAPI_W_POSITION_CHANGED:
+		return "MAPI_W_POSITION_CHANGED"
+	case MAPI_W_APPROX_COUNT:
+		return "MAPI_W_APPROX_COUNT"
+	case MAPI_E_WAIT:
+		return "MAPI_E_WAIT"
+	case MAPI_E_CANCEL:
+		return "MAPI_E_CANCEL"
+	case MAPI_E_NOT_ME:
+		return "MAPI_E_NOT_ME"
+	case MAPI_W_CANCEL_MESSAGE:
+		return "MAPI_W_CANCEL_MESSAGE"
+	case MAPI_E_CORRUPT_STORE:
+		return "MAPI_E_CORRUPT_STORE"
+	case MAPI_E_NOT_IN_QUEUE:
+		return "MAPI_E_NOT_IN_QUEUE"
+	case MAPI_E_NO_SUPPRESS:
+		return "MAPI_E_NO_SUPPRESS"
+	case MAPI_E_COLLISION:
+		return "MAPI_E_COLLISION"
+	case MAPI_E_NOT_INITIALIZED:
+		return "MAPI_E_NOT_INITIALIZED"
+	case MAPI_E_NON_STANDARD:
+		return "MAPI_E_NON_STANDARD"
+	case MAPI_E_NO_RECIPIENTS:
+		return "MAPI_E_NO_RECIPIENTS"
+	case MAPI_E_SUBMITTED:
+		return "MAPI_E_SUBMITTED"
+	case MAPI_E_HAS_FOLDERS:
+		return "MAPI_E_HAS_FOLDERS"
+	case MAPI_E_HAS_MESSAGES:
+		return "MAPI_E_HAS_MESSAGES"
+	case MAPI_E_FOLDER_CYCLE:
+		return "MAPI_E_FOLDER_CYCLE"
+	case MAPI_E_STORE_FULL:
+		return "MAPI_E_STORE_FULL"
+	case MAPI_E_LOCKID_LIMIT:
+		return "MAPI_E_LOCKID_LIMIT"
+	case MAPI_W_PARTIAL_COMPLETION:
+		return "MAPI_W_PARTIAL_COMPLETION"
+	case MAPI_E_AMBIGUOUS_RECIP:
+		return "MAPI_E_AMBIGUOUS_RECIP"
+	case SYNC_E_OBJECT_DELETED:
+		return "SYNC_E_OBJECT_DELETED"
+	case SYNC_E_IGNORE:
+		return "SYNC_E_IGNORE"
+	case SYNC_E_CONFLICT:
+		return "SYNC_E_CONFLICT"
+	case SYNC_E_NO_PARENT:
+		return "SYNC_E_NO_PARENT"
+	case SYNC_E_INCEST:
+		return "SYNC_E_INCEST"
+	case SYNC_E_UNSYNCHRONIZED:
+		return "SYNC_E_UNSYNCHRONIZED"
+	case SYNC_W_PROGRESS:
+		return "SYNC_W_PROGRESS"
+	case SYNC_W_CLIENT_CHANGE_NEWER:
+		return "SYNC_W_CLIENT_CHANGE_NEWER"
+
+	}
+	return "CODE_NOT_FOUND"
+}
+
+//ErrorMapiCode provides a mapping of uint32 error code to string
+type ErrorMapiCode struct {
+	X mapicode
+}
+
+const (
+	MAPI_E_INTERFACE_NOT_SUPPORTED     mapicode = 0x80004002
+	MAPI_E_CALL_FAILED                 mapicode = 0x80004005
+	MAPI_E_NO_ACCESS                   mapicode = 0x80070005
+	MAPI_E_NOT_ENOUGH_MEMORY           mapicode = 0x8007000e
+	MAPI_E_INVALID_PARAMETER           mapicode = 0x80070057
+	MAPI_E_NO_SUPPORT                  mapicode = 0x80040102
+	MAPI_E_BAD_CHARWIDTH               mapicode = 0x80040103
+	MAPI_E_STRING_TOO_LONG             mapicode = 0x80040105
+	MAPI_E_UNKNOWN_FLAGS               mapicode = 0x80040106
+	MAPI_E_INVALID_ENTRYID             mapicode = 0x80040107
+	MAPI_E_INVALID_OBJECT              mapicode = 0x80040108
+	MAPI_E_OBJECT_CHANGED              mapicode = 0x80040109
+	MAPI_E_OBJECT_DELETED              mapicode = 0x8004010a
+	MAPI_E_BUSY                        mapicode = 0x8004010b
+	MAPI_E_NOT_ENOUGH_DISK             mapicode = 0x8004010d
+	MAPI_E_NOT_ENOUGH_RESOURCES        mapicode = 0x8004010e
+	MAPI_E_NOT_FOUND                   mapicode = 0x8004010f
+	MAPI_E_VERSION                     mapicode = 0x80040110
+	MAPI_E_LOGON_FAILED                mapicode = 0x80040111
+	MAPI_E_SESSION_LIMIT               mapicode = 0x80040112
+	MAPI_E_USER_CANCEL                 mapicode = 0x80040113
+	MAPI_E_UNABLE_TO_ABORT             mapicode = 0x80040114
+	MAPI_E_NETWORK_ERROR               mapicode = 0x80040115
+	MAPI_E_DISK_ERROR                  mapicode = 0x80040116
+	MAPI_E_TOO_COMPLEX                 mapicode = 0x80040117
+	MAPI_E_BAD_COLUMN                  mapicode = 0x80040118
+	MAPI_E_EXTENDED_ERROR              mapicode = 0x80040119
+	MAPI_E_COMPUTED                    mapicode = 0x8004011a
+	MAPI_E_CORRUPT_DATA                mapicode = 0x8004011b
+	MAPI_E_UNCONFIGURED                mapicode = 0x8004011c
+	MAPI_E_FAILONEPROVIDER             mapicode = 0x8004011d
+	MAPI_E_UNKNOWN_CPID                mapicode = 0x8004011e
+	MAPI_E_UNKNOWN_LCID                mapicode = 0x8004011f
+	MAPI_E_PASSWORD_CHANGE_REQUIRED    mapicode = 0x80040120
+	MAPI_E_PASSWORD_EXPIRED            mapicode = 0x80040121
+	MAPI_E_INVALID_WORKSTATION_ACCOUNT mapicode = 0x80040122
+	MAPI_E_INVALID_ACCESS_TIME         mapicode = 0x80040123
+	MAPI_E_ACCOUNT_DISABLED            mapicode = 0x80040124
+	MAPI_E_END_OF_SESSION              mapicode = 0x80040200
+	MAPI_E_UNKNOWN_ENTRYID             mapicode = 0x80040201
+	MAPI_E_MISSING_REQUIRED_COLUMN     mapicode = 0x80040202
+	MAPI_W_NO_SERVICE                  mapicode = 0x00040203
+	MAPI_E_BAD_VALUE                   mapicode = 0x80040301
+	MAPI_E_INVALID_TYPE                mapicode = 0x80040302
+	MAPI_E_TYPE_NO_SUPPORT             mapicode = 0x80040303
+	MAPI_E_UNEXPECTED_TYPE             mapicode = 0x80040304
+	MAPI_E_TOO_BIG                     mapicode = 0x80040305
+	MAPI_E_DECLINE_COPY                mapicode = 0x80040306
+	MAPI_E_UNEXPECTED_ID               mapicode = 0x80040307
+	MAPI_W_ERRORS_RETURNED             mapicode = 0x00040380
+	MAPI_E_UNABLE_TO_COMPLETE          mapicode = 0x80040400
+	MAPI_E_TIMEOUT                     mapicode = 0x80040401
+	MAPI_E_TABLE_EMPTY                 mapicode = 0x80040402
+	MAPI_E_TABLE_TOO_BIG               mapicode = 0x80040403
+	MAPI_E_INVALID_BOOKMARK            mapicode = 0x80040405
+	MAPI_W_POSITION_CHANGED            mapicode = 0x00040481
+	MAPI_W_APPROX_COUNT                mapicode = 0x00040482
+	MAPI_E_WAIT                        mapicode = 0x80040500
+	MAPI_E_CANCEL                      mapicode = 0x80040501
+	MAPI_E_NOT_ME                      mapicode = 0x80040502
+	MAPI_W_CANCEL_MESSAGE              mapicode = 0x00040580
+	MAPI_E_CORRUPT_STORE               mapicode = 0x80040600
+	MAPI_E_NOT_IN_QUEUE                mapicode = 0x80040601
+	MAPI_E_NO_SUPPRESS                 mapicode = 0x80040602
+	MAPI_E_COLLISION                   mapicode = 0x80040604
+	MAPI_E_NOT_INITIALIZED             mapicode = 0x80040605
+	MAPI_E_NON_STANDARD                mapicode = 0x80040606
+	MAPI_E_NO_RECIPIENTS               mapicode = 0x80040607
+	MAPI_E_SUBMITTED                   mapicode = 0x80040608
+	MAPI_E_HAS_FOLDERS                 mapicode = 0x80040609
+	MAPI_E_HAS_MESSAGES                mapicode = 0x8004060a
+	MAPI_E_FOLDER_CYCLE                mapicode = 0x8004060b
+	MAPI_E_STORE_FULL                  mapicode = 0x8004060c
+	MAPI_E_LOCKID_LIMIT                mapicode = 0x8004060D
+	MAPI_W_PARTIAL_COMPLETION          mapicode = 0x00040680
+	MAPI_E_AMBIGUOUS_RECIP             mapicode = 0x80040700
+	SYNC_E_OBJECT_DELETED              mapicode = 0x80040800
+	SYNC_E_IGNORE                      mapicode = 0x80040801
+	SYNC_E_CONFLICT                    mapicode = 0x80040802
+	SYNC_E_NO_PARENT                   mapicode = 0x80040803
+	SYNC_E_INCEST                      mapicode = 0x80040804
+	SYNC_E_UNSYNCHRONIZED              mapicode = 0x80040805
+	SYNC_W_PROGRESS                    mapicode = 0x00040820
+	SYNC_W_CLIENT_CHANGE_NEWER         mapicode = 0x00040821
 )
 
 //-------- TAGS -------
