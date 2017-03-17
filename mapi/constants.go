@@ -1,6 +1,40 @@
 package mapi
 
-import "github.com/sensepost/ruler/utils"
+import (
+	"errors"
+	"fmt"
+
+	"github.com/sensepost/ruler/utils"
+)
+
+//ErrorCode returns the mapi error code encountered
+type ErrorCode struct {
+	ErrorCode uint32
+}
+
+func (e *ErrorCode) Error() string {
+	return fmt.Sprintf("mapi: non-zero return value. ERROR_CODE: %x", e.ErrorCode)
+}
+
+//TransportError returns the mapi error code encountered
+type TransportError struct {
+	ErrorValue error
+}
+
+func (e *TransportError) Error() string {
+	return fmt.Sprintf("mapi: a transport layer error occurred. %s", e.ErrorValue)
+}
+
+var (
+	//ErrTransport for when errors occurr on the transport layer
+	ErrTransport = errors.New("mapi: a transport layer error occurred")
+	//ErrMapiNonZero for non-zero return code in a MAPI request
+	ErrMapiNonZero = errors.New("mapi: non-zero return value")
+	//ErrUnknown hmm, we didn't account for this
+	ErrUnknown = errors.New("mapi: an unhandled exception occurred")
+	//ErrNotAdmin when attempting to get admin access to a mailbox
+	ErrNotAdmin = errors.New("mapi: Invalid logon. Admin privileges requested but user is not admin")
+)
 
 const (
 	uFlagsUser         = 0x00000000
