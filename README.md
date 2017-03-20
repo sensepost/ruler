@@ -248,8 +248,13 @@ To delete rules, use either the ruleId displayed next to the rule name (000000df
 
 # Popping a shell
 
-Now the fun part. Your initial setup is the same as outlined in the [Silentbreak blog], setup your webdav server to host your payload.
+Now the fun part. Your initial setup is the same as outlined in the [Silentbreak blog], setup your webdav server to host your payload. A basic webdav server is included in this repostitory. This can be found [here](https://github.com/sensepost/ruler/blob/master/webdav/webdavserv.go). To use this,
 
+```
+go run webdavserv.go -d /path/to/directory/to/serve
+```
+
+## Create a Rule
 To create the new rule user Ruler and:
 
 ```
