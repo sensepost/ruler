@@ -1,6 +1,6 @@
 # Introduction
 
-Ruler is a tool that allows you to interact with Exchange servers through the MAPI/HTTP protocol. The main aim is abuse the client-side Outlook mail rules as described in: [Silentbreak blog]
+Ruler is a tool that allows you to interact with Exchange servers remotely, through either the MAPI/HTTP or RPC/HTTP protocol. The main aim is abuse the client-side Outlook mail rules as described in: [Silentbreak blog]
 
 Silentbreak did a great job with this attack and it has served us well. The only downside has been that it takes time to get setup. Cloning a mailbox into a new instance of Outlook can be time consuming. And then there is all the clicking it takes to get a mailrule created. Wouldn't the command line version of this attack be great? And that is how Ruler was born.
 
