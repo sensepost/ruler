@@ -229,6 +229,7 @@ func readFile(filename string) []string {
 
 func connect(autodiscoverURL, user, password string, basic, insecure bool) Result {
 	result := Result{user, password, -1, -1, nil}
+
 	cookie, _ := cookiejar.New(nil)
 	client := http.Client{}
 	if basic == false {

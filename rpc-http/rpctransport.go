@@ -148,6 +148,7 @@ func setupHTTP(rpctype string, URL string, ntlmAuth bool, full bool) (net.Conn, 
 		request = fmt.Sprintf("%sAuthorization: Basic %s\r\n\r\n", request, utils.EncBase64([]byte(fmt.Sprintf("%s\\%s:%s", AuthSession.Domain, AuthSession.User, AuthSession.Pass))))
 	}
 
+
 	if cookiestr != "" {
 		request = fmt.Sprintf("%sCookie: %s\r\n", request, cookiestr)
 	}
