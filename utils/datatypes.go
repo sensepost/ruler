@@ -110,7 +110,7 @@ type Protocol struct {
 	ASUrl                   string
 	EWSUrl                  string
 	EMWSUrl                 string
-	SharingUrl              string
+	SharingURL              string
 	ECPUrl                  string
 	OOFUrl                  string
 	UMUrl                   string

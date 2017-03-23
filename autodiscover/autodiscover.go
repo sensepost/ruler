@@ -6,6 +6,8 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	"net/url"
+	"os"
 	"regexp"
 	"strings"
 	"text/template"
@@ -53,19 +55,150 @@ func createAutodiscover(domain string, https bool) string {
 	return fmt.Sprintf("http://%s/autodiscover/autodiscover.xml", domain)
 }
 
+//GetMapiHTTP gets the details for MAPI/HTTP
+func GetMapiHTTP(email, autoURLPtr string, resp *utils.AutodiscoverResp) (*utils.AutodiscoverResp, string, error) {
+	//var resp *utils.AutodiscoverResp
+	var err error
+	var rawAutodiscover string
+
+	if autoURLPtr == "" && resp == nil {
+		utils.Info.Println("Retrieving MAPI/HTTP info")
+		//rather use the email address's domain here and --domain is the authentication domain
+		lastBin := strings.LastIndex(email, "@")
+		if lastBin == -1 {
+			return nil, "", fmt.Errorf("The supplied email address seems to be incorrect.\n%s", err)
+		}
+		maildomain := email[lastBin+1:]
+		resp, rawAutodiscover, err = MAPIDiscover(maildomain)
+	} else if resp == nil {
+		resp, rawAutodiscover, err = MAPIDiscover(autoURLPtr)
+	}
+
+	if resp == nil || err != nil {
+		return nil, "", fmt.Errorf("The autodiscover service request did not complete.\n%s", err)
+	}
+	//check if the autodiscover service responded with an error
+	if resp.Response.Error != (utils.AutoError{}) {
+		return nil, "", fmt.Errorf("The autodiscover service responded with an error.\n%s", resp.Response.Error.Message)
+	}
+	return resp, rawAutodiscover, nil
+}
+
+//GetRPCHTTP exports the RPC details for RPC/HTTP
+func GetRPCHTTP(email, autoURLPtr string, resp *utils.AutodiscoverResp) (*utils.AutodiscoverResp, string, string, string, bool, error) {
+	//var resp *utils.AutodiscoverResp
+	var err error
+	var rawAutodiscover string
+
+	if autoURLPtr == "" && resp == nil {
+		utils.Info.Println("Retrieving RPC/HTTP info")
+		//rather use the email address's domain here and --domain is the authentication domain
+		lastBin := strings.LastIndex(email, "@")
+		if lastBin == -1 {
+			return nil, "", "", "", false, fmt.Errorf("The supplied email address seems to be incorrect.\n%s", err)
+		}
+		maildomain := email[lastBin+1:]
+		resp, rawAutodiscover, err = Autodiscover(maildomain)
+	} else if resp == nil {
+		resp, rawAutodiscover, err = Autodiscover(autoURLPtr)
+	}
+
+	if resp == nil || err != nil {
+		return nil, "", "", "", false, fmt.Errorf("The autodiscover service request did not complete.\n%s", err)
+	}
+	//check if the autodiscover service responded with an error
+	if resp.Response.Error != (utils.AutoError{}) {
+		return nil, "", "", "", false, fmt.Errorf("The autodiscover service responded with an error.\n%s", resp.Response.Error.Message)
+	}
+
+	url := ""
+	user := ""
+	encrypt := false
+	for _, v := range resp.Response.Account.Protocol {
+		if v.Type == "EXPR" {
+			if v.SSL == "Off" {
+				url = "http://" + v.Server
+			} else {
+				url = "https://" + v.Server
+			}
+			if v.AuthPackage == "Ntlm" { //set the encryption on if the server specifies NTLM auth
+				encrypt = true
+			}
+		}
+		if v.Type == "EXCH" {
+			user = v.Server
+		}
+	}
+	RPCURL := fmt.Sprintf("%s/rpc/rpcproxy.dll?%s:6001", url, user)
+
+	utils.Trace.Printf("RPC URL set: %s\n", RPCURL)
+
+	return resp, rawAutodiscover, RPCURL, user, encrypt, nil
+}
+
+//CheckCache checks to see if there is a stored copy of the autodiscover record
+func CheckCache(email string) *utils.AutodiscoverResp {
+	//check the cache folder for a stored autodiscover record
+	email = strings.Replace(email, "@", "_", -1)
+	email = strings.Replace(email, ".", "_", -1)
+	path := fmt.Sprintf("./logs/%s.cache", email)
+
+	if _, err := os.Stat(path); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		utils.Error.Println(err)
+		return nil
+	}
+	utils.Info.Println("Found cached Autodiscover record. Using this (use --nocache to force new lookup)")
+	data, err := ioutil.ReadFile(path)
+	if err != nil {
+		utils.Error.Println("Error reading stored record ", err)
+		return nil
+	}
+	autodiscoverResp := utils.AutodiscoverResp{}
+	autodiscoverResp.Unmarshal(data)
+	return &autodiscoverResp
+}
+
+//CreateCache function stores the raw autodiscover record to file
+func CreateCache(email, autodiscover string) {
+
+	if autodiscover == "" { //no autodiscover record passed in, don't try write
+		return
+	}
+	email = strings.Replace(email, "@", "_", -1)
+	email = strings.Replace(email, ".", "_", -1)
+	path := fmt.Sprintf("./logs/%s.cache", email)
+	if _, err := os.Stat("./logs"); err != nil {
+		if os.IsNotExist(err) {
+			//create the logs directory
+			if err := os.MkdirAll("./logs", 0711); err != nil {
+				utils.Error.Println("Couldn't create a cache directory")
+			}
+			//return nil
+		}
+	}
+	fout, _ := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0666)
+	_, err := fout.WriteString(autodiscover)
+	if err != nil {
+		utils.Error.Println("Couldn't write to file for some reason..", err)
+	}
+}
+
 //Autodiscover function to retrieve mailbox details using the autodiscover mechanism from MS Exchange
-func Autodiscover(domain string) (*utils.AutodiscoverResp, error) {
+func Autodiscover(domain string) (*utils.AutodiscoverResp, string, error) {
 	return autodiscover(domain, false)
 }
 
 //MAPIDiscover function to do the autodiscover request but specify the MAPI header
 //indicating that the MAPI end-points should be returned
-func MAPIDiscover(domain string) (*utils.AutodiscoverResp, error) {
-	fmt.Println("[*] Doing Autodiscover for domain")
+func MAPIDiscover(domain string) (*utils.AutodiscoverResp, string, error) {
+	//fmt.Println("Doing Autodiscover for domain")
 	return autodiscover(domain, true)
 }
 
-func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, error) {
+func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, string, error) {
 	//replace Email with the email from the config
 	r, _ := parseTemplate(autodiscoverXML)
 	autodiscoverResp := utils.AutodiscoverResp{}
@@ -110,15 +243,16 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, error) {
 		if autodiscoverStep == 2 {
 			autodiscoverURL = createAutodiscover(fmt.Sprintf("autodiscover.%s", domain), false)
 			if autodiscoverURL == "" {
-				return nil, fmt.Errorf("[x] Invalid domain or no autodiscover DNS record found")
+				return nil, "", fmt.Errorf("Invalid domain or no autodiscover DNS record found")
 			}
 		}
 	}
-	if SessionConfig.Verbose == true {
-		fmt.Printf("[*] Autodiscover step %d - URL: %s\n", autodiscoverStep, autodiscoverURL)
-	}
+
+	utils.Trace.Printf("Autodiscover step %d - URL: %s\n", autodiscoverStep, autodiscoverURL)
+
 	req, err := http.NewRequest("POST", autodiscoverURL, strings.NewReader(r))
 	req.Header.Add("Content-Type", "text/xml")
+	req.Header.Add("User-Agent", "ruler")
 
 	if mapi == true {
 		req.Header.Add("X-MapiHttpCapability", "1")            //we want MAPI info
@@ -138,10 +272,10 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, error) {
 	if err != nil {
 		//check if this error was because of ntml auth when basic auth was expected.
 		if m, _ := regexp.Match("illegal base64", []byte(err.Error())); m == true {
-			client = http.Client{}
+			client = http.Client{Transport: InsecureRedirects{}}
 			resp, err = client.Do(req)
 			if err != nil {
-				return nil, err
+				return nil, "", err
 			}
 		} else {
 			if autodiscoverStep < 2 {
@@ -150,7 +284,7 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, error) {
 			}
 			//we've done all three steps of autodiscover and all three failed
 
-			return nil, err
+			return nil, "", err
 		}
 	}
 
@@ -158,7 +292,7 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, error) {
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	//check if we got a 200 response
@@ -166,53 +300,63 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, error) {
 
 		err := autodiscoverResp.Unmarshal(body)
 		if err != nil {
+			if SessionConfig.Verbose == true {
+				utils.Error.Printf("%s\n", err)
+			}
 			if autodiscoverStep < 2 {
 				autodiscoverStep++
 				return autodiscover(domain, mapi)
 			}
-			return nil, fmt.Errorf("[x] Error in autodiscover response, %s", err)
+			return nil, "", fmt.Errorf("Error in autodiscover response, %s", err)
 		}
 		SessionConfig.NTLMAuth = req.Header.Get("Authorization")
 		if SessionConfig.Verbose == true {
-			fmt.Println(string(body))
+			//fmt.Println(string(body))
 		}
 		//check if we got a RedirectAddr ,
 		//if yes, get the new autodiscover url
 		if autodiscoverResp.Response.Account.Action == "redirectAddr" {
 			rediraddr := autodiscoverResp.Response.Account.RedirectAddr
 			redirAddrs := strings.Split(rediraddr, "@") //regexp.MustCompile(".*@").Split(rediraddr, 2)
-			//fmt.Printf("secondary email: %s\n", redirAddrs)
+
 			secondaryEmail = fmt.Sprintf("%s@%s", redirAddrs[0], domain)
 			red, err := redirectAutodiscover(redirAddrs[1])
 			if err != nil {
-				return nil, err
+				return nil, "", err
 			}
 			return autodiscover(red, mapi)
 		}
-		return &autodiscoverResp, nil
+		return &autodiscoverResp, string(body), nil
 	}
+
 	if resp.StatusCode == 401 || resp.StatusCode == 403 || resp.StatusCode == 404 {
 		//for office365 we might need to use a different email address, try this
 		if resp.StatusCode == 401 && secondaryEmail != "" {
-			fmt.Printf("[*] Authentication failed with primary email, trying secondary email [%s]\n", secondaryEmail)
+			utils.Trace.Printf("Authentication failed with primary email, trying secondary email [%s]\n", secondaryEmail)
 			SessionConfig.Email = secondaryEmail
 			return autodiscover(domain, mapi)
+		}
+		if SessionConfig.Verbose == true {
+			utils.Error.Printf("Failed, StatusCode [%d]\n", resp.StatusCode)
 		}
 		if autodiscoverStep < 2 {
 			autodiscoverStep++
 			return autodiscover(domain, mapi)
 		}
-		return nil, fmt.Errorf("[x] Permission Denied or URL not found: StatusCode [%d]\n", resp.StatusCode)
+		return nil, "", fmt.Errorf("Permission Denied or URL not found: StatusCode [%d]\n", resp.StatusCode)
+	}
+	if SessionConfig.Verbose == true {
+		utils.Error.Printf("Failed, StatusCode [%d]\n", resp.StatusCode)
 	}
 	if autodiscoverStep < 2 {
 		autodiscoverStep++
 		return autodiscover(domain, mapi)
 	}
-	return nil, fmt.Errorf("[x] Got an unexpected result: StatusCode [%d] %s\n", resp.StatusCode, body)
+	return nil, "", fmt.Errorf("Got an unexpected result: StatusCode [%d] %s\n", resp.StatusCode, body)
 }
 
 func redirectAutodiscover(redirdom string) (string, error) {
-	fmt.Printf("[*] Redirected with new address [%s]\n", redirdom)
+	utils.Trace.Printf("Redirected with new address [%s]\n", redirdom)
 	//create the autodiscover url
 	autodiscoverURL := fmt.Sprintf("http://autodiscover.%s/autodiscover/autodiscover.xml", redirdom)
 	req, _ := http.NewRequest("GET", autodiscoverURL, nil)
@@ -222,7 +366,49 @@ func redirectAutodiscover(redirdom string) (string, error) {
 		return "", err
 	}
 	defer resp.Body.Close()
-	fmt.Printf("[*] Authenticating through: %s\n", string(resp.Header.Get("Location")))
+	utils.Trace.Printf("Authenticating through: %s\n", string(resp.Header.Get("Location")))
 	//return the new autodiscover server location
 	return resp.Header.Get("Location"), nil
+}
+
+//InsecureRedirects allows forwarding the Authorization header even when we shouldn't
+type InsecureRedirects struct {
+	Transport http.RoundTripper
+}
+
+//RoundTrip custom redirector that allows us to forward the auth header, even when the domain changes.
+//This is needed as some office365 domains will redirect from autodiscover.domain.com to autodiscover.outlook.com
+//and Go does not forward Sensitive headers such as Authorization (https://golang.org/src/net/http/client.go#41)
+func (l InsecureRedirects) RoundTrip(req *http.Request) (resp *http.Response, err error) {
+	t := l.Transport
+	if t == nil {
+		t = http.DefaultTransport
+	}
+	resp, err = t.RoundTrip(req)
+	if err != nil {
+		return
+	}
+	switch resp.StatusCode {
+	case http.StatusMovedPermanently, http.StatusFound, http.StatusSeeOther, http.StatusTemporaryRedirect:
+
+		utils.Trace.Printf("Request for %s redirected. Following to %s\n", req.URL, resp.Header.Get("Location"))
+
+		URL, _ := url.Parse(resp.Header.Get("Location"))
+		r, _ := parseTemplate(autodiscoverXML)
+		//if the domains are different, we need to force the auth cookie to be passed along.. this is for redirects to office365
+		client := http.Client{}
+		req, err = http.NewRequest("POST", URL.String(), strings.NewReader(r))
+		req.Header.Add("Content-Type", "text/xml")
+		req.Header.Add("User-Agent", "ruler")
+
+		req.Header.Add("X-MapiHttpCapability", "1")            //we want MAPI info
+		req.Header.Add("X-AnchorMailbox", SessionConfig.Email) //we want MAPI info
+
+		req.URL, _ = url.Parse(resp.Header.Get("Location"))
+		req.SetBasicAuth(SessionConfig.Email, SessionConfig.Pass)
+
+		resp, err = client.Do(req)
+
+	}
+	return
 }

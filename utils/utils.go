@@ -5,16 +5,31 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"fmt"
+	"hash/fnv"
 	"reflect"
 )
 
 var (
-	put32     = binary.LittleEndian.PutUint32
-	put16     = binary.LittleEndian.PutUint16
+	put32 = binary.LittleEndian.PutUint32
+	put16 = binary.LittleEndian.PutUint16
+	//EncBase64 wrapper for encoding to base64
 	EncBase64 = base64.StdEncoding.EncodeToString
+	//DecBase64 wrapper for decoding from base64
 	DecBase64 = base64.StdEncoding.DecodeString
 )
 
+//FromUnicode read unicode and convert to byte array
+func FromUnicode(uni []byte) string {
+	st := ""
+	for _, k := range uni {
+		if k != 0x00 {
+			st += string(k)
+		}
+	}
+	return st
+}
+
+//UniString converts a string into a unicode string byte array
 func UniString(str string) []byte {
 	bt := make([]byte, (len(str) * 2))
 	cnt := 0
@@ -48,12 +63,15 @@ func UTF16BE(str string, trail int) []byte {
 	return bt
 }
 
+//DecodeUint32 decode 4 byte value into uint32
 func DecodeUint32(num []byte) uint32 {
 	var number uint32
 	bf := bytes.NewReader(num)
 	binary.Read(bf, binary.LittleEndian, &number)
 	return number
 }
+
+//DecodeUint16 decode 2 byte value into uint16
 func DecodeUint16(num []byte) uint16 {
 	var number uint16
 	bf := bytes.NewReader(num)
@@ -61,12 +79,15 @@ func DecodeUint16(num []byte) uint16 {
 	return number
 }
 
+//DecodeUint8 decode 1 byte value into uint8
 func DecodeUint8(num []byte) uint8 {
 	var number uint8
 	bf := bytes.NewReader(num)
 	binary.Read(bf, binary.LittleEndian, &number)
 	return number
 }
+
+//EncodeNum encode a number as a byte array
 func EncodeNum(v interface{}) []byte {
 	byteNum := new(bytes.Buffer)
 	binary.Write(byteNum, binary.LittleEndian, v)
@@ -115,25 +136,32 @@ func BodyToBytes(DataStruct interface{}) []byte {
 	return dumped
 }
 
+//ReadUint32 read 4 bytes and return as uint32
 func ReadUint32(pos int, buff []byte) (uint32, int) {
 	return DecodeUint32(buff[pos : pos+4]), pos + 4
 }
 
+//ReadUint16 read 2 bytes and return as uint16
 func ReadUint16(pos int, buff []byte) (uint16, int) {
 	return DecodeUint16(buff[pos : pos+2]), pos + 2
 }
+
+//ReadUint8 read 1 byte and return as uint8
 func ReadUint8(pos int, buff []byte) (uint8, int) {
 	return DecodeUint8(buff[pos : pos+2]), pos + 2
 }
 
+//ReadBytes read and return count number o bytes
 func ReadBytes(pos, count int, buff []byte) ([]byte, int) {
 	return buff[pos : pos+count], pos + count
 }
 
+//ReadByte read and return a single byte
 func ReadByte(pos int, buff []byte) (byte, int) {
 	return buff[pos : pos+1][0], pos + 1
 }
 
+//ReadUnicodeString read and return a unicode string
 func ReadUnicodeString(pos int, buff []byte) ([]byte, int) {
 	//stupid hack as using bufio and ReadString(byte) would terminate too early
 	//would terminate on 0x00 instead of 0x0000
@@ -142,12 +170,14 @@ func ReadUnicodeString(pos int, buff []byte) ([]byte, int) {
 	return []byte(str), pos + index + 2
 }
 
+//ReadASCIIString returns a string as ascii
 func ReadASCIIString(pos int, buff []byte) ([]byte, int) {
 	bf := bytes.NewBuffer(buff[pos:])
 	str, _ := bf.ReadString(0x00)
 	return []byte(str), pos + len(str)
 }
 
+//ReadTypedString reads a string as either Unicode or ASCII depending on type value
 func ReadTypedString(pos int, buff []byte) ([]byte, int) {
 	var t = buff[pos]
 	if t == 0 { //no string
@@ -166,4 +196,20 @@ func ReadTypedString(pos int, buff []byte) ([]byte, int) {
 	}
 	str, _ := ReadBytes(pos+1, 4, buff)
 	return str, pos + len(str)
+}
+
+//Hash Calculate a 32byte hash
+func Hash(s string) uint32 {
+	h := fnv.New32()
+	h.Write([]byte(s))
+	return h.Sum32()
+}
+
+//Obfuscate traffic using XOR and the magic byte as specified in RPC docs
+func Obfuscate(data []byte) []byte {
+	bnew := make([]byte, len(data))
+	for k := range data {
+		bnew[k] = data[k] ^ 0xA5
+	}
+	return bnew
 }
