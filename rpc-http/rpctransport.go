@@ -152,6 +152,7 @@ func setupHTTP(rpctype string, URL string, ntlmAuth bool, full bool) (net.Conn, 
 		}
 	}
 
+
 	if cookiestr != "" {
 		request = fmt.Sprintf("%sCookie: %s\r\n", request, cookiestr)
 	}

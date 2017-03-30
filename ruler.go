@@ -208,6 +208,34 @@ func connect(c *cli.Context) error {
 	config.Verbose = c.GlobalBool("verbose")
 	config.Admin = c.GlobalBool("admin")
 	config.RPCEncrypt = c.GlobalBool("encrypt")
+	config.CookieJar, _ = cookiejar.New(nil)
+
+	//add supplied cookie to the cookie jar
+	if c.GlobalString("cookie") != "" {
+		//split into cookies and then into name : value
+		cookies := strings.Split(c.GlobalString("cookie"), ";")
+		var cookieJarTmp []*http.Cookie
+		var cdomain string
+		//split and get the domain from the email
+		if eparts := strings.Split(c.GlobalString("email"), "@"); len(eparts) == 2 {
+			cdomain = eparts[1]
+		} else {
+			return fmt.Errorf("[x] Invalid email address")
+		}
+
+		for _, v := range cookies {
+			cookie := strings.Split(v, "=")
+			c := &http.Cookie{
+				Name:   cookie[0],
+				Value:  cookie[1],
+				Path:   "/",
+				Domain: cdomain,
+			}
+			cookieJarTmp = append(cookieJarTmp, c)
+		}
+		u, _ := url.Parse(fmt.Sprintf("https://%s/", cdomain))
+		config.CookieJar.SetCookies(u, cookieJarTmp)
+	}
 
 	config.CookieJar, _ = cookiejar.New(nil)
 
