@@ -75,9 +75,11 @@ func Init(config *utils.Session, lid, URL, ABKURL string, transport int) {
 	AuthSession.LogonID = 0x09
 	AuthSession.Authenticated = false
 
-	//if AuthSession.RPCEncrypt == true { //only support NTLM auth for now
-	AuthSession.RPCNetworkAuthLevel = rpchttp.RPC_C_AUTHN_LEVEL_PKT_PRIVACY
-	AuthSession.RPCNetworkAuthType = rpchttp.RPC_C_AUTHN_WINNT
+	if AuthSession.RPCEncrypt == true { //only support NTLM auth for now
+		AuthSession.RPCNetworkAuthLevel = rpchttp.RPC_C_AUTHN_LEVEL_PKT_PRIVACY
+		AuthSession.RPCNetworkAuthType = rpchttp.RPC_C_AUTHN_WINNT
+	}
+
 	//} else {
 	//AuthSession.RPCNetworkAuthLevel = rpchttp.RPC_C_AUTHN_LEVEL_NONE
 	//AuthSession.RPCNetworkAuthType = rpchttp.RPC_C_AUTHN_NONE
