@@ -86,7 +86,7 @@ func setupHTTP(rpctype string, URL string, ntlmAuth bool, full bool) (net.Conn, 
 			if full == false {
 				return nil, fmt.Errorf("Failed with initial setup for %s : %s\n", rpctype, err)
 			}
-			fmt.Printf("Failed with initial setup for %s trying again...\n", rpctype)
+			utils.Trace.Printf("Failed with initial setup for %s trying again...\n", rpctype)
 			return setupHTTP(rpctype, URL, ntlmAuth, false)
 		}
 
@@ -145,7 +145,11 @@ func setupHTTP(rpctype string, URL string, ntlmAuth bool, full bool) (net.Conn, 
 	if ntlmAuth == true {
 		request = fmt.Sprintf("%sAuthorization: NTLM %s\r\n\r\n", request, utils.EncBase64(authenticate.Bytes()))
 	} else {
-		request = fmt.Sprintf("%sAuthorization: Basic %s\r\n\r\n", request, utils.EncBase64([]byte(fmt.Sprintf("%s\\%s:%s", AuthSession.Domain, AuthSession.User, AuthSession.Pass))))
+		if u.Host == "outlook.office365.com" {
+			request = fmt.Sprintf("%sAuthorization: Basic %s\r\n\r\n", request, utils.EncBase64([]byte(fmt.Sprintf("%s:%s", AuthSession.Email, AuthSession.Pass))))
+		} else {
+			request = fmt.Sprintf("%sAuthorization: Basic %s\r\n\r\n", request, utils.EncBase64([]byte(fmt.Sprintf("%s\\%s:%s", AuthSession.Domain, AuthSession.User, AuthSession.Pass))))
+		}
 	}
 
 
@@ -182,7 +186,7 @@ func RPCOpen(URL string, readySignal chan bool, errOccurred chan error) (err err
 			_, err = rpcInConn.Write(data[:n])
 		}
 		if err != nil && err != io.EOF {
-			fmt.Println(err)
+			utils.Error.Println(err)
 			break
 		}
 	}
@@ -495,6 +499,7 @@ func SplitData(data []byte, atEOF bool) (advance int, token []byte, err error) {
 	if string(data[0:4]) == "HTTP" {
 		for k := range data {
 			if data[k] == 0x0d && data[k+1] == 0x0a && data[k+2] == 0x0d && data[k+3] == 0x0a {
+				//utils.Trace.Print(string(data[:k+4]))
 				return k + 4, nil, nil //data[0:k], nil
 			}
 		}
