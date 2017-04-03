@@ -432,6 +432,11 @@ func abkDump(c *cli.Context) error {
 		return fmt.Errorf("Address book support is currently limited to MAPI/HTTP")
 	}
 	utils.Trace.Println("Let's Dump the addressbook")
+	fout, err := os.OpenFile(c.String("output"), os.O_CREATE|os.O_WRONLY, 0666)
+	if err != nil {
+		return fmt.Errorf("Couldn't create file to write to... %s", err)
+	}
+
 	mapi.BindAddressBook()
 	columns := make([]mapi.PropertyTag, 2)
 	columns[0] = mapi.PidTagDisplayName
@@ -440,8 +445,11 @@ func abkDump(c *cli.Context) error {
 
 	for k := 0; k < int(rows.RowCount); k++ {
 		if len(rows.RowData[k].AddressBookPropertyValue) == 2 {
-			//disp := utils.FromUnicode(rows.RowData[k].AddressBookPropertyValue[0].Value)
-			//utils.Clear.Printf(fmstr2, string(disp), rows.RowData[k].AddressBookPropertyValue[1].Value)
+			disp := utils.FromUnicode(rows.RowData[k].AddressBookPropertyValue[0].Value)
+			email := utils.FromUnicode(rows.RowData[k].AddressBookPropertyValue[1].Value)
+			if _, err := fout.WriteString(fmt.Sprintf("%s , %s\n", disp, email)); err != nil {
+				return fmt.Errorf("Couldn't write to file... %s", err)
+			}
 		}
 	}
 	state := mapi.STAT{}
@@ -450,10 +458,14 @@ func abkDump(c *cli.Context) error {
 	utils.Info.Printf("Found %d entries in the GAL. Dumping...", totalrows)
 	for i := 0; i < int(totalrows); i += 100 {
 		rows, _ = mapi.QueryRows(100, rows.State, columns)
+		utils.Info.Printf("Dumping %d/%d", i+100, totalrows)
 		for k := 0; k < int(rows.RowCount); k++ {
 			if len(rows.RowData[k].AddressBookPropertyValue) == 2 {
-				//disp := utils.FromUnicode(rows.RowData[k].AddressBookPropertyValue[0].Value)
-				//utils.Clear.Printf(fmstr2, string(disp), rows.RowData[k].AddressBookPropertyValue[1].Value)
+				disp := utils.FromUnicode(rows.RowData[k].AddressBookPropertyValue[0].Value)
+				email := utils.FromUnicode(rows.RowData[k].AddressBookPropertyValue[1].Value)
+				if _, err := fout.WriteString(fmt.Sprintf("%s , %s\n", disp, email)); err != nil {
+					return fmt.Errorf("Couldn't write to file... %s", err)
+				}
 			}
 		}
 	}
@@ -756,6 +768,31 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 							return cli.NewExitError(err, 1)
 						}
 						err = abkList(c)
+						if err != nil {
+							return cli.NewExitError(err, 1)
+						}
+						return nil
+					},
+				},
+				{
+					Name:  "dump",
+					Usage: "dump the entries of the GAL and save to local file",
+					Flags: []cli.Flag{
+						cli.StringFlag{
+							Name:  "output,o",
+							Value: "",
+							Usage: "File to save the GAL to",
+						},
+					},
+					Action: func(c *cli.Context) error {
+						if c.String("output") == "" {
+							return cli.NewExitError("The file to save to is required. Use --output or -o", 1)
+						}
+						err := connect(c)
+						if err != nil {
+							return cli.NewExitError(err, 1)
+						}
+						err = abkDump(c)
 						if err != nil {
 							return cli.NewExitError(err, 1)
 						}
