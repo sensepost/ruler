@@ -12,6 +12,7 @@ var (
 	Fail     *log.Logger
 	Warning  *log.Logger
 	Error    *log.Logger
+	Clear    *log.Logger
 )
 
 //Init the logging function
@@ -23,6 +24,7 @@ func Init(
 
 	Trace = log.New(traceHandle, "\033[33m[*] \033[0m", 0)
 	Info = log.New(infoHandle, "\033[32m[+] \033[0m", 0)
+	Clear = log.New(infoHandle, "    ", 0)
 	Fail = log.New(infoHandle, "\033[91m[x] \033[0m", 0)
 	Question = log.New(infoHandle, "\033[91m[?] \033[0m", 0)
 	Warning = log.New(warningHandle,
