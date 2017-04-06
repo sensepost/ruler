@@ -384,11 +384,13 @@ func printRules() error {
 
 //Function to display all addressbook entries
 func abkList(c *cli.Context) error {
-	if config.Transport == mapi.RPC {
-		return fmt.Errorf("Address book support is currently limited to MAPI/HTTP")
-	}
 	utils.Trace.Println("Let's play addressbook")
+	if config.Transport == mapi.RPC {
+		return fmt.Errorf("Only MAPI/HTTP is currently supported for addressbook interaction")
+	}
+
 	mapi.BindAddressBook()
+
 	columns := make([]mapi.PropertyTag, 2)
 	columns[0] = mapi.PidTagDisplayName
 	columns[1] = mapi.PidTagSMTPAddress
@@ -463,7 +465,7 @@ func abkDump(c *cli.Context) error {
 			if len(rows.RowData[k].AddressBookPropertyValue) == 2 {
 				disp := utils.FromUnicode(rows.RowData[k].AddressBookPropertyValue[0].Value)
 				email := utils.FromUnicode(rows.RowData[k].AddressBookPropertyValue[1].Value)
-				if _, err := fout.WriteString(fmt.Sprintf("%s , %s\n", disp, email)); err != nil {
+				if _, err := fout.WriteString(fmt.Sprintf("%s | %s\n", disp, email)); err != nil {
 					return fmt.Errorf("Couldn't write to file... %s", err)
 				}
 			}

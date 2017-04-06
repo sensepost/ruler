@@ -15,6 +15,12 @@ type BindRequest struct {
 	AuxiliaryBuffer     []byte
 }
 
+type BindRequestRPC struct {
+	Flags      uint32
+	State      []byte //optional 36 bytes
+	ServerGUID []byte
+}
+
 //BindResponse struct
 type BindResponse struct {
 	StatusCode          uint32
@@ -175,6 +181,11 @@ type STAT struct {
 
 //Marshal turn BindRequest into Bytes
 func (bindRequest BindRequest) Marshal() []byte {
+	return utils.BodyToBytes(bindRequest)
+}
+
+//Marshal turn BindRequestRPC into Bytes
+func (bindRequest BindRequestRPC) Marshal() []byte {
 	return utils.BodyToBytes(bindRequest)
 }
 

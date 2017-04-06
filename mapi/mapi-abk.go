@@ -3,6 +3,7 @@ package mapi
 import (
 	"fmt"
 
+	rpchttp "github.com/sensepost/ruler/rpc-http"
 	"github.com/sensepost/ruler/utils"
 )
 
@@ -10,7 +11,10 @@ func sendAddressBookRequest(mapiType string, mapi []byte) ([]byte, error) {
 	if AuthSession.Transport == HTTP {
 		return mapiRequestHTTP(AuthSession.ABKURL.String(), mapiType, mapi)
 	}
-	return nil, nil //mapiRequestRPC(mapi)
+
+	//return rpchttp.EcDoRPCExt2(mapi, 0)
+	return rpchttp.EcDoRPCAbk(mapi, 0)
+	//return nil, nil
 }
 
 //ExtractMapiAddressBookURL extract the External mapi url from the autodiscover response
@@ -29,7 +33,7 @@ func BindAddressBook() (*BindResponse, error) {
 	bindReq := BindRequest{}
 	bindReq.Flags = 0x00
 	bindReq.HasState = 0xFF
-	bindReq.State = STAT{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 1252, 1033, 2057}.Marshal()
+	bindReq.State = STAT{0x00, 0x00, 0x00, 0x00, 0x00, 0xFFFFFFFF, 1252, 1033, 2057}.Marshal()
 	bindReq.AuxiliaryBufferSize = 0x00
 
 	responseBody, err := sendAddressBookRequest("BIND", bindReq.Marshal())
@@ -37,6 +41,32 @@ func BindAddressBook() (*BindResponse, error) {
 	if err != nil {
 		return nil, fmt.Errorf("A HTTP server side error occurred.\n %s", err)
 	}
+
+	bindResp := BindResponse{}
+	_, err = bindResp.Unmarshal(responseBody)
+	if err != nil {
+		return nil, err
+	}
+	return &bindResp, nil
+
+	//return nil, fmt.Errorf("unexpected error occurred")
+}
+
+//BindAddressBookRPC function to bind to the AddressBook provider
+func BindAddressBookRPC() (*BindResponse, error) {
+
+	bindReq := BindRequestRPC{}
+	bindReq.Flags = 0x00
+	bindReq.State = STAT{0x00, 0x00, 0x00, 0x00, 0x00, 0xFFFFFFFF, 1252, 1033, 2057}.Marshal()
+	bindReq.ServerGUID = []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x28, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x10, 0x00, 0x00, 0x00, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0f, 0x00, 0x00, 0x00, 0x1f, 0x00, 0x01, 0x30, 0x1f, 0x00, 0x17, 0x3a, 0x1f, 0x00, 0x08, 0x3a, 0x1f, 0x00, 0x19, 0x3a, 0x1f, 0x00, 0x18, 0x3a, 0x1f, 0x00, 0xfe, 0x39, 0x1f, 0x00, 0x16, 0x3a, 0x1f, 0x00, 0x00, 0x3a, 0x1f, 0x00, 0x02, 0x30, 0x02, 0x01, 0xff, 0x0f, 0x03, 0x00, 0xfe, 0x0f, 0x03, 0x00, 0x00, 0x39, 0x03, 0x00, 0x05, 0x39}
+
+	data := bindReq.Marshal()
+	responseBody, err := rpchttp.EcDoRPCAbk(data, len(bindReq.ServerGUID)-10)
+
+	if err != nil {
+		return nil, fmt.Errorf("A HTTP server side error occurred.\n %s", err)
+	}
+
 	bindResp := BindResponse{}
 	_, err = bindResp.Unmarshal(responseBody)
 	if err != nil {

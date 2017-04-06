@@ -156,11 +156,10 @@ func mapiConnectRPC(body ConnectRequestRPC) ([]byte, error) {
 	ready := make(chan bool)      //this is our ready channel,
 	chanError := make(chan error) //get the error message from our channel setup
 
+	utils.Trace.Println("Setting up channels")
 	//we should add a channel to check if there was an error setting up the channels
 	//there will currently be a deadlock here if something goes wrong
 	go rpchttp.RPCOpen(AuthSession.RPCURL, ready, chanError)
-
-	utils.Trace.Println("Setting up channels")
 
 	//wait for channels to be setup
 	if v := <-ready; v == false { //check if the setup was successful or premission Denied
@@ -982,7 +981,7 @@ func DeleteFolder(folderid []byte) (*RopDeleteFolderResponse, error) {
 	deleteFolder := RopDeleteFolderRequest{RopID: 0x1D, LogonID: AuthSession.LogonID}
 	deleteFolder.InputHandle = 0x00
 	deleteFolder.FolderID = folderid
-	deleteFolder.DeleteFolderFlags = 0x05
+	deleteFolder.DeleteFolderFlags = 0x10 | 0x04 | 0x01
 
 	fullReq := deleteFolder.Marshal()
 
