@@ -80,7 +80,7 @@ func autodiscoverDomain(domain string) string {
 //BruteForce function takes a domain/URL, file path to users and filepath to passwords whether to use BASIC auth and to trust insecure SSL
 //And whether to stop on success
 func BruteForce(domain, usersFile, passwordsFile string, basic, insecure, stopSuccess, verbose bool, consc, delay int) {
-	utils.Info.Println("[*] Trying to Autodiscover domain")
+	utils.Info.Println("Trying to Autodiscover domain")
 	autodiscoverURL := autodiscoverDomain(domain)
 
 	if autodiscoverURL == "" {
@@ -142,7 +142,7 @@ func BruteForce(domain, usersFile, passwordsFile string, basic, insecure, stopSu
 		}
 
 		if attempts == consc {
-			utils.Info.Printf("\033[31m[*] Multiple attempts. To prevent lockout - delaying for %d minutes.\033[0m\n", delay)
+			utils.Info.Printf("\033[31mMultiple attempts. To prevent lockout - delaying for %d minutes.\033[0m\n", delay)
 			time.Sleep(time.Minute * (time.Duration)(delay))
 			attempts = 0
 		}
@@ -151,7 +151,7 @@ func BruteForce(domain, usersFile, passwordsFile string, basic, insecure, stopSu
 
 //UserPassBruteForce function does a bruteforce using a supplied user:pass file
 func UserPassBruteForce(domain, userpassFile string, basic, insecure, stopSuccess, verbose bool, consc, delay int) {
-	utils.Info.Println("[*] Trying to Autodiscover domain")
+	utils.Info.Println("Trying to Autodiscover domain")
 	autodiscoverURL := autodiscoverDomain(domain)
 
 	if autodiscoverURL == "" {
@@ -173,7 +173,7 @@ func UserPassBruteForce(domain, userpassFile string, basic, insecure, stopSucces
 		// verify colon-delimited username:password format
 		s := strings.SplitN(up, ":", 2)
 		if len(s) < 2 {
-			utils.Fail.Printf("[!] Skipping improperly formatted entry in %s:%d\n", userpassFile, count)
+			utils.Fail.Printf("Skipping improperly formatted entry in %s:%d\n", userpassFile, count)
 			continue
 		}
 		u, p := s[0], s[1]

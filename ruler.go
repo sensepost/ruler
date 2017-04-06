@@ -382,24 +382,94 @@ func printRules() error {
 	return nil
 }
 
-//Function to display all rules
+//Function to display all addressbook entries
 func abkList(c *cli.Context) error {
+	utils.Trace.Println("Let's play addressbook")
+	if config.Transport == mapi.RPC {
+		return fmt.Errorf("Only MAPI/HTTP is currently supported for addressbook interaction")
+	}
+
+	mapi.BindAddressBook()
+
+	columns := make([]mapi.PropertyTag, 2)
+	columns[0] = mapi.PidTagDisplayName
+	columns[1] = mapi.PidTagSMTPAddress
+	rows, _ := mapi.QueryRows(100, []byte{}, columns) //pull first 255 entries
+	utils.Info.Println("Found the following entries: ")
+	maxwidth := 30
+	fmstr1 := fmt.Sprintf("%%-%ds | %%-s\n", maxwidth)
+	fmstr2 := fmt.Sprintf("%%-%ds | %%s\n", maxwidth)
+	utils.Info.Printf(fmstr1, "Display Name", "SMTP Address")
+	utils.Info.Printf("%s|%s\n", (strings.Repeat("-", maxwidth+1)), strings.Repeat("-", 18))
+	for k := 0; k < int(rows.RowCount); k++ {
+		if len(rows.RowData[k].AddressBookPropertyValue) == 2 {
+			disp := utils.FromUnicode(rows.RowData[k].AddressBookPropertyValue[0].Value)
+			if len(disp) > maxwidth {
+				disp = disp[:maxwidth-2]
+			}
+			utils.Clear.Printf(fmstr2, string(disp), rows.RowData[k].AddressBookPropertyValue[1].Value)
+		}
+	}
+	state := mapi.STAT{}
+	state.Unmarshal(rows.State)
+	totalrows := state.TotalRecs
+	for i := 0; i < int(totalrows); i += 100 {
+		rows, _ = mapi.QueryRows(100, rows.State, columns)
+		for k := 0; k < int(rows.RowCount); k++ {
+			if len(rows.RowData[k].AddressBookPropertyValue) == 2 {
+				disp := utils.FromUnicode(rows.RowData[k].AddressBookPropertyValue[0].Value)
+				if len(disp) > maxwidth {
+					disp = disp[:maxwidth-2]
+				}
+				utils.Clear.Printf(fmstr2, string(disp), rows.RowData[k].AddressBookPropertyValue[1].Value)
+			}
+		}
+	}
+	return nil
+}
+
+//Function to display all addressbook entries
+func abkDump(c *cli.Context) error {
 	if config.Transport == mapi.RPC {
 		return fmt.Errorf("Address book support is currently limited to MAPI/HTTP")
 	}
-	utils.Trace.Println("Let's play addressbook")
+	utils.Trace.Println("Let's Dump the addressbook")
+	fout, err := os.OpenFile(c.String("output"), os.O_CREATE|os.O_WRONLY, 0666)
+	if err != nil {
+		return fmt.Errorf("Couldn't create file to write to... %s", err)
+	}
+
 	mapi.BindAddressBook()
 	columns := make([]mapi.PropertyTag, 2)
-	columns[0] = mapi.PidTagSMTPAddress
-	columns[1] = mapi.PidTagDisplayName
-	rows, _ := mapi.QueryRows(10, columns) //pull first 255 entries
-	utils.Info.Println("Found the following entries: ")
+	columns[0] = mapi.PidTagDisplayName
+	columns[1] = mapi.PidTagSMTPAddress
+	rows, _ := mapi.QueryRows(100, []byte{}, columns) //pull first 255 entries
+
 	for k := 0; k < int(rows.RowCount); k++ {
-		for v := 0; v < int(rows.Columns.PropertyTagCount); v++ {
-			//value, p = mapi.ReadPropertyValue(rows.RowData[k].ValueArray[p:], rows.Columns.PropertyTags[v].PropertyType)
-			utils.Info.Printf("%s :: ", rows.RowData[k].AddressBookPropertyValue[v].Value)
+		if len(rows.RowData[k].AddressBookPropertyValue) == 2 {
+			disp := utils.FromUnicode(rows.RowData[k].AddressBookPropertyValue[0].Value)
+			email := utils.FromUnicode(rows.RowData[k].AddressBookPropertyValue[1].Value)
+			if _, err := fout.WriteString(fmt.Sprintf("%s , %s\n", disp, email)); err != nil {
+				return fmt.Errorf("Couldn't write to file... %s", err)
+			}
 		}
-		utils.Info.Println("")
+	}
+	state := mapi.STAT{}
+	state.Unmarshal(rows.State)
+	totalrows := state.TotalRecs
+	utils.Info.Printf("Found %d entries in the GAL. Dumping...", totalrows)
+	for i := 0; i < int(totalrows); i += 100 {
+		rows, _ = mapi.QueryRows(100, rows.State, columns)
+		utils.Info.Printf("Dumping %d/%d", i+100, totalrows)
+		for k := 0; k < int(rows.RowCount); k++ {
+			if len(rows.RowData[k].AddressBookPropertyValue) == 2 {
+				disp := utils.FromUnicode(rows.RowData[k].AddressBookPropertyValue[0].Value)
+				email := utils.FromUnicode(rows.RowData[k].AddressBookPropertyValue[1].Value)
+				if _, err := fout.WriteString(fmt.Sprintf("%s | %s\n", disp, email)); err != nil {
+					return fmt.Errorf("Couldn't write to file... %s", err)
+				}
+			}
+		}
 	}
 	return nil
 }
@@ -700,6 +770,31 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 							return cli.NewExitError(err, 1)
 						}
 						err = abkList(c)
+						if err != nil {
+							return cli.NewExitError(err, 1)
+						}
+						return nil
+					},
+				},
+				{
+					Name:  "dump",
+					Usage: "dump the entries of the GAL and save to local file",
+					Flags: []cli.Flag{
+						cli.StringFlag{
+							Name:  "output,o",
+							Value: "",
+							Usage: "File to save the GAL to",
+						},
+					},
+					Action: func(c *cli.Context) error {
+						if c.String("output") == "" {
+							return cli.NewExitError("The file to save to is required. Use --output or -o", 1)
+						}
+						err := connect(c)
+						if err != nil {
+							return cli.NewExitError(err, 1)
+						}
+						err = abkDump(c)
 						if err != nil {
 							return cli.NewExitError(err, 1)
 						}

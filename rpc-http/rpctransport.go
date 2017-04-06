@@ -22,6 +22,7 @@ var rpcOutR, rpcOutW = io.Pipe()
 var rpcRespBody *bufio.Reader
 var callcounter int
 var responses = make([]RPCResponse, 0)
+var httpResponses = make([][]byte, 0)
 var rpcntlmsession ntlm.ClientSession
 
 //AuthSession Keep track of session data
@@ -152,7 +153,6 @@ func setupHTTP(rpctype string, URL string, ntlmAuth bool, full bool) (net.Conn, 
 		}
 	}
 
-
 	if cookiestr != "" {
 		request = fmt.Sprintf("%sCookie: %s\r\n", request, cookiestr)
 	}
@@ -179,6 +179,15 @@ func RPCOpen(URL string, readySignal chan bool, errOccurred chan error) (err err
 	//this will be sent back to the caller through "readySignal", while error is sent through errOccurred
 	go RPCOpenOut(URL, readySignal, errOccurred)
 
+	select {
+	case <-readySignal:
+		readySignal <- false
+		errOccurred <- err
+		return err
+	case <-time.After(time.Second * 2): // call timed out
+		readySignal <- true
+	}
+
 	for {
 		data := make([]byte, 2048)
 		n, err := rpcInR.Read(data)
@@ -204,13 +213,15 @@ func RPCOpenOut(URL string, readySignal chan bool, errOccurred chan error) (err 
 		errOccurred <- err
 		return err
 	}
-	readySignal <- true
 
 	scanner := bufio.NewScanner(rpcOutConn)
 	scanner.Split(SplitData)
 
 	for scanner.Scan() {
 		if b := scanner.Bytes(); b != nil {
+			if string(b[0:4]) == "HTTP" {
+				httpResponses = append(httpResponses, b)
+			}
 			r := RPCResponse{}
 			r.Unmarshal(b)
 			r.Body = b
@@ -248,8 +259,12 @@ func RPCBind() error {
 
 	RPCWrite(bind.Marshal())
 
-	RPCRead(0)
-	RPCRead(0)
+	if _, err := RPCRead(0); err != nil {
+		return err
+	}
+	if _, err := RPCRead(0); err != nil {
+		return err
+	}
 
 	//parse out and setup security
 	if AuthSession.RPCNetworkAuthLevel == RPC_C_AUTHN_LEVEL_PKT_PRIVACY {
@@ -319,7 +334,21 @@ func EcDoRPCExt2(MAPI []byte, auxLen uint32) ([]byte, error) {
 		sec.Unmarshal(resp.SecTrailer, int(resp.Header.AuthLen))
 		return dec[20:], err
 	}
+
 	return resp.PDU[28:], err
+}
+
+func EcDoRPCAbk(MAPI []byte, l int) ([]byte, error) {
+	RPCWriteN(MAPI, uint32(l), 0x03)
+	//RPCWrite(req.Marshal())
+
+	resp, err := RPCRead(callcounter - 1)
+
+	if err != nil {
+		return nil, err
+	}
+	fmt.Printf("%x\n", resp.PDU)
+	return resp.PDU, err
 }
 
 //DoConnectExRequest makes our connection request. After this we can use
@@ -405,6 +434,7 @@ func RPCWriteN(MAPI []byte, auxlen uint32, opnum byte) {
 		pdu.ContextHandle = AuthSession.ContextHandle
 	}
 	pdu.Data = MAPI
+
 	pdu.CbAuxIn = uint32(auxlen)
 	pdu.AuxOut = 0x000001008
 
@@ -466,6 +496,7 @@ func RPCOutWrite(data []byte) {
 //our list of received responses. Blocks until it finds a response
 func RPCRead(callID int) (RPCResponse, error) {
 	c := make(chan RPCResponse, 1)
+	cerr := make(chan error, 1)
 	go func() {
 		stop := false
 		for stop != true {
@@ -480,9 +511,22 @@ func RPCRead(callID int) (RPCResponse, error) {
 		}
 	}()
 
+	go func() {
+		for _, v := range httpResponses {
+			st := string(v)
+			if er := strings.Split(strings.Split(st, "\r\n")[0], " "); er[1] != "200" {
+				utils.Trace.Printf("Invalid HTTP response: %s", er)
+				cerr <- fmt.Errorf("Invalid HTTP response: %s", er)
+				break
+			}
+		}
+	}()
+
 	select {
 	case resp := <-c:
 		return resp, nil
+	case er := <-cerr:
+		return RPCResponse{}, er
 	case <-time.After(time.Second * 10): // call timed out
 		return RPCResponse{}, fmt.Errorf("Time-out reading from RPC")
 	}
@@ -500,7 +544,7 @@ func SplitData(data []byte, atEOF bool) (advance int, token []byte, err error) {
 		for k := range data {
 			if data[k] == 0x0d && data[k+1] == 0x0a && data[k+2] == 0x0d && data[k+3] == 0x0a {
 				//utils.Trace.Print(string(data[:k+4]))
-				return k + 4, nil, nil //data[0:k], nil
+				return k + 4, data[0:k], nil //data[0:k], nil
 			}
 		}
 	}

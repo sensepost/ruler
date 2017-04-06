@@ -16,6 +16,7 @@ Ruler has multiple functions and more are planned. These include
 * View currently configured mail rules
 * Create new malicious mail rules
 * Delete mail rules
+* Dump the Global Address List (GAL)
 
 Ruler attempts to be semi-smart when it comes to interacting with Exchange and uses the Autodiscover service (just as your Outlook client would) to discover the relevant information.
 
@@ -310,6 +311,21 @@ If you want to send the email manually, using the targets own email address, you
 
 Enjoy your shell and don't forget to clean-up after yourself by deleting the rule (or leave it for persistence).
 
+# Getting the GAL
+
+The Global Address List contains a listing of all addresses stored in the organisational addressbook. If your target is accessible through MAPI/HTTP you can list or download the GAL.
+
+To list:
+
+```
+./ruler --email user@targetdomain.com abk list"
+```
+
+This will display all entries on screen. Now there can be ALOT of entries, so it's probably more useful to dump this list to file for offline parsing. To do this use the ```dump``` command.
+
+```
+./ruler --email user@targetdomain.com abk dump --output /tmp/gal.txt
+```
 
 [Silentbreak blog]: <https://silentbreaksecurity.com/malicious-outlook-rules/>
 [SensePost blog]: <https://sensepost.com/blog/2016/mapi-over-http-and-mailrule-pwnage/>

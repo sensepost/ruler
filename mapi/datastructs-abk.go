@@ -15,6 +15,12 @@ type BindRequest struct {
 	AuxiliaryBuffer     []byte
 }
 
+type BindRequestRPC struct {
+	Flags      uint32
+	State      []byte //optional 36 bytes
+	ServerGUID []byte
+}
+
 //BindResponse struct
 type BindResponse struct {
 	StatusCode          uint32
@@ -160,8 +166,26 @@ type AddressBookPropertyValue struct {
 	Value []byte
 }
 
+//STAT holds the state of the NSPI table
+type STAT struct {
+	SortType       uint32
+	ContainerID    uint32
+	CurrentRec     uint32
+	Delta          uint32
+	NumPos         uint32
+	TotalRecs      uint32
+	CodePage       uint32
+	TemplateLocale uint32
+	SortLocale     uint32
+}
+
 //Marshal turn BindRequest into Bytes
 func (bindRequest BindRequest) Marshal() []byte {
+	return utils.BodyToBytes(bindRequest)
+}
+
+//Marshal turn BindRequestRPC into Bytes
+func (bindRequest BindRequestRPC) Marshal() []byte {
 	return utils.BodyToBytes(bindRequest)
 }
 
@@ -188,6 +212,11 @@ func (qrows SeekEntriesRequest) Marshal() []byte {
 //Marshal turn AddressBookPropertyValue into Bytes
 func (abpv AddressBookPropertyValue) Marshal() []byte {
 	return utils.BodyToBytes(abpv)
+}
+
+//Marshal turn STAT struct into Bytes
+func (stat STAT) Marshal() []byte {
+	return utils.BodyToBytes(stat)
 }
 
 //Unmarshal func
@@ -376,7 +405,23 @@ func (qrResponse *QueryRowsResponse) Unmarshal(resp []byte) (int, error) {
 	}
 	qrResponse.AuxiliaryBufferSize, pos = utils.ReadUint32(pos, resp)
 	if qrResponse.AuxiliaryBufferSize != 0 {
-		qrResponse.AuxiliaryBuffer, pos = utils.ReadBytes(pos, int(qrResponse.AuxiliaryBufferSize), resp)
+		//qrResponse.AuxiliaryBuffer, pos = utils.ReadBytes(pos, int(qrResponse.AuxiliaryBufferSize), resp)
 	}
+	return pos, nil
+}
+
+//Unmarshal func
+func (stat *STAT) Unmarshal(resp []byte) (int, error) {
+	pos := 0
+	stat.SortType, pos = utils.ReadUint32(pos, resp)
+	stat.ContainerID, pos = utils.ReadUint32(pos, resp)
+	stat.CurrentRec, pos = utils.ReadUint32(pos, resp)
+	stat.Delta, pos = utils.ReadUint32(pos, resp)
+	stat.NumPos, pos = utils.ReadUint32(pos, resp)
+	stat.TotalRecs, pos = utils.ReadUint32(pos, resp)
+	stat.CodePage, pos = utils.ReadUint32(pos, resp)
+	stat.TemplateLocale, pos = utils.ReadUint32(pos, resp)
+	stat.SortLocale, pos = utils.ReadUint32(pos, resp)
+
 	return pos, nil
 }
