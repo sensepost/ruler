@@ -2,6 +2,7 @@ package autodiscover
 
 import (
 	"bytes"
+	"crypto/tls"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -213,7 +214,10 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, string, er
 	autodiscoverResp := utils.AutodiscoverResp{}
 	//for now let's rely on autodiscover.domain/autodiscover/autodiscover.xml
 	//var client http.Client
-	client := http.Client{}
+	client := http.Client{Transport: &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: SessionConfig.Insecure},
+	}}
+
 	if SessionConfig.Basic == false {
 		//check if this is a first request or a redirect
 		//create an ntml http client
@@ -369,7 +373,9 @@ func redirectAutodiscover(redirdom string) (string, error) {
 	//create the autodiscover url
 	autodiscoverURL := fmt.Sprintf("http://autodiscover.%s/autodiscover/autodiscover.xml", redirdom)
 	req, _ := http.NewRequest("GET", autodiscoverURL, nil)
-	var DefaultTransport http.RoundTripper = &http.Transport{}
+	var DefaultTransport http.RoundTripper = &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: SessionConfig.Insecure},
+	}
 	resp, err := DefaultTransport.RoundTrip(req)
 	if err != nil {
 		return "", err
@@ -405,7 +411,10 @@ func (l InsecureRedirects) RoundTrip(req *http.Request) (resp *http.Response, er
 		URL, _ := url.Parse(resp.Header.Get("Location"))
 		r, _ := parseTemplate(autodiscoverXML)
 		//if the domains are different, we need to force the auth cookie to be passed along.. this is for redirects to office365
-		client := http.Client{}
+		client := http.Client{Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: SessionConfig.Insecure},
+		}}
+
 		req, err = http.NewRequest("POST", URL.String(), strings.NewReader(r))
 		req.Header.Add("Content-Type", "text/xml")
 		req.Header.Add("User-Agent", "ruler")

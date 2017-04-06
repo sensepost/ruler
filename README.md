@@ -20,23 +20,31 @@ Ruler has multiple functions and more are planned. These include
 
 Ruler attempts to be semi-smart when it comes to interacting with Exchange and uses the Autodiscover service (just as your Outlook client would) to discover the relevant information.
 
+# Pre-built Binaries
+
+Compiled binaries for Linux, OSX and Windows are available. Find these in [Releases]
+
+
 # Getting the Code
 
-Ruler is written in Go so you'll need to have Go setup to run/build the project
+Ruler is written in Go so you'll need to have [Go setup](https://golang.org/doc/install) to run/build the project from source. The easiest way to get up and running from source is through ```go get```.
 
 Get it through Go:
 ```
 go get github.com/sensepost/ruler
 ```
 
-You can now run the app through ```go run``` if you wish:
+You can now run the app through ```go run``` in the GOPATH/src/github.com/sensepost/ruler directory:
 ```
 go run ruler.go -h
 ```
 
-Or build it (the prefered option):
+### Or build it:
 
-The first step as always is to clone the repo :
+When building you'll need to have your [GOPATH correctly configured](https://golang.org/doc/install).
+
+The first step as always is to clone the repo. Here it is probably best to clone into ```$GOPATH/src/github.com/sensepost/ruler``` this saves you from having to change a whole bunch of paths. If you are cloning into a different directory, remember you'll need to change all references to ```github.com/sensepost/ruler``` in the imports.
+
 ```
 git clone https://github.com/sensepost/ruler.git
 ```
@@ -52,9 +60,6 @@ Then build it
 go build
 ```
 
-## Pre-built Binaries
-
-Compiled binaries for Linux, OSX and Windows are available. Find these in [Releases]
 
 # Interacting with Exchange
 

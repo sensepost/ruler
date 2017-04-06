@@ -2,6 +2,7 @@ package mapi
 
 import (
 	"bytes"
+	"crypto/tls"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -67,6 +68,7 @@ func Init(config *utils.Session, lid, URL, ABKURL string, transport int) {
 			Jar: AuthSession.CookieJar,
 		}
 	} else {
+		AuthSession.URL, _ = url.Parse(AuthSession.RPCURL)
 		AuthSession.Host = URL
 	}
 	AuthSession.Transport = transport
@@ -80,10 +82,10 @@ func Init(config *utils.Session, lid, URL, ABKURL string, transport int) {
 	AuthSession.RPCNetworkAuthType = rpchttp.RPC_C_AUTHN_WINNT
 	//}
 
-	//} else {
-	//AuthSession.RPCNetworkAuthLevel = rpchttp.RPC_C_AUTHN_LEVEL_NONE
-	//AuthSession.RPCNetworkAuthType = rpchttp.RPC_C_AUTHN_NONE
-	//}
+	if AuthSession.URL.Host == "outlook.office365.com" {
+		AuthSession.RPCNetworkAuthLevel = rpchttp.RPC_C_AUTHN_LEVEL_NONE
+		AuthSession.RPCNetworkAuthType = rpchttp.RPC_C_AUTHN_NONE
+	}
 
 }
 
@@ -131,7 +133,9 @@ func mapiRequestHTTP(URL, mapiType string, body []byte) ([]byte, error) {
 	if err != nil {
 		//check if this error was because of ntml auth when basic auth was expected.
 		if m, _ := regexp.Match("illegal base64", []byte(err.Error())); m == true {
-			AuthSession.Client = http.Client{Jar: AuthSession.CookieJar}
+			AuthSession.Client = http.Client{Jar: AuthSession.CookieJar, Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: AuthSession.Insecure},
+			}}
 			resp, err = AuthSession.Client.Do(req)
 		} else {
 			return nil, err //&TransportError{err}
