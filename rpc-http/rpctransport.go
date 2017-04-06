@@ -515,6 +515,7 @@ func RPCRead(callID int) (RPCResponse, error) {
 		for _, v := range httpResponses {
 			st := string(v)
 			if er := strings.Split(strings.Split(st, "\r\n")[0], " "); er[1] != "200" {
+				utils.Trace.Printf("Invalid HTTP response: %s", er)
 				cerr <- fmt.Errorf("Invalid HTTP response: %s", er)
 				break
 			}
