@@ -77,12 +77,11 @@ func Init(config *utils.Session, lid, URL, ABKURL string, transport int) {
 	AuthSession.LogonID = 0x09
 	AuthSession.Authenticated = false
 
-	//if AuthSession.RPCEncrypt == true { //only support NTLM auth for now
+	//default to Encrypt + Sign for NTLM
 	AuthSession.RPCNetworkAuthLevel = rpchttp.RPC_C_AUTHN_LEVEL_PKT_PRIVACY
 	AuthSession.RPCNetworkAuthType = rpchttp.RPC_C_AUTHN_WINNT
-	//}
 
-	if AuthSession.URL.Host == "outlook.office365.com" {
+	if AuthSession.URL.Host == "outlook.office365.com" || AuthSession.RPCEncrypt == false {
 		AuthSession.RPCNetworkAuthLevel = rpchttp.RPC_C_AUTHN_LEVEL_NONE
 		AuthSession.RPCNetworkAuthType = rpchttp.RPC_C_AUTHN_NONE
 	}

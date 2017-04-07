@@ -207,7 +207,7 @@ func connect(c *cli.Context) error {
 	config.Insecure = c.GlobalBool("insecure")
 	config.Verbose = c.GlobalBool("verbose")
 	config.Admin = c.GlobalBool("admin")
-	config.RPCEncrypt = c.GlobalBool("encrypt")
+	config.RPCEncrypt = !c.GlobalBool("noencrypt")
 	config.CookieJar, _ = cookiejar.New(nil)
 
 	//add supplied cookie to the cookie jar
@@ -299,7 +299,7 @@ func connect(c *cli.Context) error {
 
 		if mapiURL == "" { //try RPC
 			//fmt.Println("No MAPI URL found. Trying RPC/HTTP")
-			resp, _, config.RPCURL, config.RPCMailbox, config.RPCEncrypt, err = autodiscover.GetRPCHTTP(config.Email, url, resp)
+			resp, _, config.RPCURL, config.RPCMailbox, config.RPCNtlm, err = autodiscover.GetRPCHTTP(config.Email, url, resp)
 			if err != nil {
 				exit(err)
 			}
@@ -323,7 +323,7 @@ func connect(c *cli.Context) error {
 
 	} else {
 		utils.Trace.Println("RPC/HTTP forced, trying RPC/HTTP")
-		resp, rawAutodiscover, config.RPCURL, config.RPCMailbox, config.RPCEncrypt, err = autodiscover.GetRPCHTTP(config.Email, url, resp)
+		resp, rawAutodiscover, config.RPCURL, config.RPCMailbox, config.RPCNtlm, err = autodiscover.GetRPCHTTP(config.Email, url, resp)
 		if err != nil {
 			exit(err)
 		}
@@ -534,8 +534,8 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 			Usage: "Ignore server SSL certificate errors",
 		},
 		cli.BoolFlag{
-			Name:  "encrypt",
-			Usage: "Use NTLM auth on the RPC level - some environments require this",
+			Name:  "noencrypt",
+			Usage: "Don't use encryption the RPC level - some environments require this",
 		},
 		cli.BoolFlag{
 			Name:  "basic,b",

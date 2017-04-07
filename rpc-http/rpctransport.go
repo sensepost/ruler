@@ -167,7 +167,7 @@ func RPCOpen(URL string, readySignal chan bool, errOccurred chan error) (err err
 	//can't find a way to keep the write channel open (other than going over to http/2, which isn't valid here)
 	//so this is some damn messy code, but screw it
 
-	rpcInConn, err = setupHTTP("RPC_IN_DATA", URL, AuthSession.RPCEncrypt, true)
+	rpcInConn, err = setupHTTP("RPC_IN_DATA", URL, AuthSession.RPCNtlm, true)
 
 	if err != nil {
 		readySignal <- false
@@ -207,7 +207,7 @@ func RPCOpen(URL string, readySignal chan bool, errOccurred chan error) (err err
 //these to our list of recieved responses
 func RPCOpenOut(URL string, readySignal chan bool, errOccurred chan error) (err error) {
 
-	rpcOutConn, err = setupHTTP("RPC_OUT_DATA", URL, AuthSession.RPCEncrypt, true)
+	rpcOutConn, err = setupHTTP("RPC_OUT_DATA", URL, AuthSession.RPCNtlm, true)
 	if err != nil {
 		readySignal <- false
 		errOccurred <- err
@@ -512,12 +512,16 @@ func RPCRead(callID int) (RPCResponse, error) {
 	}()
 
 	go func() {
-		for _, v := range httpResponses {
-			st := string(v)
-			if er := strings.Split(strings.Split(st, "\r\n")[0], " "); er[1] != "200" {
-				utils.Trace.Printf("Invalid HTTP response: %s", er)
-				cerr <- fmt.Errorf("Invalid HTTP response: %s", er)
-				break
+		stop := false
+		for stop != true {
+			for k, v := range httpResponses {
+				st := string(v)
+				if er := strings.Split(strings.Split(st, "\r\n")[0], " "); er[1] != "200" {
+					cerr <- fmt.Errorf("Invalid HTTP response: %s", er)
+					stop = true
+					break
+				}
+				httpResponses = append(httpResponses[:k], httpResponses[k+1:]...)
 			}
 		}
 	}()

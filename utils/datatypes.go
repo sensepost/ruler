@@ -53,6 +53,7 @@ type Session struct {
 	Trigger             string
 	RPCMailbox          string
 	RPCEncrypt          bool
+	RPCNtlm             bool
 	RPCNetworkAuthLevel uint8
 	RPCNetworkAuthType  uint8
 	RPCNtlmSessionKey   []byte

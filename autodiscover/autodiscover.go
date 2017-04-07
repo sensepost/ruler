@@ -114,7 +114,7 @@ func GetRPCHTTP(email, autoURLPtr string, resp *utils.AutodiscoverResp) (*utils.
 
 	url := ""
 	user := ""
-	encrypt := false
+	ntlmAuth := false
 	for _, v := range resp.Response.Account.Protocol {
 		if v.Type == "EXPR" {
 			if v.SSL == "Off" {
@@ -123,7 +123,7 @@ func GetRPCHTTP(email, autoURLPtr string, resp *utils.AutodiscoverResp) (*utils.
 				url = "https://" + v.Server
 			}
 			if v.AuthPackage == "Ntlm" { //set the encryption on if the server specifies NTLM auth
-				encrypt = true
+				ntlmAuth = true
 			}
 		}
 		if v.Type == "EXCH" {
@@ -143,7 +143,7 @@ func GetRPCHTTP(email, autoURLPtr string, resp *utils.AutodiscoverResp) (*utils.
 
 	utils.Trace.Printf("RPC URL set: %s\n", RPCURL)
 
-	return resp, rawAutodiscover, RPCURL, user, encrypt, nil
+	return resp, rawAutodiscover, RPCURL, user, ntlmAuth, nil
 }
 
 //CheckCache checks to see if there is a stored copy of the autodiscover record
