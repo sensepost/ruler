@@ -496,7 +496,7 @@ func RPCOutWrite(data []byte) {
 //our list of received responses. Blocks until it finds a response
 func RPCRead(callID int) (RPCResponse, error) {
 	c := make(chan RPCResponse, 1)
-	cerr := make(chan error, 1)
+
 	go func() {
 		stop := false
 		for stop != true {
@@ -511,27 +511,18 @@ func RPCRead(callID int) (RPCResponse, error) {
 		}
 	}()
 
-	go func() {
-		stop := false
-		for stop != true {
-			for k, v := range httpResponses {
-				st := string(v)
-				if er := strings.Split(strings.Split(st, "\r\n")[0], " "); er[1] != "200" {
-					cerr <- fmt.Errorf("Invalid HTTP response: %s", er)
-					stop = true
-					break
-				}
-				httpResponses = append(httpResponses[:k], httpResponses[k+1:]...)
-			}
-		}
-	}()
-
 	select {
 	case resp := <-c:
 		return resp, nil
-	case er := <-cerr:
-		return RPCResponse{}, er
 	case <-time.After(time.Second * 10): // call timed out
+		//check if there is a 401 or other error message
+		for k, v := range httpResponses {
+			st := string(v)
+			if er := strings.Split(strings.Split(st, "\r\n")[0], " "); er[1] != "200" {
+				return RPCResponse{}, fmt.Errorf("Invalid HTTP response: %s", er)
+			}
+			httpResponses = append(httpResponses[:k], httpResponses[k+1:]...)
+		}
 		return RPCResponse{}, fmt.Errorf("Time-out reading from RPC")
 	}
 
