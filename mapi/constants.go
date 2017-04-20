@@ -77,6 +77,7 @@ const (
 	PtypBinary         = 0x0102
 	PtypMultipleBinary = 0x1102
 	PtypTime           = 0x0040
+	PtypObject         = 0x000D
 )
 
 //Folder id/locations -- https://msdn.microsoft.com/en-us/library/office/cc815825.aspx
@@ -549,3 +550,31 @@ var PidTagBodyHTML = PropertyTag{PtypBinary, 0x1013}
 
 //PidTagHTMLBody is the same as above?
 var PidTagHTMLBody = PropertyTag{PtypString, 0x1013}
+
+var PidTagAttachMethod = PropertyTag{PtypInteger32, 0x3705}
+
+var PidTagRenderingPosition = PropertyTag{PtypInteger32, 0x370B}
+
+var PidTagAttachContentId = PropertyTag{PtypString, 0x03712}
+
+var PidTagAttachMimeTag = PropertyTag{PtypString, 0x370E}
+
+var PidTagAttachmentLinkId = PropertyTag{PtypInteger32, 0x7FFA}
+
+var PidTagAttachFlags = PropertyTag{PtypInteger32, 0x3714}
+
+var PidTagAttachmentHidden = PropertyTag{PtypBoolean, 0x7FFE}
+
+var PidTagAttachLongFilename = PropertyTag{PtypString, 0x3707}
+
+var PidTagAttachFilename = PropertyTag{PtypString, 0x3704}
+
+var PidTagAttachExtension = PropertyTag{PtypString, 0x3703}
+
+var PidTagMessageAttachments = PropertyTag{PtypObject, 0x0E13}
+
+var PidTagAttachPathName = PropertyTag{PtypString, 0x3708}
+var PidTagAttachLongPathName = PropertyTag{PtypString, 0x370D}
+var PidTagAttachPayloadProviderGuidString = PropertyTag{PtypString, 0x3719}
+var PidTagTrustSender = PropertyTag{PtypInteger32, 0x0E79}
+var PidTagAttachDataBinary = PropertyTag{PtypBinary, 0x3701}

@@ -101,6 +101,7 @@ func setupHTTP(rpctype string, URL string, ntlmAuth bool, full bool) (net.Conn, 
 				}
 			}
 		}
+		utils.Trace.Println(string(data))
 
 		ntlmChallengeString := strings.Replace(ntlmChallengeHeader, "NTLM ", "", 1)
 		challengeBytes, err := utils.DecBase64(ntlmChallengeString)
@@ -120,12 +121,10 @@ func setupHTTP(rpctype string, URL string, ntlmAuth bool, full bool) (net.Conn, 
 		// parse NTLM challenge
 		challenge, err := ntlm.ParseChallengeMessage(challengeBytes)
 		if err != nil {
-			//panic(err)
 			return nil, err
 		}
 		err = session.ProcessChallengeMessage(challenge)
 		if err != nil {
-			//panic(err)
 			return nil, err
 		}
 		// authenticate user

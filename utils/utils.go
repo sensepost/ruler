@@ -63,6 +63,14 @@ func UTF16BE(str string, trail int) []byte {
 	return bt
 }
 
+//DecodeUint64 decode 4 byte value into uint32
+func DecodeUint64(num []byte) uint64 {
+	var number uint64
+	bf := bytes.NewReader(num)
+	binary.Read(bf, binary.LittleEndian, &number)
+	return number
+}
+
 //DecodeUint32 decode 4 byte value into uint32
 func DecodeUint32(num []byte) uint32 {
 	var number uint32
@@ -103,7 +111,7 @@ func BodyToBytes(DataStruct interface{}) []byte {
 	//check if we have a slice of structs
 	if reflect.TypeOf(DataStruct).Kind() == reflect.Slice {
 		for i := 0; i < v.Len(); i++ {
-			if v.Index(i).Kind() == reflect.Uint8 || v.Index(i).Kind() == reflect.Uint16 || v.Index(i).Kind() == reflect.Uint32 {
+			if v.Index(i).Kind() == reflect.Uint8 || v.Index(i).Kind() == reflect.Uint16 || v.Index(i).Kind() == reflect.Uint32 || v.Index(i).Kind() == reflect.Uint64 {
 				byteNum := new(bytes.Buffer)
 				binary.Write(byteNum, binary.LittleEndian, v.Index(i).Interface())
 				dumped = append(dumped, byteNum.Bytes()...)
@@ -118,7 +126,7 @@ func BodyToBytes(DataStruct interface{}) []byte {
 		}
 	} else {
 		for i := 0; i < v.NumField(); i++ {
-			if v.Field(i).Kind() == reflect.Uint8 || v.Field(i).Kind() == reflect.Uint16 || v.Field(i).Kind() == reflect.Uint32 {
+			if v.Field(i).Kind() == reflect.Uint8 || v.Field(i).Kind() == reflect.Uint16 || v.Field(i).Kind() == reflect.Uint32 || v.Field(i).Kind() == reflect.Uint64 {
 				byteNum := new(bytes.Buffer)
 				binary.Write(byteNum, binary.LittleEndian, v.Field(i).Interface())
 				dumped = append(dumped, byteNum.Bytes()...)

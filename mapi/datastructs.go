@@ -410,6 +410,39 @@ type RopSaveChangesMessageResponse struct {
 	MessageID           []byte
 }
 
+//RopGetAttachmentTableRequest to open the attachment table
+type RopGetAttachmentTableRequest struct {
+	RopID             uint8 //0x21
+	LogonID           uint8
+	InputHandleIndex  uint8
+	OutputHandleIndex uint8
+	TableFlags        uint8
+}
+
+//RopGetAttachmentTableResponse struct holding the attachment table index
+type RopGetAttachmentTableResponse struct {
+	RopID             uint8 //0x21
+	OutputHandleIndex uint8
+	ReturnValue       uint32
+}
+
+//RopOpenAttachmentRequest to open an existing attachment
+type RopOpenAttachmentRequest struct {
+	RopID               uint8 //0x22
+	LogonID             uint8
+	InputHandleIndex    uint8
+	OutputHandleIndex   uint8
+	OpenAttachmentFlags uint8
+	AttachmentID        uint32
+}
+
+//RopOpenAttachmentResponse struct holding the attachment  index
+type RopOpenAttachmentResponse struct {
+	RopID             uint8 //0x22
+	OutputHandleIndex uint8
+	ReturnValue       uint32
+}
+
 //RopSynchronizationOpenCollectorRequest struct used to open handle to new email message
 type RopSynchronizationOpenCollectorRequest struct {
 	RopID               uint8
@@ -455,34 +488,34 @@ type RopOpenMessageResponse struct {
 
 //RopCreateAttachmentRequest used to create an attachment
 type RopCreateAttachmentRequest struct {
-	RopID        uint8 //0x23
-	LogonID      uint8
-	InputHandle  uint8
-	OutputHandle uint8
+	RopID             uint8 //0x23
+	LogonID           uint8
+	InputHandleIndex  uint8
+	OutputHandleIndex uint8
 }
 
 //RopCreateAttachmentResponse holds the response to a create attachment
 type RopCreateAttachmentResponse struct {
-	RopID        uint8 //0x23
-	OutputHandle uint8
-	ReturnValue  uint32
-	AttachmentID []byte
+	RopID             uint8 //0x23
+	OutputHandleIndex uint8
+	ReturnValue       uint32
+	AttachmentID      uint32
 }
 
 //RopSaveChangesAttachmentRequest used to create an attachment
 type RopSaveChangesAttachmentRequest struct {
-	RopID        uint8 //0x25
-	LogonID      uint8
-	InputHandle  uint8
-	OutputHandle uint8
-	SaveFlags    uint8
+	RopID               uint8 //0x25
+	LogonID             uint8
+	InputHandleIndex    uint8
+	ResponseHandleIndex uint8
+	SaveFlags           uint8
 }
 
 //RopSaveChangesAttachmentResponse holds the response to a create attachment
 type RopSaveChangesAttachmentResponse struct {
-	RopID        uint8 //0x23
-	OutputHandle uint8
-	ReturnValue  uint32
+	RopID               uint8 //0x25
+	ResponseHandleIndex uint8
+	ReturnValue         uint32
 }
 
 //RopFastTransferSourceCopyToRequest struct used to open handle to  message
@@ -543,52 +576,66 @@ type RopFastTransferSourceGetBufferResponse struct {
 
 //RopOpenStreamRequest struct used to open a stream
 type RopOpenStreamRequest struct {
-	RopID         uint8 //0x2B
-	LogonID       uint8
-	InputHandle   uint8
-	OutputHandle  uint8
-	PropertyTag   []byte
-	OpenModeFlags byte
+	RopID             uint8 //0x2B
+	LogonID           uint8
+	InputHandleIndex  uint8
+	OutputHandleIndex uint8
+	PropertyTag       PropertyTag
+	OpenModeFlags     uint8
 }
 
 //RopOpenStreamResponse struct used to open a stream
 type RopOpenStreamResponse struct {
-	RopID        uint8 //0x2B
-	OutputHandle uint8
-	ReturnValue  uint32
-	StreamSize   uint32
+	RopID             uint8 //0x2B
+	OutputHandleIndex uint8
+	ReturnValue       uint32
+	StreamSize        uint32
 }
 
-//RopWriteStreamRequest struct used to open a stream
+//RopWriteStreamRequest struct used to write a stream
 type RopWriteStreamRequest struct {
-	RopID       uint8 //0x2B
-	LogonID     uint8
-	InputHandle uint8
-	DataSize    uint16
-	Data        []byte
+	RopID            uint8 //0x2B
+	LogonID          uint8
+	InputHandleIndex uint8
+	DataSize         uint16
+	Data             []byte
 }
 
-//RopWriteStreamResponse struct used to open a stream
+//RopWriteStreamResponse struct used to write a stream
 type RopWriteStreamResponse struct {
-	RopID        uint8 //0x2B
-	OutputHandle uint8
-	ReturnValue  uint32
-	WrittenSize  uint16
+	RopID            uint8 //0x2B
+	InputHandleIndex uint8
+	ReturnValue      uint32
+	WrittenSize      uint16
+}
+
+//RopCommitStreamRequest struct used to commit a stream
+type RopCommitStreamRequest struct {
+	RopID            uint8 //0x2B
+	LogonID          uint8
+	InputHandleIndex uint8
+}
+
+//RopCommitStreamResponse struct used to commit a stream
+type RopCommitStreamResponse struct {
+	RopID            uint8 //0x2B
+	InputHandleIndex uint8
+	ReturnValue      uint32
 }
 
 //RopSetStreamSizeRequest struct used to open a stream
 type RopSetStreamSizeRequest struct {
-	RopID       uint8 //0x2F
-	LogonID     uint8
-	InputHandle uint8
-	StreamSize  uint64
+	RopID            uint8 //0x2F
+	LogonID          uint8
+	InputHandleIndex uint8
+	StreamSize       uint64
 }
 
 //RopSetStreamSizeResponse struct used to open a stream
 type RopSetStreamSizeResponse struct {
-	RopID        uint8 //0x2B
-	OutputHandle uint8
-	ReturnValue  uint32
+	RopID             uint8 //0x2B
+	OutputHandleIndex uint8
+	ReturnValue       uint32
 }
 
 //RopReadStreamRequest struct used to open a stream
@@ -991,6 +1038,21 @@ func (openStream RopOpenStreamRequest) Marshal() []byte {
 	return utils.BodyToBytes(openStream)
 }
 
+//Marshal turn RopOpenStreamRequest into Bytes
+func (setStreamSize RopSetStreamSizeRequest) Marshal() []byte {
+	return utils.BodyToBytes(setStreamSize)
+}
+
+//Marshal turn RopOpenStreamRequest into Bytes
+func (writeStream RopWriteStreamRequest) Marshal() []byte {
+	return utils.BodyToBytes(writeStream)
+}
+
+//Marshal turn RopOpenStreamRequest into Bytes
+func (commitStream RopCommitStreamRequest) Marshal() []byte {
+	return utils.BodyToBytes(commitStream)
+}
+
 //Marshal turn RopReadStreamRequest into Bytes
 func (readStream RopReadStreamRequest) Marshal() []byte {
 	return utils.BodyToBytes(readStream)
@@ -1019,6 +1081,26 @@ func (emptyFolder RopEmptyFolderRequest) Marshal() []byte {
 //Marshal turn RopDeleteFolderRequest into Bytes
 func (deleteFolder RopDeleteFolderRequest) Marshal() []byte {
 	return utils.BodyToBytes(deleteFolder)
+}
+
+//Marshal turn RopGetAttachmentTableRequest into Bytes
+func (getAttachTable RopGetAttachmentTableRequest) Marshal() []byte {
+	return utils.BodyToBytes(getAttachTable)
+}
+
+//Marshal turn RopCreateAttachmentRequest into Bytes
+func (createAttach RopCreateAttachmentRequest) Marshal() []byte {
+	return utils.BodyToBytes(createAttach)
+}
+
+//Marshal turn RopOpenAttachmentRequest into Bytes
+func (getAttach RopOpenAttachmentRequest) Marshal() []byte {
+	return utils.BodyToBytes(getAttach)
+}
+
+//Marshal turn RopSaveChangesAttachmentRequest into Bytes
+func (saveAttach RopSaveChangesAttachmentRequest) Marshal() []byte {
+	return utils.BodyToBytes(saveAttach)
 }
 
 //Unmarshal function to convert response into ConnectResponse struct
@@ -1425,6 +1507,124 @@ func (ropOpenFolderResponse *RopOpenFolderResponse) Unmarshal(resp []byte) (int,
 		ropOpenFolderResponse.ServerCount, pos = utils.ReadUint16(pos, resp)
 		ropOpenFolderResponse.CheapServerCount, pos = utils.ReadUint16(pos, resp)
 		ropOpenFolderResponse.Servers, pos = utils.ReadASCIIString(pos, resp)
+	}
+
+	return pos, nil
+}
+
+//Unmarshal function to produce RopCreateMessageResponse struct
+func (getAttachmentTable *RopGetAttachmentTableResponse) Unmarshal(resp []byte) (int, error) {
+	pos := 0
+
+	getAttachmentTable.RopID, pos = utils.ReadByte(pos, resp)
+	getAttachmentTable.OutputHandleIndex, pos = utils.ReadByte(pos, resp)
+	getAttachmentTable.ReturnValue, pos = utils.ReadUint32(pos, resp)
+
+	if getAttachmentTable.ReturnValue != 0 {
+		return pos, &ErrorCode{getAttachmentTable.ReturnValue}
+	}
+	return pos, nil
+}
+
+//Unmarshal function to produce RopCreateMessageResponse struct
+func (createAttachment *RopCreateAttachmentResponse) Unmarshal(resp []byte) (int, error) {
+	pos := 0
+
+	createAttachment.RopID, pos = utils.ReadByte(pos, resp)
+	createAttachment.OutputHandleIndex, pos = utils.ReadByte(pos, resp)
+	createAttachment.ReturnValue, pos = utils.ReadUint32(pos, resp)
+
+	if createAttachment.ReturnValue != 0 {
+		return pos, &ErrorCode{createAttachment.ReturnValue}
+	}
+	createAttachment.AttachmentID, pos = utils.ReadUint32(pos, resp)
+	return pos, nil
+}
+
+//Unmarshal function to produce RopCreateMessageResponse struct
+func (getAttachment *RopOpenAttachmentResponse) Unmarshal(resp []byte) (int, error) {
+	pos := 0
+
+	getAttachment.RopID, pos = utils.ReadByte(pos, resp)
+	getAttachment.OutputHandleIndex, pos = utils.ReadByte(pos, resp)
+	getAttachment.ReturnValue, pos = utils.ReadUint32(pos, resp)
+
+	if getAttachment.ReturnValue != 0 {
+		return pos, &ErrorCode{getAttachment.ReturnValue}
+	}
+
+	return pos, nil
+}
+
+//Unmarshal function to produce RopSaveChangesMessageResponse struct
+func (saveAttachResponse *RopSaveChangesAttachmentResponse) Unmarshal(resp []byte) (int, error) {
+	pos := 0
+
+	saveAttachResponse.RopID, pos = utils.ReadByte(pos, resp)
+	saveAttachResponse.ResponseHandleIndex, pos = utils.ReadByte(pos, resp)
+	saveAttachResponse.ReturnValue, pos = utils.ReadUint32(pos, resp)
+
+	if saveAttachResponse.ReturnValue != 0 {
+		return pos, &ErrorCode{saveAttachResponse.ReturnValue}
+	}
+	return pos, nil
+}
+
+//Unmarshal function to produce RopOpenStreamResponse struct
+func (openStreamResponse *RopOpenStreamResponse) Unmarshal(resp []byte) (int, error) {
+	pos := 0
+
+	openStreamResponse.RopID, pos = utils.ReadByte(pos, resp)
+	openStreamResponse.OutputHandleIndex, pos = utils.ReadByte(pos, resp)
+	openStreamResponse.ReturnValue, pos = utils.ReadUint32(pos, resp)
+
+	if openStreamResponse.ReturnValue != 0 {
+		return pos, &ErrorCode{openStreamResponse.ReturnValue}
+	}
+	openStreamResponse.StreamSize, pos = utils.ReadUint32(pos, resp)
+	return pos, nil
+}
+
+//Unmarshal function to produce RopOpenStreamResponse struct
+func (setStreamSizeResponse *RopSetStreamSizeResponse) Unmarshal(resp []byte) (int, error) {
+	pos := 0
+
+	setStreamSizeResponse.RopID, pos = utils.ReadByte(pos, resp)
+	setStreamSizeResponse.OutputHandleIndex, pos = utils.ReadByte(pos, resp)
+	setStreamSizeResponse.ReturnValue, pos = utils.ReadUint32(pos, resp)
+
+	if setStreamSizeResponse.ReturnValue != 0 {
+		return pos, &ErrorCode{setStreamSizeResponse.ReturnValue}
+	}
+	return pos, nil
+}
+
+//Unmarshal function to produce RopOpenStreamResponse struct
+func (writeStreamResponse *RopWriteStreamResponse) Unmarshal(resp []byte) (int, error) {
+	pos := 0
+
+	writeStreamResponse.RopID, pos = utils.ReadByte(pos, resp)
+	writeStreamResponse.InputHandleIndex, pos = utils.ReadByte(pos, resp)
+	writeStreamResponse.ReturnValue, pos = utils.ReadUint32(pos, resp)
+
+	if writeStreamResponse.ReturnValue != 0 {
+		return pos, &ErrorCode{writeStreamResponse.ReturnValue}
+	}
+
+	writeStreamResponse.WrittenSize, pos = utils.ReadUint16(pos, resp)
+	return pos, nil
+}
+
+//Unmarshal function to produce RopCommitStreamResponse struct
+func (commitStreamResponse *RopCommitStreamResponse) Unmarshal(resp []byte) (int, error) {
+	pos := 0
+
+	commitStreamResponse.RopID, pos = utils.ReadByte(pos, resp)
+	commitStreamResponse.InputHandleIndex, pos = utils.ReadByte(pos, resp)
+	commitStreamResponse.ReturnValue, pos = utils.ReadUint32(pos, resp)
+
+	if commitStreamResponse.ReturnValue != 0 {
+		return pos, &ErrorCode{commitStreamResponse.ReturnValue}
 	}
 
 	return pos, nil

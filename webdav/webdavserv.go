@@ -28,9 +28,9 @@ func main() {
 		LockSystem: webdav.NewMemLS(),
 		Logger: func(r *http.Request, err error) {
 			if err != nil {
-				log.Printf("WEBDAV [%s]: %s, ERROR: %s\n", r.Method, r.URL, err)
+				log.Printf("WEBDAV [%s][%s]: %s, ERROR: %s\n", r.RemoteAddr, r.Method, r.URL, err)
 			} else {
-				log.Printf("WEBDAV [%s]: %s \n", r.Method, r.URL)
+				log.Printf("WEBDAV [%s][%s]: %s \n", r.RemoteAddr, r.Method, r.URL)
 			}
 		},
 	}
