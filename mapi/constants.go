@@ -473,11 +473,11 @@ var PidTagMessageClassIPMNote = TaggedPropertyValue{PropertyTag{PtypString, 0x00
 //PidTagMessageFlags setting this to unsent
 var PidTagMessageFlags = PropertyTag{PtypInteger32, 0x0E07} //0x00000008
 
-//PidTagIconIndex index of the icon to display
-var PidTagIconIndex = TaggedPropertyValue{PropertyTag{PtypInteger32, 0x1080}, []byte{0xFF, 0xFF, 0xFF, 0xFF}}
+//PidTagIconIndexOld index of the icon to display
+var PidTagIconIndexOld = TaggedPropertyValue{PropertyTag{PtypInteger32, 0x1080}, []byte{0xFF, 0xFF, 0xFF, 0xFF}}
 
-//PidTagMessageEditorFormat format lets do plaintext
-var PidTagMessageEditorFormat = TaggedPropertyValue{PropertyTag{PtypInteger32, 0x5909}, []byte{0x01, 0x00, 0x00, 0x00}}
+//PidTagMessageEditorFormatOld format lets do plaintext
+var PidTagMessageEditorFormatOld = TaggedPropertyValue{PropertyTag{PtypInteger32, 0x5909}, []byte{0x01, 0x00, 0x00, 0x00}}
 
 //PidTagNativeBody format of the body
 var PidTagNativeBody = PropertyTag{PtypInteger32, 0x1016}
@@ -578,3 +578,8 @@ var PidTagAttachLongPathName = PropertyTag{PtypString, 0x370D}
 var PidTagAttachPayloadProviderGuidString = PropertyTag{PtypString, 0x3719}
 var PidTagTrustSender = PropertyTag{PtypInteger32, 0x0E79}
 var PidTagAttachDataBinary = PropertyTag{PtypBinary, 0x3701}
+
+var PidTagIconIndex = PropertyTag{PtypInteger32, 0x1080}
+var PidTagMessageEditorFormat = PropertyTag{PtypInteger32, 0x5909}
+var PidTagSenderEmailAddress = PropertyTag{PtypString, 0x0C1F}
+var PidTagDeleteAfterSubmit = PropertyTag{PtypBoolean, 0x0E01}

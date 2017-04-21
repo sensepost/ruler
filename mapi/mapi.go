@@ -98,11 +98,23 @@ func addMapiHeaders(req *http.Request, mapiType string) {
 	req.Header.Add("X-ClientApplication", "Outlook/15.0.4815.1002")
 }
 
-func sendMapiRequest(mapiType string, mapi ExecuteRequest) ([]byte, error) {
-	if AuthSession.Transport == HTTP {
-		return mapiRequestHTTP(AuthSession.URL.String(), mapiType, mapi.Marshal())
+//sendMapiRequest sends an Execute request, gets the response and processes.
+//returns the unmarshalled ExecuteResponse and/or and error
+func sendMapiRequest(mapi ExecuteRequest) (*ExecuteResponse, error) {
+	var rawResp []byte
+	var err error
+	if AuthSession.Transport == HTTP { //this is always going to be an "Execute" request
+		if rawResp, err = mapiRequestHTTP(AuthSession.URL.String(), "Execute", mapi.Marshal()); err != nil {
+			return nil, err
+		}
+	} else {
+		if rawResp, err = mapiRequestRPC(mapi); err != nil {
+			return nil, err
+		}
 	}
-	return mapiRequestRPC(mapi)
+	executeResponse := ExecuteResponse{}
+	executeResponse.Unmarshal(rawResp)
+	return &executeResponse, nil
 }
 
 func sendMapiConnectRequestHTTP(mapi ConnectRequest) ([]byte, error) {
@@ -398,14 +410,11 @@ func AuthenticateFetchMailbox(essdn []byte) (*RopLogonResponse, error) {
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0xFF, 0xFF, 0xFF, 0xFF}
 	execRequest.RopBuffer.ROP.RopsList = logonBody.Marshal()
 
-	responseBody, err := sendMapiRequest("Execute", execRequest)
+	execResponse, err := sendMapiRequest(execRequest)
 
 	if err != nil {
 		return nil, &TransportError{err}
 	}
-
-	execResponse := ExecuteResponse{}
-	execResponse.Unmarshal(responseBody)
 
 	if execResponse.StatusCode == 0 || execResponse.StatusCode == 3 {
 		AuthSession.Authenticated = true
@@ -451,16 +460,11 @@ func ReleaseObject(inputHandle byte) (*RopReleaseResponse, error) {
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF}
 	execRequest.RopBuffer.ROP.RopsList = fullReq
 
-	responseBody, err := sendMapiRequest("Execute", execRequest)
+	execResponse, err := sendMapiRequest(execRequest)
 
 	if err != nil {
 		return nil, &TransportError{err}
 	}
-	execResponse := ExecuteResponse{}
-	if len(responseBody) <= 0 {
-		return nil, fmt.Errorf("")
-	}
-	execResponse.Unmarshal(responseBody)
 
 	if execResponse.StatusCode == 0 {
 		ropReleaseResponse := RopReleaseResponse{}
@@ -473,6 +477,7 @@ func ReleaseObject(inputHandle byte) (*RopReleaseResponse, error) {
 	return nil, ErrUnknown
 }
 
+//SendExistingMessage sends a message that has already been created. This is essentially a RopSubmitMessage
 func SendExistingMessage(folderID, messageID []byte, recipient string) (*RopSubmitMessageResponse, error) {
 
 	execRequest := ExecuteRequest{}
@@ -534,13 +539,11 @@ func SendExistingMessage(folderID, messageID []byte, recipient string) (*RopSubm
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
 	execRequest.RopBuffer.ROP.RopsList = fullReq
 
-	responseBody, err := sendMapiRequest("Execute", execRequest)
+	execResponse, err := sendMapiRequest(execRequest)
 
 	if err != nil {
 		return nil, &TransportError{err}
 	}
-	execResponse := ExecuteResponse{}
-	execResponse.Unmarshal(responseBody)
 
 	if execResponse.StatusCode != 255 {
 
@@ -596,8 +599,8 @@ func SendMessage(triggerWord, body string) (*RopSubmitMessageResponse, error) {
 	propertyTags[1] = TaggedPropertyValue{PropertyTag{PtypString, 0x001A}, utils.UniString("IPM.Note")}
 	propertyTags[2] = TaggedPropertyValue{PidTagMessageFlags, []byte{0x00, 0x00, 0x00, 0x08}} //unsent
 	propertyTags[3] = TaggedPropertyValue{PidTagConversationTopic, utils.UniString(triggerWord)}
-	propertyTags[4] = PidTagIconIndex
-	propertyTags[5] = PidTagMessageEditorFormat
+	propertyTags[4] = TaggedPropertyValue{PropertyTag: PidTagIconIndex, PropertyValue: []byte{0x00, 0x00, 0x00, 0x01}}
+	propertyTags[5] = TaggedPropertyValue{PropertyTag: PidTagMessageEditorFormat, PropertyValue: []byte{0x01, 0x00, 0x00, 0x00}}
 	propertyTags[5] = TaggedPropertyValue{PidTagNativeBody, []byte{0x00, 0x00, 0x00, 0x01}}
 	propertyTags[6] = TaggedPropertyValue{PidTagSubject, utils.UniString(triggerWord)}
 	propertyTags[7] = TaggedPropertyValue{PidTagNormalizedSubject, utils.UniString(triggerWord)}
@@ -658,13 +661,11 @@ func SendMessage(triggerWord, body string) (*RopSubmitMessageResponse, error) {
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
 	execRequest.RopBuffer.ROP.RopsList = fullReq
 
-	responseBody, err := sendMapiRequest("Execute", execRequest)
+	execResponse, err := sendMapiRequest(execRequest)
 
 	if err != nil {
 		return nil, &TransportError{err}
 	}
-	execResponse := ExecuteResponse{}
-	execResponse.Unmarshal(responseBody)
 
 	if execResponse.StatusCode != 255 {
 
@@ -728,13 +729,11 @@ func SetMessageStatus(folderid, messageid []byte) (*RopSetMessageStatusResponse,
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
 	execRequest.RopBuffer.ROP.RopsList = fullReq
 
-	responseBody, err := sendMapiRequest("Execute", execRequest)
+	execResponse, err := sendMapiRequest(execRequest)
 
 	if err != nil {
 		return nil, &TransportError{err}
 	}
-	execResponse := ExecuteResponse{}
-	execResponse.Unmarshal(responseBody)
 
 	if execResponse.StatusCode == 0 {
 		bufPtr := 10
@@ -794,13 +793,11 @@ func CreateMessage(folderID []byte, properties []TaggedPropertyValue) (*RopSaveC
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
 	execRequest.RopBuffer.ROP.RopsList = fullReq
 
-	responseBody, err := sendMapiRequest("Execute", execRequest)
+	execResponse, err := sendMapiRequest(execRequest)
 
 	if err != nil {
 		return nil, &TransportError{err}
 	}
-	execResponse := ExecuteResponse{}
-	execResponse.Unmarshal(responseBody)
 
 	if execResponse.StatusCode == 0 {
 		bufPtr := 10
@@ -830,6 +827,9 @@ func CreateMessage(folderID []byte, properties []TaggedPropertyValue) (*RopSaveC
 	return nil, ErrUnknown
 }
 
+//CreateMessageAttachment creates the attachment object for a message. If the message is attached by reference,
+//no more actions are required. If the attachment data should be included in the message, this needs to be added with
+//the WriteAttachmentProperty using the PidTagAttachDataBinary property
 func CreateMessageAttachment(folderid, messageid []byte, properties []TaggedPropertyValue) (*RopCreateAttachmentResponse, error) {
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
@@ -885,14 +885,12 @@ func CreateMessageAttachment(folderid, messageid []byte, properties []TaggedProp
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
 	execRequest.RopBuffer.ROP.RopsList = fullReq
 
-	responseBody, err := sendMapiRequest("Execute", execRequest)
+	execResponse, err := sendMapiRequest(execRequest)
 
 	if err != nil {
 		utils.Error.Println(err)
 		return nil, &TransportError{err}
 	}
-	execResponse := ExecuteResponse{}
-	execResponse.Unmarshal(responseBody)
 
 	if execResponse.StatusCode == 0 {
 		bufPtr := 10
@@ -925,9 +923,11 @@ func CreateMessageAttachment(folderid, messageid []byte, properties []TaggedProp
 		bufPtr += p
 
 		saveAttachmentResp := RopSaveChangesAttachmentResponse{}
-		if _, e = saveAttachmentResp.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+		if p, e = saveAttachmentResp.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
 			return nil, e
 		}
+
+		bufPtr += p
 
 		saveMessageResponse := RopSaveChangesMessageResponse{}
 		e = saveMessageResponse.Unmarshal(execResponse.RopBuffer[bufPtr:])
@@ -979,31 +979,15 @@ func WriteAttachmentProperty(folderid, messageid []byte, attachmentid uint32, pr
 
 	fullReq = append(fullReq, setStreamSize.Marshal()...)
 
-	/*
-		writeStream := RopWriteStreamRequest{RopID: 0x02D, LogonID: AuthSession.LogonID, InputHandleIndex: 0x03}
-		writeStream.DataSize = uint16(len(propData))
-		writeStream.Data = propData
-
-		fullReq = append(fullReq, writeStream.Marshal()...)
-
-		//	commitStream := RopCommitStreamRequest{RopID: 0x05D, LogonID: AuthSession.LogonID, InputHandleIndex: 0x04}
-
-		//fullReq = append(fullReq, commitStream.Marshal()...)
-		/*
-			saveAttachment := RopSaveChangesAttachmentRequest{RopID: 0x25, LogonID: AuthSession.LogonID, InputHandleIndex: 0x03, ResponseHandleIndex: 0x04, SaveFlags: 0x0A}
-			fullReq = append(fullReq, saveAttachment.Marshal()...)
-	*/
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
 	execRequest.RopBuffer.ROP.RopsList = fullReq
 
-	responseBody, err := sendMapiRequest("Execute", execRequest)
+	execResponse, err := sendMapiRequest(execRequest)
 
 	if err != nil {
 		utils.Error.Println(err)
 		return nil, &TransportError{err}
 	}
-	execResponse := ExecuteResponse{}
-	execResponse.Unmarshal(responseBody)
 
 	if execResponse.StatusCode == 0 {
 		bufPtr := 10
@@ -1046,7 +1030,7 @@ func WriteAttachmentProperty(folderid, messageid []byte, attachmentid uint32, pr
 		utils.Debug.Println("Get Attach: ", getAttachmentResp)
 		utils.Debug.Println("Open Stream: ", openStreamResp)
 		utils.Debug.Println("Set Stream: ", setStreamSizeResp)
-
+		utils.Debug.Println("Stream Size: ", len(propData))
 		serverHandles := execResponse.RopBuffer[len(execResponse.RopBuffer)-12:]
 		//messageHandles := execResponse.RopBuffer[len(execResponse.RopBuffer)-12:]
 
@@ -1074,17 +1058,14 @@ func WriteAttachmentProperty(folderid, messageid []byte, attachmentid uint32, pr
 			execRequest.RopBuffer.ROP.ServerObjectHandleTable = append(execRequest.RopBuffer.ROP.ServerObjectHandleTable, []byte{0xFF, 0xFF, 0xFF, 0xFF}...)
 			execRequest.RopBuffer.ROP.RopsList = fullReq
 
-			responseBody, err = sendMapiRequest("Execute", execRequest)
+			_, err := sendMapiRequest(execRequest)
 
 			if err != nil {
 				return nil, &TransportError{err}
 			}
-			execResponse = ExecuteResponse{}
-			execResponse.Unmarshal(responseBody)
-			//utils.Debug.Println("WriteStream", (responseBody))
-			//serverHandles = execResponse.RopBuffer[len(execResponse.RopBuffer)-12:]
+
 		}
-		if len(propData) > split*piecescnt {
+		if len(propData) < split || len(propData) > split*piecescnt {
 			body := propData[index:]
 			execRequest := ExecuteRequest{}
 			execRequest.Init()
@@ -1098,14 +1079,12 @@ func WriteAttachmentProperty(folderid, messageid []byte, attachmentid uint32, pr
 			execRequest.RopBuffer.ROP.ServerObjectHandleTable = append(execRequest.RopBuffer.ROP.ServerObjectHandleTable, []byte{0xFF, 0xFF, 0xFF, 0xFF}...)
 			execRequest.RopBuffer.ROP.RopsList = fullReq
 
-			responseBody, err = sendMapiRequest("Execute", execRequest)
+			_, err := sendMapiRequest(execRequest)
 
 			if err != nil {
 				return nil, &TransportError{err}
 			}
-			execResponse = ExecuteResponse{}
-			execResponse.Unmarshal(responseBody)
-			//utils.Debug.Println("write Stream: ", string(responseBody))
+
 		}
 
 		execRequest := ExecuteRequest{}
@@ -1117,6 +1096,13 @@ func WriteAttachmentProperty(folderid, messageid []byte, attachmentid uint32, pr
 
 		saveAttachment := RopSaveChangesAttachmentRequest{RopID: 0x25, LogonID: AuthSession.LogonID, InputHandleIndex: 0x01, ResponseHandleIndex: 0x02, SaveFlags: 0x0A}
 		fullReq = append(fullReq, saveAttachment.Marshal()...)
+
+		saveMessage := RopSaveChangesMessageRequest{RopID: 0x0C, LogonID: AuthSession.LogonID}
+		saveMessage.ResponseHandleIndex = 0x02
+		saveMessage.InputHandle = 0x01
+		saveMessage.SaveFlags = 0x02
+
+		fullReq = append(fullReq, saveMessage.Marshal()...)
 
 		ropRelease = RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandle: 0x01}
 		fullReq = append(fullReq, ropRelease.Marshal()...)
@@ -1131,13 +1117,11 @@ func WriteAttachmentProperty(folderid, messageid []byte, attachmentid uint32, pr
 		execRequest.RopBuffer.ROP.ServerObjectHandleTable = append(execRequest.RopBuffer.ROP.ServerObjectHandleTable, []byte{0xFF, 0xFF, 0xFF, 0xFF}...)
 		execRequest.RopBuffer.ROP.RopsList = fullReq
 
-		responseBody, err = sendMapiRequest("Execute", execRequest)
+		execResponse, err := sendMapiRequest(execRequest)
 
 		if err != nil {
 			return nil, &TransportError{err}
 		}
-		execResponse := ExecuteResponse{}
-		execResponse.Unmarshal(responseBody)
 
 		if execResponse.StatusCode == 0 {
 			bufPtr := 10
@@ -1152,11 +1136,15 @@ func WriteAttachmentProperty(folderid, messageid []byte, attachmentid uint32, pr
 			utils.Debug.Println("Commit Stream: ", commitStreamResp)
 
 			saveAttachmentResp := RopSaveChangesAttachmentResponse{}
-			if _, e = saveAttachmentResp.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+			if p, e = saveAttachmentResp.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
 				return nil, e
 			}
-
+			bufPtr += p
 			utils.Debug.Println("Save: ", saveAttachmentResp)
+
+			saveMessageResponse := RopSaveChangesMessageResponse{}
+			e = saveMessageResponse.Unmarshal(execResponse.RopBuffer[bufPtr:])
+			utils.Debug.Println("Save: ", saveMessageResponse)
 
 			return &saveAttachmentResp, e
 		}
@@ -1189,13 +1177,11 @@ func SetPropertyFast(folderid []byte, messageid []byte, property TaggedPropertyV
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
 	execRequest.RopBuffer.ROP.RopsList = fullReq
 
-	responseBody, err := sendMapiRequest("Execute", execRequest)
+	execResponse, err := sendMapiRequest(execRequest)
 
 	if err != nil {
 		return nil, &TransportError{err}
 	}
-	execResponse := ExecuteResponse{}
-	execResponse.Unmarshal(responseBody)
 
 	if execResponse.StatusCode == 0 {
 
@@ -1225,13 +1211,12 @@ func SetPropertyFast(folderid []byte, messageid []byte, property TaggedPropertyV
 			execRequest.RopBuffer.ROP.ServerObjectHandleTable = append(execRequest.RopBuffer.ROP.ServerObjectHandleTable, []byte{0xFF, 0xFF, 0xFF, 0xFF}...)
 			execRequest.RopBuffer.ROP.RopsList = fullReq
 
-			responseBody, err = sendMapiRequest("Execute", execRequest)
+			execResponse, err := sendMapiRequest(execRequest)
 
 			if err != nil {
 				return nil, &TransportError{err}
 			}
-			execResponse = ExecuteResponse{}
-			execResponse.Unmarshal(responseBody)
+
 			serverHandles = execResponse.RopBuffer[len(execResponse.RopBuffer)-8:]
 		}
 		if len(props) > split*piecescnt {
@@ -1245,13 +1230,11 @@ func SetPropertyFast(folderid []byte, messageid []byte, property TaggedPropertyV
 			execRequest.RopBuffer.ROP.ServerObjectHandleTable = append(execRequest.RopBuffer.ROP.ServerObjectHandleTable, []byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}...)
 			execRequest.RopBuffer.ROP.RopsList = fullReq
 
-			responseBody, err = sendMapiRequest("Execute", execRequest)
+			_, err := sendMapiRequest(execRequest)
 
 			if err != nil {
 				return nil, &TransportError{err}
 			}
-			execResponse = ExecuteResponse{}
-			execResponse.Unmarshal(responseBody)
 
 		}
 		return SaveMessageFast(0x01, 0x02, messageHandles)
@@ -1279,13 +1262,12 @@ func SaveMessageFast(inputHandle, responseHandle byte, serverHandles []byte) (*R
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = append(execRequest.RopBuffer.ROP.ServerObjectHandleTable, []byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}...)
 	execRequest.RopBuffer.ROP.RopsList = fullReq
 
-	responseBody, err := sendMapiRequest("Execute", execRequest)
+	execResponse, err := sendMapiRequest(execRequest)
 
 	if err != nil {
 		return nil, &TransportError{err}
 	}
-	execResponse := ExecuteResponse{}
-	execResponse.Unmarshal(responseBody)
+
 	//fmt.Println("Complete")
 	if execResponse.StatusCode == 0 {
 		bufPtr := 10
@@ -1328,13 +1310,11 @@ func DeleteMessages(folderid []byte, messageIDCount int, messageIDs []byte) (*Ro
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
 	execRequest.RopBuffer.ROP.RopsList = fullReq
 
-	responseBody, err := sendMapiRequest("Execute", execRequest)
+	execResponse, err := sendMapiRequest(execRequest)
 
 	if err != nil {
 		return nil, &TransportError{err}
 	}
-	execResponse := ExecuteResponse{}
-	execResponse.Unmarshal(responseBody)
 
 	if execResponse.StatusCode == 0 {
 		bufPtr := 10
@@ -1382,12 +1362,10 @@ func EmptyFolder(folderid []byte) (*RopEmptyFolderResponse, error) {
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
 	execRequest.RopBuffer.ROP.RopsList = fullReq
 
-	responseBody, err := sendMapiRequest("Execute", execRequest)
+	execResponse, err := sendMapiRequest(execRequest)
 	if err != nil {
 		return nil, &TransportError{err}
 	}
-	execResponse := ExecuteResponse{}
-	execResponse.Unmarshal(responseBody)
 
 	if execResponse.StatusCode == 0 {
 		bufPtr := 10
@@ -1424,13 +1402,11 @@ func DeleteFolder(folderid []byte) (*RopDeleteFolderResponse, error) {
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
 	execRequest.RopBuffer.ROP.RopsList = fullReq
 
-	responseBody, err := sendMapiRequest("Execute", execRequest)
+	execResponse, err := sendMapiRequest(execRequest)
 
 	if err != nil {
 		return nil, &TransportError{err}
 	}
-	execResponse := ExecuteResponse{}
-	execResponse.Unmarshal(responseBody)
 
 	if execResponse.StatusCode == 0 {
 		bufPtr := 10
@@ -1482,13 +1458,11 @@ func GetFolder(folderid int, columns []PropertyTag) (*RopOpenFolderResponse, err
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF}
 
 	//fetch folder
-	responseBody, err := sendMapiRequest("Execute", execRequest)
+	execResponse, err := sendMapiRequest(execRequest)
 
 	if err != nil {
 		return nil, &TransportError{err}
 	}
-	execResponse := ExecuteResponse{}
-	execResponse.Unmarshal(responseBody)
 
 	if execResponse.StatusCode != 255 {
 		bufPtr := 10
@@ -1543,13 +1517,11 @@ func GetMessage(folderid, messageid []byte, columns []PropertyTag) (*RopGetPrope
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF}
 
 	//fetch folder
-	responseBody, err := sendMapiRequest("Execute", execRequest)
+	execResponse, err := sendMapiRequest(execRequest)
 
 	if err != nil {
 		return nil, &TransportError{err}
 	}
-	execResponse := ExecuteResponse{}
-	execResponse.Unmarshal(responseBody)
 
 	if execResponse.StatusCode == 0 {
 
@@ -1615,13 +1587,11 @@ func GetMessageFast(folderid, messageid []byte, columns []PropertyTag) (*RopFast
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
 
 	//fetch folder
-	responseBody, err := sendMapiRequest("Execute", execRequest)
+	execResponse, err := sendMapiRequest(execRequest)
 
 	if err != nil {
 		return nil, &TransportError{err}
 	}
-	execResponse := ExecuteResponse{}
-	execResponse.Unmarshal(responseBody)
 
 	if execResponse.StatusCode == 0 {
 
@@ -1684,13 +1654,11 @@ func FastTransferFetchStep(handles []byte) ([]byte, error) {
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = append([]byte{0x00, 0x00, 0x00, AuthSession.LogonID}, handles...) //append(handles, []byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}...) //[]byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF} //append([]byte{0x00, 0x00, 0x00, AuthSession.LogonID}, handles...)
 
 	//fetch folder
-	responseBody, err := sendMapiRequest("Execute", execRequest)
+	execResponse, err := sendMapiRequest(execRequest)
 
 	if err != nil {
 		return nil, &TransportError{err}
 	}
-	execResponse := ExecuteResponse{}
-	execResponse.Unmarshal(responseBody)
 
 	if execResponse.StatusCode == 0 {
 		if execResponse.RopBuffer[2] == 0x05 { //compression
@@ -1749,14 +1717,11 @@ func GetContentsTable(folderid []byte) (*RopGetContentsTableResponse, []byte, er
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
 
 	//fetch contents
-	responseBody, err := sendMapiRequest("Execute", execRequest)
+	execResponse, err := sendMapiRequest(execRequest)
 
 	if err != nil {
 		return nil, nil, &TransportError{err}
 	}
-
-	execResponse := ExecuteResponse{}
-	execResponse.Unmarshal(responseBody)
 
 	if execResponse.StatusCode == 0 {
 		bufPtr := 10
@@ -1803,13 +1768,11 @@ func GetFolderHierarchy(folderid []byte) (*RopGetHierarchyTableResponse, []byte,
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
 
 	//fetch folder
-	responseBody, err := sendMapiRequest("Execute", execRequest)
+	execResponse, err := sendMapiRequest(execRequest)
 
 	if err != nil {
 		return nil, nil, &TransportError{err}
 	}
-	execResponse := ExecuteResponse{}
-	execResponse.Unmarshal(responseBody)
 
 	if execResponse.StatusCode == 0 {
 		bufPtr := 10
@@ -1859,13 +1822,11 @@ func GetSubFolders(folderid []byte) (*RopQueryRowsResponse, error) {
 	execRequest.RopBuffer.ROP.RopsList = fullReq
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = append([]byte{0x01, 0x00, 0x00, AuthSession.LogonID}, svrhndl...)
 
-	responseBody, err := sendMapiRequest("Execute", execRequest)
+	execResponse, err := sendMapiRequest(execRequest)
 
 	if err != nil {
 		return nil, &TransportError{err}
 	}
-	execResponse := ExecuteResponse{}
-	execResponse.Unmarshal(responseBody)
 
 	if execResponse.StatusCode == 0 {
 		bufPtr := 10
@@ -1925,13 +1886,11 @@ func CreateFolder(folderName string, hidden bool) (*RopCreateFolderResponse, err
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x01, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF}
 
 	//fetch folder
-	responseBody, err := sendMapiRequest("Execute", execRequest)
+	execResponse, err := sendMapiRequest(execRequest)
 
 	if err != nil {
 		return nil, ErrTransport //&TransportError{err}
 	}
-	execResponse := ExecuteResponse{}
-	execResponse.Unmarshal(responseBody)
 
 	if execResponse.StatusCode == 0 {
 		bufPtr := 10
@@ -1981,14 +1940,11 @@ func GetContents(folderid []byte) (*RopQueryRowsResponse, error) {
 	execRequest.RopBuffer.ROP.RopsList = fullReq
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = append([]byte{0x01, 0x00, 0x00, AuthSession.LogonID}, svrhndl...)
 
-	responseBody, err := sendMapiRequest("Execute", execRequest)
+	execResponse, err := sendMapiRequest(execRequest)
 
 	if err != nil {
 		return nil, &TransportError{err}
 	}
-
-	execResponse := ExecuteResponse{}
-	execResponse.Unmarshal(responseBody)
 
 	if execResponse.StatusCode == 0 {
 		bufPtr := 10
@@ -2037,13 +1993,11 @@ func DisplayRules() ([]Rule, error) {
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x01, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF}
 
 	//fetch folder
-	responseBody, err := sendMapiRequest("Execute", execRequest)
+	execResponse, err := sendMapiRequest(execRequest)
 
 	if err != nil {
 		return nil, &TransportError{err}
 	}
-	execResponse := ExecuteResponse{}
-	execResponse.Unmarshal(responseBody)
 
 	rules, _, err := DecodeRulesResponse(execResponse.RopBuffer, setColumns.PropertyTags)
 	if rules == nil || err != nil {
@@ -2101,14 +2055,13 @@ func ExecuteMailRuleAdd(rulename, triggerword, triggerlocation string, delete bo
 	execRequest.RopBuffer.ROP.RopsList = ruleBytes
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x01, 0x00, 0x00, AuthSession.LogonID} //append(AuthSession.RulesHandle, []byte{0xFF, 0xFF, 0xFF, 0xFF}...)
 
-	responseBody, err := sendMapiRequest("Execute", execRequest)
+	execResponse, err := sendMapiRequest(execRequest)
 
 	if err != nil {
 		return nil, &TransportError{err}
 	}
-	execResponse := ExecuteResponse{}
-	execResponse.Unmarshal(responseBody)
-	return &execResponse, nil
+
+	return execResponse, nil
 
 	//return nil, ErrUnknown
 }
@@ -2129,13 +2082,11 @@ func ExecuteMailRuleDelete(ruleid []byte) error {
 	execRequest.RopBuffer.ROP.RopsList = ruleBytes
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x01, 0x00, 0x00, AuthSession.LogonID} //append(AuthSession.RulesHandle, []byte{0xFF, 0xFF, 0xFF, 0xFF}...)
 
-	responseBody, err := sendMapiRequest("Execute", execRequest)
+	execResponse, err := sendMapiRequest(execRequest)
 
 	if err != nil {
 		return &TransportError{err}
 	}
-	execResponse := ExecuteResponse{}
-	execResponse.Unmarshal(responseBody)
 
 	if execResponse.StatusCode != 255 {
 		return nil
