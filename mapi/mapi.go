@@ -112,6 +112,7 @@ func sendMapiRequest(mapi ExecuteRequest) (*ExecuteResponse, error) {
 			return nil, err
 		}
 	}
+	//fmt.Println(string(rawResp))
 	executeResponse := ExecuteResponse{}
 	executeResponse.Unmarshal(rawResp)
 	return &executeResponse, nil
@@ -750,8 +751,18 @@ func SetMessageStatus(folderid, messageid []byte) (*RopSetMessageStatusResponse,
 
 }
 
-//CreateMessage is used to create a message on the exchange server
+//CreateMessage creates a standard message for a folder
 func CreateMessage(folderID []byte, properties []TaggedPropertyValue) (*RopSaveChangesMessageResponse, error) {
+	return CreateMessageRequest(folderID, properties, 0)
+}
+
+//CreateAssocMessage creates a message that is associated with a folder
+func CreateAssocMessage(folderID []byte, properties []TaggedPropertyValue) (*RopSaveChangesMessageResponse, error) {
+	return CreateMessageRequest(folderID, properties, 1)
+}
+
+//CreateMessageRequest is used to create a message on the exchange server
+func CreateMessageRequest(folderID []byte, properties []TaggedPropertyValue, associated byte) (*RopSaveChangesMessageResponse, error) {
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
 
@@ -760,7 +771,7 @@ func CreateMessage(folderID []byte, properties []TaggedPropertyValue) (*RopSaveC
 	createMessage.OutputHandle = 0x01
 	createMessage.FolderID = folderID
 	createMessage.CodePageID = 0xFFF
-	createMessage.AssociatedFlag = 0
+	createMessage.AssociatedFlag = associated
 
 	fullReq := createMessage.Marshal()
 
@@ -777,7 +788,6 @@ func CreateMessage(folderID []byte, properties []TaggedPropertyValue) (*RopSaveC
 	}
 
 	setProperties.PropertValueSize = uint16(propertySize + 2)
-
 	fullReq = append(fullReq, setProperties.Marshal()...)
 
 	saveMessage := RopSaveChangesMessageRequest{RopID: 0x0C, LogonID: AuthSession.LogonID}
@@ -888,7 +898,6 @@ func CreateMessageAttachment(folderid, messageid []byte, properties []TaggedProp
 	execResponse, err := sendMapiRequest(execRequest)
 
 	if err != nil {
-		utils.Error.Println(err)
 		return nil, &TransportError{err}
 	}
 
@@ -1024,19 +1033,20 @@ func WriteAttachmentProperty(folderid, messageid []byte, attachmentid uint32, pr
 		if _, e = setStreamSizeResp.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
 			return nil, e
 		}
-
-		utils.Debug.Println("Get Message: ", getMessageResp)
-		utils.Debug.Println("Get AttachTbl: ", getAttachmentTblResp)
-		utils.Debug.Println("Get Attach: ", getAttachmentResp)
-		utils.Debug.Println("Open Stream: ", openStreamResp)
-		utils.Debug.Println("Set Stream: ", setStreamSizeResp)
-		utils.Debug.Println("Stream Size: ", len(propData))
+		/*
+			utils.Debug.Println("Get Message: ", getMessageResp)
+			utils.Debug.Println("Get AttachTbl: ", getAttachmentTblResp)
+			utils.Debug.Println("Get Attach: ", getAttachmentResp)
+			utils.Debug.Println("Open Stream: ", openStreamResp)
+			utils.Debug.Println("Set Stream: ", setStreamSizeResp)
+			utils.Debug.Println("Stream Size: ", len(propData))
+		*/
 		serverHandles := execResponse.RopBuffer[len(execResponse.RopBuffer)-12:]
 		//messageHandles := execResponse.RopBuffer[len(execResponse.RopBuffer)-12:]
 
 		//lets split it..
 		index := 0
-		split := 5000
+		split := 2000
 		piecescnt := len(propData) / split
 		for kk := 0; kk < piecescnt; kk++ {
 			var body []byte
@@ -1065,7 +1075,7 @@ func WriteAttachmentProperty(folderid, messageid []byte, attachmentid uint32, pr
 			}
 
 		}
-		if len(propData) < split || len(propData) > split*piecescnt {
+		if len(propData) < split || piecescnt == 0 || len(propData) > split*piecescnt {
 			body := propData[index:]
 			execRequest := ExecuteRequest{}
 			execRequest.Init()
@@ -1133,18 +1143,18 @@ func WriteAttachmentProperty(folderid, messageid []byte, attachmentid uint32, pr
 				return nil, e
 			}
 			bufPtr += p
-			utils.Debug.Println("Commit Stream: ", commitStreamResp)
+			//utils.Debug.Println("Commit Stream: ", commitStreamResp)
 
 			saveAttachmentResp := RopSaveChangesAttachmentResponse{}
 			if p, e = saveAttachmentResp.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
 				return nil, e
 			}
 			bufPtr += p
-			utils.Debug.Println("Save: ", saveAttachmentResp)
+			//utils.Debug.Println("Save: ", saveAttachmentResp)
 
 			saveMessageResponse := RopSaveChangesMessageResponse{}
 			e = saveMessageResponse.Unmarshal(execResponse.RopBuffer[bufPtr:])
-			utils.Debug.Println("Save: ", saveMessageResponse)
+			//utils.Debug.Println("Save: ", saveMessageResponse)
 
 			return &saveAttachmentResp, e
 		}

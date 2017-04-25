@@ -63,21 +63,23 @@ const (
 
 //Property Data types
 const (
-	PtypInteger16      = 0x0002
-	PtypInteger32      = 0x0003
-	PtypInteger64      = 0x0014
-	PtypFloating32     = 0x0004
-	PtypFloating64     = 0x0005
-	PtypBoolean        = 0x000B
-	PtypString         = 0x001F
-	PtypString8        = 0x001E
-	PtypGUID           = 0x0048
-	PtypRuleAction     = 0x00FE
-	PtypRestriction    = 0x00FD
-	PtypBinary         = 0x0102
-	PtypMultipleBinary = 0x1102
-	PtypTime           = 0x0040
-	PtypObject         = 0x000D
+	PtypInteger16         = 0x0002
+	PtypInteger32         = 0x0003
+	PtypInteger64         = 0x0014
+	PtypFloating32        = 0x0004
+	PtypFloating64        = 0x0005
+	PtypBoolean           = 0x000B
+	PtypString            = 0x001F
+	PtypString8           = 0x001E
+	PtypGUID              = 0x0048
+	PtypRuleAction        = 0x00FE
+	PtypRestriction       = 0x00FD
+	PtypBinary            = 0x0102
+	PtypMultipleBinary    = 0x1102
+	PtypMultipleInteger32 = 0x1003
+	PtypMultipleInteger64 = 0x1014
+	PtypTime              = 0x0040
+	PtypObject            = 0x000D
 )
 
 //Folder id/locations -- https://msdn.microsoft.com/en-us/library/office/cc815825.aspx
@@ -583,3 +585,21 @@ var PidTagIconIndex = PropertyTag{PtypInteger32, 0x1080}
 var PidTagMessageEditorFormat = PropertyTag{PtypInteger32, 0x5909}
 var PidTagSenderEmailAddress = PropertyTag{PtypString, 0x0C1F}
 var PidTagDeleteAfterSubmit = PropertyTag{PtypBoolean, 0x0E01}
+var PidTagOfflineAddressBookName = PropertyTag{PtypString, 0x6800}
+var PidTagOfflineAddressBookTruncatedProps = PropertyTag{PtypMultipleInteger32, 0x6805}
+var PidTagOfflineAddressBookLangID = PropertyTag{PtypInteger32, 0x6807}
+var PidTagOfflineAddressBookFileType = PropertyTag{PtypBoolean, 0x6808}
+var PidTagSendOutlookRecallReport = PropertyTag{PtypBoolean, 0x6803}
+var PidTagOABCompressedSize = PropertyTag{PtypGUID, 0x6809}
+var PidTagOABDN = PropertyTag{PtypGUID, 0x6804}
+
+var PidTag6830 = PropertyTag{PtypString8, 0x6830}
+var PidTag682C = PropertyTag{PtypMultipleInteger64, 0x682C}
+var PidTag6831 = PropertyTag{PtypBinary, 0x6831}
+var PidTag6832 = PropertyTag{PtypBinary, 0x6832}
+var PidTag6823 = PropertyTag{PtypBinary, 0x6823}
+var PidTag6824 = PropertyTag{PtypBinary, 0x6824}
+var PidTag6827 = PropertyTag{PtypString8, 0x6827}
+var PidTag6B00 = PropertyTag{PtypString8, 0x6B00}
+var PidTag6902 = PropertyTag{0x001E, 0x6902}
+var PidTag6900 = PropertyTag{0x0003, 0x6900}

@@ -18,6 +18,11 @@ var (
 	DecBase64 = base64.StdEncoding.DecodeString
 )
 
+//COUNT returns the uint16 byte stream of an int. This is required for PtypBinary
+func COUNT(val int) []byte {
+	return EncodeNum(uint16(val))
+}
+
 //FromUnicode read unicode and convert to byte array
 func FromUnicode(uni []byte) string {
 	st := ""
@@ -99,6 +104,13 @@ func DecodeUint8(num []byte) uint8 {
 func EncodeNum(v interface{}) []byte {
 	byteNum := new(bytes.Buffer)
 	binary.Write(byteNum, binary.LittleEndian, v)
+	return byteNum.Bytes()
+}
+
+//EncodeNumBE encode a number in big endian as a byte array
+func EncodeNumBE(v interface{}) []byte {
+	byteNum := new(bytes.Buffer)
+	binary.Write(byteNum, binary.BigEndian, v)
 	return byteNum.Bytes()
 }
 
