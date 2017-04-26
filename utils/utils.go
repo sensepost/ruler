@@ -6,7 +6,11 @@ import (
 	"encoding/binary"
 	"fmt"
 	"hash/fnv"
+	"io/ioutil"
+	"math/rand"
+	"os"
 	"reflect"
+	"time"
 )
 
 var (
@@ -17,6 +21,31 @@ var (
 	//DecBase64 wrapper for decoding from base64
 	DecBase64 = base64.StdEncoding.DecodeString
 )
+
+//ReadFile returns the contents of a file at 'path'
+func ReadFile(path string) ([]byte, error) {
+	if _, err := os.Stat(path); err != nil {
+		return nil, err
+	}
+	data, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	return data, nil
+}
+
+//CookieGen creates a 16byte UUID
+func CookieGen() []byte {
+	rand.Seed(time.Now().UnixNano())
+	b := make([]byte, 16)
+	_, err := rand.Read(b)
+	if err != nil {
+		fmt.Println("Error: ", err)
+		return nil
+	}
+	//fmt.Printf("%X%X%X%X%X\n", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
+	return b
+}
 
 //COUNT returns the uint16 byte stream of an int. This is required for PtypBinary
 func COUNT(val int) []byte {
