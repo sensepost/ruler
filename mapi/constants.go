@@ -115,6 +115,8 @@ func (e mapicode) String() string {
 		return "MAPI_E_INTERFACE_NOT_SUPPORTED"
 	case MAPI_E_CALL_FAILED:
 		return "MAPI_E_CALL_FAILED"
+	case MAPI_E_NOT_IMPLEMENTED:
+		return "MAPI_E_NOT_IMPLEMENTED"
 	case MAPI_E_NO_ACCESS:
 		return "MAPI_E_NO_ACCESS"
 	case MAPI_E_NOT_ENOUGH_MEMORY:
@@ -290,6 +292,7 @@ type ErrorMapiCode struct {
 }
 
 const (
+	MAPI_E_NOT_IMPLEMENTED             mapicode = 0x80040FFF
 	MAPI_E_INTERFACE_NOT_SUPPORTED     mapicode = 0x80004002
 	MAPI_E_CALL_FAILED                 mapicode = 0x80004005
 	MAPI_E_NO_ACCESS                   mapicode = 0x80070005

@@ -163,3 +163,35 @@ func CreateFormTriggerMessage(suffix, subject, body string) ([]byte, error) {
 	}
 	return msg.MessageID, nil
 }
+
+//DeleteForm is used to delete a specific form stored in an associated table
+func DeleteForm(suffix string, folderid []byte) ([]byte, error) {
+
+	columns := make([]mapi.PropertyTag, 2)
+	columns[0] = mapi.PidTagOfflineAddressBookName
+	columns[1] = mapi.PidTagMid
+
+	assoctable, err := mapi.GetAssociatedContents(folderid, columns)
+	if err != nil {
+		return nil, err
+	}
+	var foundMsgID []byte
+	for k := 0; k < len(assoctable.RowData); k++ {
+		name := utils.FromUnicode(assoctable.RowData[k][0].ValueArray)
+		messageid := assoctable.RowData[k][1].ValueArray
+		if name != "" && name == fmt.Sprintf("IPM.Note.%s", suffix) {
+			foundMsgID = messageid
+			break
+		}
+	}
+	if len(foundMsgID) == 0 {
+		return nil, fmt.Errorf("No form with supplied suffix found!")
+	}
+
+	//delete the message
+	if _, err := mapi.DeleteMessages(folderid, 1, foundMsgID); err != nil {
+		return nil, err
+	}
+
+	return nil, nil
+}

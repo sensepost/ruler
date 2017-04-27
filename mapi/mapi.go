@@ -1703,9 +1703,23 @@ func FastTransferFetchStep(handles []byte) ([]byte, error) {
 	return nil, ErrUnknown
 }
 
-//GetContentsTable function get's a folder from the folders id
-//and returns a hanlde to the contents table for that folder
+//GetContentsTable is the standard request for getting the contents of a table.
+//A wrapper function that calls GetContentsTableRequest
 func GetContentsTable(folderid []byte) (*RopGetContentsTableResponse, []byte, error) {
+	return GetContentsTableRequest(folderid, 0x40)
+}
+
+//GetAssocatedContentsTable is the standard request for getting the contents of a table.
+//sets the assocated flag to get hidden items
+//A wrapper function that calls GetContentsTableRequest
+func GetAssocatedContentsTable(folderid []byte) (*RopGetContentsTableResponse, []byte, error) {
+	return GetContentsTableRequest(folderid, 0x40|0x02)
+}
+
+//GetContentsTableRequest function get's a folder from the folders id
+//and returns a hanlde to the contents table for that folder. tableFlags can be used to
+//control whether the associated table entries etc are returned
+func GetContentsTableRequest(folderid []byte, tableFlags byte) (*RopGetContentsTableResponse, []byte, error) {
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
 	ropRelease := RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandle: 0x01}
@@ -1719,7 +1733,7 @@ func GetContentsTable(folderid []byte) (*RopGetContentsTableResponse, []byte, er
 	//fullReq := getFolder.Marshal()
 	fullReq = append(fullReq, getFolder.Marshal()...)
 
-	getContents := RopGetContentsTableRequest{RopID: 0x05, LogonID: AuthSession.LogonID, InputHandleIndex: 0x01, OutputHandleIndex: 0x02, TableFlags: 0x40}
+	getContents := RopGetContentsTableRequest{RopID: 0x05, LogonID: AuthSession.LogonID, InputHandleIndex: 0x01, OutputHandleIndex: 0x02, TableFlags: tableFlags}
 
 	fullReq = append(fullReq, getContents.Marshal()...)
 
@@ -1921,9 +1935,36 @@ func CreateFolder(folderName string, hidden bool) (*RopCreateFolderResponse, err
 	return nil, ErrUnknown
 }
 
-//GetContents returns the rows of a folder's content table
+//GetContents returns the rows of a folder's content table.
+//This function returns the subject and message id
+//For custom columns use GetContentsColumns
 func GetContents(folderid []byte) (*RopQueryRowsResponse, error) {
-	contentsTable, svrhndl, err := GetContentsTable(folderid)
+	columns := make([]PropertyTag, 2)
+	columns[0] = PidTagSubject
+	columns[1] = PidTagMid
+	return GetTableContents(folderid, false, columns)
+}
+
+//GetAssociatedContents returns the rows of a folder's assocated content table
+func GetAssociatedContents(folderid []byte, columns []PropertyTag) (*RopQueryRowsResponse, error) {
+	return GetTableContents(folderid, true, columns)
+}
+
+//GetContentsColumns returns the rows of a folder's content table
+func GetContentsColumns(folderid []byte, columns []PropertyTag) (*RopQueryRowsResponse, error) {
+	return GetTableContents(folderid, false, columns)
+}
+
+//GetTableContents returns the contents of a specific table
+func GetTableContents(folderid []byte, assoc bool, columns []PropertyTag) (*RopQueryRowsResponse, error) {
+	var contentsTable *RopGetContentsTableResponse
+	var svrhndl []byte
+	var err error
+	if assoc == false {
+		contentsTable, svrhndl, err = GetContentsTable(folderid)
+	} else {
+		contentsTable, svrhndl, err = GetAssocatedContentsTable(folderid)
+	}
 	if err != nil || contentsTable == nil {
 		return nil, err
 	}
@@ -1933,11 +1974,11 @@ func GetContents(folderid []byte) (*RopQueryRowsResponse, error) {
 
 	setColumns := RopSetColumnsRequest{RopID: 0x12, LogonID: AuthSession.LogonID, SetColumnFlags: 0x00}
 	setColumns.InputHandle = 0x01
-	setColumns.PropertyTagCount = 2
+	setColumns.PropertyTagCount = uint16(len(columns))
 	setColumns.PropertyTags = make([]PropertyTag, setColumns.PropertyTagCount)
-	setColumns.PropertyTags[0] = PidTagSubject
-	//setColumns.PropertyTags[1] = PidTagBodyHtml
-	setColumns.PropertyTags[1] = PidTagMid
+	for k, v := range columns {
+		setColumns.PropertyTags[k] = v
+	}
 
 	fullReq := setColumns.Marshal()
 
