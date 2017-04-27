@@ -524,7 +524,7 @@ func triggerForm(c *cli.Context) error {
 	suffix := c.String("suffix")
 	folderid := mapi.AuthSession.Folderids[mapi.INBOX]
 
-	utils.Debug.Println("Email sent! Hopefully you will have a shell soon.")
+	utils.Trace.Println("Creating Trigger message.")
 	msgid, err := forms.CreateFormTriggerMessage(suffix, subject, body)
 	if err != nil {
 		return err
@@ -542,9 +542,10 @@ func deleteForm(c *cli.Context) error {
 	folderid := mapi.AuthSession.Folderids[mapi.INBOX]
 
 	if _, err := forms.DeleteForm(suffix, folderid); err != nil {
+		utils.Error.Println("Failed to delete form.")
 		return err
 	}
-	utils.Info.Println("Form deleted")
+	utils.Info.Println("Form deleted successfully.")
 	return nil
 }
 
