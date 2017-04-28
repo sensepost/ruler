@@ -1450,7 +1450,7 @@ func (queryRows *RopQueryRowsResponse) Unmarshal(resp []byte, properties []Prope
 					pos++
 				}
 			} else if property.PropertyType == PtypBinary {
-				cnt, p := utils.ReadByte(pos, resp)
+				cnt, p := utils.ReadUint16(pos, resp)
 				pos = p
 				trow.ValueArray, pos = utils.ReadBytes(pos, int(cnt), resp)
 				rows[k] = append(rows[k], trow)

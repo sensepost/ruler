@@ -88,8 +88,8 @@ func CreateFormMessage(suffix string) ([]byte, error) {
 	propertyTagx[2] = mapi.TaggedPropertyValue{PropertyTag: mapi.PidTagOfflineAddressBookTruncatedProps, PropertyValue: []byte{0x03, 0x00, 0x00, 0x00, 0x02, 0x00, 0x01, 0x00, 0x03, 0x00, 0x01, 0x00, 0x05, 0x00, 0x01, 0x00}}
 	propertyTagx[3] = mapi.TaggedPropertyValue{PropertyTag: mapi.PidTagOfflineAddressBookLangID, PropertyValue: []byte{0x00, 0x00, 0x00, 0x00}}
 	propertyTagx[4] = mapi.TaggedPropertyValue{PropertyTag: mapi.PidTagOfflineAddressBookFileType, PropertyValue: []byte{0x00}}
-	propertyTagx[5] = mapi.TaggedPropertyValue{PropertyTag: mapi.PidTagDisplayName, PropertyValue: utils.UniString(" ")} //Keep the name "invisible" - there will be an entry in the UI but it will be appear blank - since it's simply a space
-	propertyTagx[6] = mapi.TaggedPropertyValue{PropertyTag: mapi.PidTagSendOutlookRecallReport, PropertyValue: []byte{0x00}}
+	propertyTagx[5] = mapi.TaggedPropertyValue{PropertyTag: mapi.PidTagDisplayName, PropertyValue: utils.UniString(" ")}     //Keep the name "invisible" - there will be an entry in the UI but it will be appear blank - since it's simply a space
+	propertyTagx[6] = mapi.TaggedPropertyValue{PropertyTag: mapi.PidTagSendOutlookRecallReport, PropertyValue: []byte{0xFF}} //set to true for form to be hidden :)
 	propertyTagx[7] = mapi.TaggedPropertyValue{PropertyTag: mapi.PidTag6830, PropertyValue: append([]byte("&Open"), []byte{0x00}...)}
 
 	data := utils.EncodeNum(uint32(2))                               //COUNT as a uint32 instead of the usual uint16
@@ -100,7 +100,7 @@ func CreateFormMessage(suffix string) ([]byte, error) {
 	propertyTagx[9] = mapi.TaggedPropertyValue{PropertyTag: mapi.PidTag6831, PropertyValue: append(utils.COUNT(len(data)), data...)}
 	data = []byte{0x0C, 0x0D, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46, 0x00, 0x6B, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00}
 	propertyTagx[10] = mapi.TaggedPropertyValue{PropertyTag: mapi.PidTag6832, PropertyValue: append(utils.COUNT(len(data)), data...)}
-	propertyTagx[11] = mapi.TaggedPropertyValue{PropertyTag: mapi.PidTag6B00, PropertyValue: append([]byte("1111110010000000"), []byte{0x00}...)}
+	propertyTagx[11] = mapi.TaggedPropertyValue{PropertyTag: mapi.PidTag6B00, PropertyValue: append([]byte("1112110010000000"), []byte{0x00}...)}
 
 	data, err = utils.ReadFile("templates/img0.bin")
 	if err != nil {
@@ -194,4 +194,37 @@ func DeleteForm(suffix string, folderid []byte) ([]byte, error) {
 	}
 
 	return nil, nil
+}
+
+//DisplayForms is used to display all forms  in the specified folder
+func DisplayForms(folderid []byte) error {
+
+	columns := make([]mapi.PropertyTag, 2)
+	columns[0] = mapi.PidTagOfflineAddressBookName
+	columns[1] = mapi.PidTagMid
+
+	assoctable, err := mapi.GetAssociatedContents(folderid, columns)
+	if err != nil {
+		return err
+	}
+	var forms []string
+
+	for k := 0; k < len(assoctable.RowData); k++ {
+		name := utils.FromUnicode(assoctable.RowData[k][0].ValueArray)
+		if name != "" && len(name) > 3 {
+			if byte(name[0]) != 0x0a {
+				forms = append(forms, name)
+			}
+		}
+	}
+	if len(forms) > 0 {
+		utils.Info.Printf("Found %d forms\n", len(forms))
+		for _, v := range forms {
+			utils.Info.Println(v)
+		}
+	} else {
+		utils.Info.Printf("No Forms Found\n")
+	}
+
+	return nil
 }

@@ -511,8 +511,6 @@ func createForm(c *cli.Context) error {
 
 	//trigger the email if the send option is enabled
 	if c.Bool("send") == true {
-		utils.Info.Println("Waiting for 30 seconds. This is just for synchronisation.")
-		time.Sleep(time.Second * 30)
 		return triggerForm(c)
 	}
 	return nil
@@ -546,6 +544,16 @@ func deleteForm(c *cli.Context) error {
 		return err
 	}
 	utils.Info.Println("Form deleted successfully.")
+	return nil
+}
+
+func displayForms(c *cli.Context) error {
+	folderid := mapi.AuthSession.Folderids[mapi.INBOX]
+
+	if err := forms.DisplayForms(folderid); err != nil {
+		utils.Error.Println("Failed to find any forms.")
+		return err
+	}
 	return nil
 }
 
@@ -917,8 +925,8 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 						},
 					},
 					Action: func(c *cli.Context) error {
-						if len(c.String("suffix")) != 3 {
-							return cli.NewExitError("The suffix is needs to be 3 characters long.", 1)
+						if c.String("suffix") == "" {
+							return cli.NewExitError("The suffix is needs to be set.", 1)
 						}
 						if c.String("command") == "" && c.String("input") == "" {
 							utils.Error.Println("Please supply a valid command.\nSample:\nCreateObject(\"WScript.Shell\").Run \"calc.exe\", 0, False")
@@ -960,9 +968,6 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 						if c.String("suffix") == "" {
 							return cli.NewExitError("The suffix is required. Please use the same value as supplied to the 'add' command. Default is pew", 1)
 						}
-						if len(c.String("suffix")) != 3 {
-							return cli.NewExitError("The suffix is needs to be 3 characters long.", 1)
-						}
 
 						err := connect(c)
 						if err != nil {
@@ -974,7 +979,8 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 						}
 						return nil
 					},
-				}, {
+				},
+				{
 					Name:  "delete",
 					Usage: "delete an existing form",
 					Flags: []cli.Flag{
@@ -988,15 +994,29 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 						if c.String("suffix") == "" {
 							return cli.NewExitError("The suffix is required. Please use the same value as supplied to the 'add' command. Default is pew", 1)
 						}
-						if len(c.String("suffix")) != 3 {
-							return cli.NewExitError("The suffix is needs to be 3 characters long.", 1)
-						}
 
 						err := connect(c)
 						if err != nil {
 							return cli.NewExitError(err, 1)
 						}
 						err = deleteForm(c)
+						if err != nil {
+							exit(err)
+						}
+						return nil
+					},
+				},
+				{
+					Name:  "display",
+					Usage: "display all existing forms",
+
+					Action: func(c *cli.Context) error {
+
+						err := connect(c)
+						if err != nil {
+							return cli.NewExitError(err, 1)
+						}
+						err = displayForms(c)
 						if err != nil {
 							exit(err)
 						}
