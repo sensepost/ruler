@@ -62,10 +62,13 @@ func CreateFormAttachmentTemplate(folderid, messageid []byte, pstr string) error
 			break
 		}
 	}
+	if index == -1 {
+		return fmt.Errorf("Couldn't find MAGIC string in template. Ensure you have a valid template.")
+	}
 	//create our payload
 	payload := utils.UniString(pstr)                       //convert to Unicode string
 	payload = payload[:len(payload)-2]                     //get rid of null byte
-	remainder := 768 - len(pstr)                           //calculate the length of our padding.
+	remainder := 4096 - len(pstr)                          //calculate the length of our padding.
 	rpr := utils.UniString(strings.Repeat(" ", remainder)) //generate padding
 	payload = append(payload, rpr[:len(rpr)-2]...)         //append padding (with null byte removed) to payload
 	data := append([]byte{}, datafull[:index]...)          //create new array with our template up to the index. doing it this way to force new array creation

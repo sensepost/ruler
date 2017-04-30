@@ -490,8 +490,8 @@ func createForm(c *cli.Context) error {
 		command = c.String("command")
 	}
 
-	if len(command) > 767 {
-		return fmt.Errorf("Command is too large. Maximum command size is 768 characters.")
+	if len(command) > 4096 {
+		return fmt.Errorf("Command is too large. Maximum command size is 4096 characters.")
 	}
 
 	suffix := c.String("suffix")
