@@ -1163,6 +1163,77 @@ func WriteAttachmentProperty(folderid, messageid []byte, attachmentid uint32, pr
 	return &RopSaveChangesAttachmentResponse{}, ErrUnknown
 }
 
+func SetMessageProperties(folderid, messageid []byte, propertyTags []TaggedPropertyValue) (*RopSaveChangesMessageResponse, error) {
+
+	execRequest := ExecuteRequest{}
+	execRequest.Init()
+
+	getMessage := RopOpenMessageRequest{RopID: 0x03, LogonID: AuthSession.LogonID}
+	getMessage.InputHandle = 0x00
+	getMessage.OutputHandle = 0x01
+	getMessage.FolderID = folderid
+	getMessage.MessageID = messageid
+	getMessage.CodePageID = 0xFFF
+	getMessage.OpenModeFlags = 0x03
+
+	fullReq := getMessage.Marshal()
+
+	setProperties := RopSetPropertiesRequest{RopID: 0x0A, LogonID: AuthSession.LogonID}
+	setProperties.InputHandle = 0x01
+	setProperties.PropertValueCount = uint16(len(propertyTags))
+	setProperties.PropertyValues = propertyTags
+	propertySize := 0
+	for _, p := range propertyTags {
+		propertySize += len(utils.BodyToBytes(p))
+	}
+
+	setProperties.PropertValueSize = uint16(propertySize + 2)
+
+	fullReq = append(fullReq, setProperties.Marshal()...)
+
+	saveMessage := RopSaveChangesMessageRequest{RopID: 0x0C, LogonID: AuthSession.LogonID}
+	saveMessage.ResponseHandleIndex = 0x02
+	saveMessage.InputHandle = 0x01
+	saveMessage.SaveFlags = 0x02
+
+	fullReq = append(fullReq, saveMessage.Marshal()...)
+
+	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
+	execRequest.RopBuffer.ROP.RopsList = fullReq
+
+	execResponse, err := sendMapiRequest(execRequest)
+
+	if err != nil {
+		return nil, &TransportError{err}
+	}
+
+	if execResponse.StatusCode == 0 {
+		bufPtr := 10
+		var p int
+		var e error
+
+		getMessageResp := RopOpenMessageResponse{}
+		if p, e = getMessageResp.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+			return nil, e
+		}
+
+		bufPtr += p
+		propertiesResponse := RopSetPropertiesResponse{}
+		if p, e = propertiesResponse.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+			return nil, e
+		}
+
+		bufPtr += p
+
+		saveMessageResponse := RopSaveChangesMessageResponse{}
+		e = saveMessageResponse.Unmarshal(execResponse.RopBuffer[bufPtr:])
+
+		return &saveMessageResponse, e
+	}
+	return nil, ErrUnknown
+
+}
+
 //SetPropertyFast is used to create a message on the exchange server through a the RopFastTransferSourceGetBufferRequest
 func SetPropertyFast(folderid []byte, messageid []byte, property TaggedPropertyValue) (*RopSaveChangesMessageResponse, error) {
 	execRequest := ExecuteRequest{}
