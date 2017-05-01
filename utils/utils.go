@@ -6,7 +6,11 @@ import (
 	"encoding/binary"
 	"fmt"
 	"hash/fnv"
+	"io/ioutil"
+	"math/rand"
+	"os"
 	"reflect"
+	"time"
 )
 
 var (
@@ -17,6 +21,36 @@ var (
 	//DecBase64 wrapper for decoding from base64
 	DecBase64 = base64.StdEncoding.DecodeString
 )
+
+//ReadFile returns the contents of a file at 'path'
+func ReadFile(path string) ([]byte, error) {
+	if _, err := os.Stat(path); err != nil {
+		return nil, err
+	}
+	data, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	return data, nil
+}
+
+//CookieGen creates a 16byte UUID
+func CookieGen() []byte {
+	rand.Seed(time.Now().UnixNano())
+	b := make([]byte, 16)
+	_, err := rand.Read(b)
+	if err != nil {
+		fmt.Println("Error: ", err)
+		return nil
+	}
+	//fmt.Printf("%X%X%X%X%X\n", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
+	return b
+}
+
+//COUNT returns the uint16 byte stream of an int. This is required for PtypBinary
+func COUNT(val int) []byte {
+	return EncodeNum(uint16(val))
+}
 
 //FromUnicode read unicode and convert to byte array
 func FromUnicode(uni []byte) string {
@@ -63,6 +97,14 @@ func UTF16BE(str string, trail int) []byte {
 	return bt
 }
 
+//DecodeUint64 decode 4 byte value into uint32
+func DecodeUint64(num []byte) uint64 {
+	var number uint64
+	bf := bytes.NewReader(num)
+	binary.Read(bf, binary.LittleEndian, &number)
+	return number
+}
+
 //DecodeUint32 decode 4 byte value into uint32
 func DecodeUint32(num []byte) uint32 {
 	var number uint32
@@ -94,6 +136,13 @@ func EncodeNum(v interface{}) []byte {
 	return byteNum.Bytes()
 }
 
+//EncodeNumBE encode a number in big endian as a byte array
+func EncodeNumBE(v interface{}) []byte {
+	byteNum := new(bytes.Buffer)
+	binary.Write(byteNum, binary.BigEndian, v)
+	return byteNum.Bytes()
+}
+
 //BodyToBytes func
 func BodyToBytes(DataStruct interface{}) []byte {
 	dumped := []byte{}
@@ -103,7 +152,7 @@ func BodyToBytes(DataStruct interface{}) []byte {
 	//check if we have a slice of structs
 	if reflect.TypeOf(DataStruct).Kind() == reflect.Slice {
 		for i := 0; i < v.Len(); i++ {
-			if v.Index(i).Kind() == reflect.Uint8 || v.Index(i).Kind() == reflect.Uint16 || v.Index(i).Kind() == reflect.Uint32 {
+			if v.Index(i).Kind() == reflect.Uint8 || v.Index(i).Kind() == reflect.Uint16 || v.Index(i).Kind() == reflect.Uint32 || v.Index(i).Kind() == reflect.Uint64 {
 				byteNum := new(bytes.Buffer)
 				binary.Write(byteNum, binary.LittleEndian, v.Index(i).Interface())
 				dumped = append(dumped, byteNum.Bytes()...)
@@ -118,7 +167,7 @@ func BodyToBytes(DataStruct interface{}) []byte {
 		}
 	} else {
 		for i := 0; i < v.NumField(); i++ {
-			if v.Field(i).Kind() == reflect.Uint8 || v.Field(i).Kind() == reflect.Uint16 || v.Field(i).Kind() == reflect.Uint32 {
+			if v.Field(i).Kind() == reflect.Uint8 || v.Field(i).Kind() == reflect.Uint16 || v.Field(i).Kind() == reflect.Uint32 || v.Field(i).Kind() == reflect.Uint64 {
 				byteNum := new(bytes.Buffer)
 				binary.Write(byteNum, binary.LittleEndian, v.Field(i).Interface())
 				dumped = append(dumped, byteNum.Bytes()...)
@@ -165,7 +214,7 @@ func ReadByte(pos int, buff []byte) (byte, int) {
 func ReadUnicodeString(pos int, buff []byte) ([]byte, int) {
 	//stupid hack as using bufio and ReadString(byte) would terminate too early
 	//would terminate on 0x00 instead of 0x0000
-	index := bytes.Index(buff[pos:], []byte{0x00, 0x00})
+	index := bytes.Index(buff[pos:], []byte{0x00, 0x00, 0x00}) + 1
 	str := buff[pos : pos+index]
 	return []byte(str), pos + index + 2
 }

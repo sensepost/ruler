@@ -101,6 +101,7 @@ func setupHTTP(rpctype string, URL string, ntlmAuth bool, full bool) (net.Conn, 
 				}
 			}
 		}
+		utils.Trace.Println(string(data))
 
 		ntlmChallengeString := strings.Replace(ntlmChallengeHeader, "NTLM ", "", 1)
 		challengeBytes, err := utils.DecBase64(ntlmChallengeString)
@@ -120,12 +121,10 @@ func setupHTTP(rpctype string, URL string, ntlmAuth bool, full bool) (net.Conn, 
 		// parse NTLM challenge
 		challenge, err := ntlm.ParseChallengeMessage(challengeBytes)
 		if err != nil {
-			//panic(err)
 			return nil, err
 		}
 		err = session.ProcessChallengeMessage(challenge)
 		if err != nil {
-			//panic(err)
 			return nil, err
 		}
 		// authenticate user
@@ -167,7 +166,7 @@ func RPCOpen(URL string, readySignal chan bool, errOccurred chan error) (err err
 	//can't find a way to keep the write channel open (other than going over to http/2, which isn't valid here)
 	//so this is some damn messy code, but screw it
 
-	rpcInConn, err = setupHTTP("RPC_IN_DATA", URL, AuthSession.RPCEncrypt, true)
+	rpcInConn, err = setupHTTP("RPC_IN_DATA", URL, AuthSession.RPCNtlm, true)
 
 	if err != nil {
 		readySignal <- false
@@ -207,7 +206,7 @@ func RPCOpen(URL string, readySignal chan bool, errOccurred chan error) (err err
 //these to our list of recieved responses
 func RPCOpenOut(URL string, readySignal chan bool, errOccurred chan error) (err error) {
 
-	rpcOutConn, err = setupHTTP("RPC_OUT_DATA", URL, AuthSession.RPCEncrypt, true)
+	rpcOutConn, err = setupHTTP("RPC_OUT_DATA", URL, AuthSession.RPCNtlm, true)
 	if err != nil {
 		readySignal <- false
 		errOccurred <- err
@@ -333,6 +332,11 @@ func EcDoRPCExt2(MAPI []byte, auxLen uint32) ([]byte, error) {
 		sec := RTSSec{}
 		sec.Unmarshal(resp.SecTrailer, int(resp.Header.AuthLen))
 		return dec[20:], err
+	}
+
+	if len(resp.PDU) < 28 {
+		utils.Error.Println(resp.PDU)
+		return nil, fmt.Errorf("Invalid response.")
 	}
 
 	return resp.PDU[28:], err
@@ -496,7 +500,7 @@ func RPCOutWrite(data []byte) {
 //our list of received responses. Blocks until it finds a response
 func RPCRead(callID int) (RPCResponse, error) {
 	c := make(chan RPCResponse, 1)
-	cerr := make(chan error, 1)
+
 	go func() {
 		stop := false
 		for stop != true {
@@ -511,23 +515,18 @@ func RPCRead(callID int) (RPCResponse, error) {
 		}
 	}()
 
-	go func() {
-		for _, v := range httpResponses {
-			st := string(v)
-			if er := strings.Split(strings.Split(st, "\r\n")[0], " "); er[1] != "200" {
-				utils.Trace.Printf("Invalid HTTP response: %s", er)
-				cerr <- fmt.Errorf("Invalid HTTP response: %s", er)
-				break
-			}
-		}
-	}()
-
 	select {
 	case resp := <-c:
 		return resp, nil
-	case er := <-cerr:
-		return RPCResponse{}, er
 	case <-time.After(time.Second * 10): // call timed out
+		//check if there is a 401 or other error message
+		for k, v := range httpResponses {
+			st := string(v)
+			if er := strings.Split(strings.Split(st, "\r\n")[0], " "); er[1] != "200" {
+				return RPCResponse{}, fmt.Errorf("Invalid HTTP response: %s", er)
+			}
+			httpResponses = append(httpResponses[:k], httpResponses[k+1:]...)
+		}
 		return RPCResponse{}, fmt.Errorf("Time-out reading from RPC")
 	}
 

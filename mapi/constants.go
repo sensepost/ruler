@@ -63,20 +63,23 @@ const (
 
 //Property Data types
 const (
-	PtypInteger16      = 0x0002
-	PtypInteger32      = 0x0003
-	PtypInteger64      = 0x0014
-	PtypFloating32     = 0x0004
-	PtypFloating64     = 0x0005
-	PtypBoolean        = 0x000B
-	PtypString         = 0x001F
-	PtypString8        = 0x001E
-	PtypGUID           = 0x0048
-	PtypRuleAction     = 0x00FE
-	PtypRestriction    = 0x00FD
-	PtypBinary         = 0x0102
-	PtypMultipleBinary = 0x1102
-	PtypTime           = 0x0040
+	PtypInteger16         = 0x0002
+	PtypInteger32         = 0x0003
+	PtypInteger64         = 0x0014
+	PtypFloating32        = 0x0004
+	PtypFloating64        = 0x0005
+	PtypBoolean           = 0x000B
+	PtypString            = 0x001F
+	PtypString8           = 0x001E
+	PtypGUID              = 0x0048
+	PtypRuleAction        = 0x00FE
+	PtypRestriction       = 0x00FD
+	PtypBinary            = 0x0102
+	PtypMultipleBinary    = 0x1102
+	PtypMultipleInteger32 = 0x1003
+	PtypMultipleInteger64 = 0x1014
+	PtypTime              = 0x0040
+	PtypObject            = 0x000D
 )
 
 //Folder id/locations -- https://msdn.microsoft.com/en-us/library/office/cc815825.aspx
@@ -112,6 +115,8 @@ func (e mapicode) String() string {
 		return "MAPI_E_INTERFACE_NOT_SUPPORTED"
 	case MAPI_E_CALL_FAILED:
 		return "MAPI_E_CALL_FAILED"
+	case MAPI_E_NOT_IMPLEMENTED:
+		return "MAPI_E_NOT_IMPLEMENTED"
 	case MAPI_E_NO_ACCESS:
 		return "MAPI_E_NO_ACCESS"
 	case MAPI_E_NOT_ENOUGH_MEMORY:
@@ -287,6 +292,7 @@ type ErrorMapiCode struct {
 }
 
 const (
+	MAPI_E_NOT_IMPLEMENTED             mapicode = 0x80040FFF
 	MAPI_E_INTERFACE_NOT_SUPPORTED     mapicode = 0x80004002
 	MAPI_E_CALL_FAILED                 mapicode = 0x80004005
 	MAPI_E_NO_ACCESS                   mapicode = 0x80070005
@@ -472,11 +478,11 @@ var PidTagMessageClassIPMNote = TaggedPropertyValue{PropertyTag{PtypString, 0x00
 //PidTagMessageFlags setting this to unsent
 var PidTagMessageFlags = PropertyTag{PtypInteger32, 0x0E07} //0x00000008
 
-//PidTagIconIndex index of the icon to display
-var PidTagIconIndex = TaggedPropertyValue{PropertyTag{PtypInteger32, 0x1080}, []byte{0xFF, 0xFF, 0xFF, 0xFF}}
+//PidTagIconIndexOld index of the icon to display
+var PidTagIconIndexOld = TaggedPropertyValue{PropertyTag{PtypInteger32, 0x1080}, []byte{0xFF, 0xFF, 0xFF, 0xFF}}
 
-//PidTagMessageEditorFormat format lets do plaintext
-var PidTagMessageEditorFormat = TaggedPropertyValue{PropertyTag{PtypInteger32, 0x5909}, []byte{0x01, 0x00, 0x00, 0x00}}
+//PidTagMessageEditorFormatOld format lets do plaintext
+var PidTagMessageEditorFormatOld = TaggedPropertyValue{PropertyTag{PtypInteger32, 0x5909}, []byte{0x01, 0x00, 0x00, 0x00}}
 
 //PidTagNativeBody format of the body
 var PidTagNativeBody = PropertyTag{PtypInteger32, 0x1016}
@@ -549,3 +555,54 @@ var PidTagBodyHTML = PropertyTag{PtypBinary, 0x1013}
 
 //PidTagHTMLBody is the same as above?
 var PidTagHTMLBody = PropertyTag{PtypString, 0x1013}
+
+var PidTagAttachMethod = PropertyTag{PtypInteger32, 0x3705}
+
+var PidTagRenderingPosition = PropertyTag{PtypInteger32, 0x370B}
+
+var PidTagAttachContentId = PropertyTag{PtypString, 0x03712}
+
+var PidTagAttachMimeTag = PropertyTag{PtypString, 0x370E}
+
+var PidTagAttachmentLinkId = PropertyTag{PtypInteger32, 0x7FFA}
+
+var PidTagAttachFlags = PropertyTag{PtypInteger32, 0x3714}
+
+var PidTagAttachmentHidden = PropertyTag{PtypBoolean, 0x7FFE}
+
+var PidTagAttachLongFilename = PropertyTag{PtypString, 0x3707}
+
+var PidTagAttachFilename = PropertyTag{PtypString, 0x3704}
+
+var PidTagAttachExtension = PropertyTag{PtypString, 0x3703}
+
+var PidTagMessageAttachments = PropertyTag{PtypObject, 0x0E13}
+
+var PidTagAttachPathName = PropertyTag{PtypString, 0x3708}
+var PidTagAttachLongPathName = PropertyTag{PtypString, 0x370D}
+var PidTagAttachPayloadProviderGuidString = PropertyTag{PtypString, 0x3719}
+var PidTagTrustSender = PropertyTag{PtypInteger32, 0x0E79}
+var PidTagAttachDataBinary = PropertyTag{PtypBinary, 0x3701}
+
+var PidTagIconIndex = PropertyTag{PtypInteger32, 0x1080}
+var PidTagMessageEditorFormat = PropertyTag{PtypInteger32, 0x5909}
+var PidTagSenderEmailAddress = PropertyTag{PtypString, 0x0C1F}
+var PidTagDeleteAfterSubmit = PropertyTag{PtypBoolean, 0x0E01}
+var PidTagOfflineAddressBookName = PropertyTag{PtypString, 0x6800}
+var PidTagOfflineAddressBookTruncatedProps = PropertyTag{PtypMultipleInteger32, 0x6805}
+var PidTagOfflineAddressBookLangID = PropertyTag{PtypInteger32, 0x6807}
+var PidTagOfflineAddressBookFileType = PropertyTag{PtypBoolean, 0x6808}
+var PidTagSendOutlookRecallReport = PropertyTag{PtypBoolean, 0x6803}
+var PidTagOABCompressedSize = PropertyTag{PtypGUID, 0x6809}
+var PidTagOABDN = PropertyTag{PtypGUID, 0x6804}
+
+var PidTag6830 = PropertyTag{PtypString8, 0x6830}
+var PidTag682C = PropertyTag{PtypMultipleInteger64, 0x682C}
+var PidTag6831 = PropertyTag{PtypBinary, 0x6831}
+var PidTag6832 = PropertyTag{PtypBinary, 0x6832}
+var PidTag6823 = PropertyTag{PtypBinary, 0x6823}
+var PidTag6824 = PropertyTag{PtypBinary, 0x6824}
+var PidTag6827 = PropertyTag{PtypString8, 0x6827}
+var PidTag6B00 = PropertyTag{PtypString8, 0x6B00}
+var PidTag6902 = PropertyTag{0x001E, 0x6902}
+var PidTag6900 = PropertyTag{0x0003, 0x6900}
