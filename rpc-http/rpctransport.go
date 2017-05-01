@@ -334,6 +334,11 @@ func EcDoRPCExt2(MAPI []byte, auxLen uint32) ([]byte, error) {
 		return dec[20:], err
 	}
 
+	if len(resp.PDU) < 28 {
+		utils.Error.Println(resp.PDU)
+		return nil, fmt.Errorf("Invalid response.")
+	}
+
 	return resp.PDU[28:], err
 }
 
