@@ -123,7 +123,9 @@ func CreateFormMessage(suffix string) ([]byte, error) {
 	}
 	//the small icon for the message
 	propertyTagx[4] = mapi.TaggedPropertyValue{PropertyTag: mapi.PidTag6823, PropertyValue: append(utils.COUNT(len(data)), data...)}
-	_, err = mapi.SetMessageProperties(folderid, msg.MessageID, propertyTagx)
+	if _, err = mapi.SetMessageProperties(folderid, msg.MessageID, propertyTagx); err != nil {
+		return nil, err
+	}
 
 	propertyTagx = make([]mapi.TaggedPropertyValue, 4)
 	data, err = utils.ReadFile("templates/img1.bin")

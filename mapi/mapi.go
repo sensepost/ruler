@@ -74,7 +74,7 @@ func Init(config *utils.Session, lid, URL, ABKURL string, transport int) {
 	AuthSession.Transport = transport
 	AuthSession.ClientSet = false
 	AuthSession.ReqCounter = 1
-	AuthSession.LogonID = 0x09
+	AuthSession.LogonID = 0x08f
 	AuthSession.Authenticated = false
 
 	//default to Encrypt + Sign for NTLM
@@ -417,7 +417,7 @@ func AuthenticateFetchMailbox(essdn []byte) (*RopLogonResponse, error) {
 		return nil, &TransportError{err}
 	}
 
-	if execResponse.StatusCode == 0 || execResponse.StatusCode == 3 {
+	if execResponse.StatusCode != 255 {
 		AuthSession.Authenticated = true
 
 		logonResponse := RopLogonResponse{}
@@ -467,7 +467,7 @@ func ReleaseObject(inputHandle byte) (*RopReleaseResponse, error) {
 		return nil, &TransportError{err}
 	}
 
-	if execResponse.StatusCode == 0 {
+	if execResponse.StatusCode != 255 {
 		ropReleaseResponse := RopReleaseResponse{}
 		if _, e := ropReleaseResponse.Unmarshal(execResponse.RopBuffer[10:]); e != nil {
 			return nil, e
@@ -736,7 +736,7 @@ func SetMessageStatus(folderid, messageid []byte) (*RopSetMessageStatusResponse,
 		return nil, &TransportError{err}
 	}
 
-	if execResponse.StatusCode == 0 {
+	if execResponse.StatusCode != 255 {
 		bufPtr := 10
 
 		setStatusResp := RopSetMessageStatusResponse{}
@@ -809,7 +809,7 @@ func CreateMessageRequest(folderID []byte, properties []TaggedPropertyValue, ass
 		return nil, &TransportError{err}
 	}
 
-	if execResponse.StatusCode == 0 {
+	if execResponse.StatusCode != 255 {
 		bufPtr := 10
 		var p int
 		var e error
@@ -901,7 +901,7 @@ func CreateMessageAttachment(folderid, messageid []byte, properties []TaggedProp
 		return nil, &TransportError{err}
 	}
 
-	if execResponse.StatusCode == 0 {
+	if execResponse.StatusCode != 255 {
 		bufPtr := 10
 		var p int
 		var e error
@@ -941,14 +941,6 @@ func CreateMessageAttachment(folderid, messageid []byte, properties []TaggedProp
 		saveMessageResponse := RopSaveChangesMessageResponse{}
 		e = saveMessageResponse.Unmarshal(execResponse.RopBuffer[bufPtr:])
 
-		/*
-			utils.Debug.Println("Get Message: ", getMessageResp)
-			utils.Debug.Println("Get AttachTbl: ", getAttachmentTblResp)
-			utils.Debug.Println("Create Attach: ", createAttachmentResp)
-			utils.Debug.Println("Set Props: ", propertiesResponse)
-			utils.Debug.Println("Save Attach: ", saveAttachmentResp)
-			utils.Debug.Println("Save Message: ", saveMessageResponse)
-		*/
 		return &createAttachmentResp, e
 	}
 
@@ -998,7 +990,7 @@ func WriteAttachmentProperty(folderid, messageid []byte, attachmentid uint32, pr
 		return nil, &TransportError{err}
 	}
 
-	if execResponse.StatusCode == 0 {
+	if execResponse.StatusCode != 255 {
 		bufPtr := 10
 		var p int
 		var e error
@@ -1133,7 +1125,7 @@ func WriteAttachmentProperty(folderid, messageid []byte, attachmentid uint32, pr
 			return nil, &TransportError{err}
 		}
 
-		if execResponse.StatusCode == 0 {
+		if execResponse.StatusCode != 255 {
 			bufPtr := 10
 			var p int
 			var e error
@@ -1163,6 +1155,7 @@ func WriteAttachmentProperty(folderid, messageid []byte, attachmentid uint32, pr
 	return &RopSaveChangesAttachmentResponse{}, ErrUnknown
 }
 
+//SetMessageProperties is used to update the properties of a message
 func SetMessageProperties(folderid, messageid []byte, propertyTags []TaggedPropertyValue) (*RopSaveChangesMessageResponse, error) {
 
 	execRequest := ExecuteRequest{}
@@ -1207,7 +1200,7 @@ func SetMessageProperties(folderid, messageid []byte, propertyTags []TaggedPrope
 		return nil, &TransportError{err}
 	}
 
-	if execResponse.StatusCode == 0 {
+	if execResponse.StatusCode != 255 {
 		bufPtr := 10
 		var p int
 		var e error
@@ -1264,7 +1257,7 @@ func SetPropertyFast(folderid []byte, messageid []byte, property TaggedPropertyV
 		return nil, &TransportError{err}
 	}
 
-	if execResponse.StatusCode == 0 {
+	if execResponse.StatusCode != 255 {
 
 		//we probably need to get the handles here to pass them down into the ServerObjectHandleTable
 		serverHandles := execResponse.RopBuffer[len(execResponse.RopBuffer)-8:]
@@ -1350,7 +1343,7 @@ func SaveMessageFast(inputHandle, responseHandle byte, serverHandles []byte) (*R
 	}
 
 	//fmt.Println("Complete")
-	if execResponse.StatusCode == 0 {
+	if execResponse.StatusCode != 255 {
 		bufPtr := 10
 
 		saveMessageResponse := RopSaveChangesMessageResponse{}
@@ -1397,7 +1390,7 @@ func DeleteMessages(folderid []byte, messageIDCount int, messageIDs []byte) (*Ro
 		return nil, &TransportError{err}
 	}
 
-	if execResponse.StatusCode == 0 {
+	if execResponse.StatusCode != 255 {
 		bufPtr := 10
 		openFolder := RopOpenFolderResponse{}
 		p, err := openFolder.Unmarshal(execResponse.RopBuffer[bufPtr:])
@@ -1448,7 +1441,7 @@ func EmptyFolder(folderid []byte) (*RopEmptyFolderResponse, error) {
 		return nil, &TransportError{err}
 	}
 
-	if execResponse.StatusCode == 0 {
+	if execResponse.StatusCode != 255 {
 		bufPtr := 10
 		openFolder := RopOpenFolderResponse{}
 		p, err := openFolder.Unmarshal(execResponse.RopBuffer[bufPtr:])
@@ -1489,7 +1482,7 @@ func DeleteFolder(folderid []byte) (*RopDeleteFolderResponse, error) {
 		return nil, &TransportError{err}
 	}
 
-	if execResponse.StatusCode == 0 {
+	if execResponse.StatusCode != 255 {
 		bufPtr := 10
 		deleteFolder := RopDeleteFolderResponse{}
 		if _, e := deleteFolder.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
@@ -1604,7 +1597,7 @@ func GetMessage(folderid, messageid []byte, columns []PropertyTag) (*RopGetPrope
 		return nil, &TransportError{err}
 	}
 
-	if execResponse.StatusCode == 0 {
+	if execResponse.StatusCode != 255 {
 
 		bufPtr := 10
 		var p int
@@ -1674,7 +1667,7 @@ func GetMessageFast(folderid, messageid []byte, columns []PropertyTag) (*RopFast
 		return nil, &TransportError{err}
 	}
 
-	if execResponse.StatusCode == 0 {
+	if execResponse.StatusCode != 255 {
 
 		bufPtr := 10
 		var p int
@@ -1741,7 +1734,7 @@ func FastTransferFetchStep(handles []byte) ([]byte, error) {
 		return nil, &TransportError{err}
 	}
 
-	if execResponse.StatusCode == 0 {
+	if execResponse.StatusCode != 255 {
 		if execResponse.RopBuffer[2] == 0x05 { //compression
 			//decompress
 		}
@@ -1818,11 +1811,13 @@ func GetContentsTableRequest(folderid []byte, tableFlags byte) (*RopGetContentsT
 		return nil, nil, &TransportError{err}
 	}
 
-	if execResponse.StatusCode == 0 {
+	if execResponse.StatusCode != 255 {
 		bufPtr := 10
 		var p int
 		var e error
-
+		if bufPtr > len(execResponse.RopBuffer) {
+			return nil, nil, fmt.Errorf("Empty table")
+		}
 		openFolder := RopOpenFolderResponse{}
 		if p, e = openFolder.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
 			return nil, nil, e
@@ -1833,7 +1828,8 @@ func GetContentsTableRequest(folderid []byte, tableFlags byte) (*RopGetContentsT
 		if p, e = ropContents.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
 			return nil, nil, e
 		}
-		bufPtr += p + 8
+		bufPtr += p
+
 		return &ropContents, execResponse.RopBuffer[bufPtr:], nil
 	}
 
@@ -1869,7 +1865,7 @@ func GetFolderHierarchy(folderid []byte) (*RopGetHierarchyTableResponse, []byte,
 		return nil, nil, &TransportError{err}
 	}
 
-	if execResponse.StatusCode == 0 {
+	if execResponse.StatusCode != 255 {
 		bufPtr := 10
 		var p int
 		var e error
@@ -1923,7 +1919,7 @@ func GetSubFolders(folderid []byte) (*RopQueryRowsResponse, error) {
 		return nil, &TransportError{err}
 	}
 
-	if execResponse.StatusCode == 0 {
+	if execResponse.StatusCode != 255 {
 		bufPtr := 10
 		var p int
 		var e error
@@ -1987,7 +1983,7 @@ func CreateFolder(folderName string, hidden bool) (*RopCreateFolderResponse, err
 		return nil, ErrTransport //&TransportError{err}
 	}
 
-	if execResponse.StatusCode == 0 {
+	if execResponse.StatusCode != 255 {
 		bufPtr := 10
 		createFolder := RopCreateFolderResponse{}
 		if _, e := createFolder.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
@@ -2068,7 +2064,7 @@ func GetTableContents(folderid []byte, assoc bool, columns []PropertyTag) (*RopQ
 		return nil, &TransportError{err}
 	}
 
-	if execResponse.StatusCode == 0 {
+	if execResponse.StatusCode != 255 {
 		bufPtr := 10
 		var p int
 		var e error

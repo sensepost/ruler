@@ -1162,6 +1162,9 @@ func (execResponse *ExecuteResponse) Unmarshal(resp []byte) error {
 		execResponse.ErrorCode, pos = utils.ReadUint32(pos, resp) //error code if MAPIHTTP else this is also the buffer size
 		execResponse.Flags, pos = utils.ReadUint32(pos, resp)
 		execResponse.RopBufferSize, pos = utils.ReadUint32(pos, resp)
+		if len(resp) < pos+int(execResponse.RopBufferSize) {
+			return nil
+		}
 		buf, pos = utils.ReadBytes(pos, int(execResponse.RopBufferSize), resp)
 		execResponse.RopBuffer = buf
 		execResponse.AuxilliaryBufSize, _ = utils.ReadUint32(pos, resp)

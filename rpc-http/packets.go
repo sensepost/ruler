@@ -476,6 +476,9 @@ func (response *RPCResponse) Unmarshal(raw []byte) (int, error) {
 	} else {
 		if len(raw) > int(response.Header.FragLen-response.Header.AuthLen-24) {
 			response.PDU, pos = utils.ReadBytes(pos, int(response.Header.FragLen-response.Header.AuthLen-24), raw)
+			if len(raw) < pos+int(response.Header.AuthLen) {
+				return pos, nil
+			}
 			response.SecTrailer, pos = utils.ReadBytes(pos, int(response.Header.AuthLen), raw)
 		} else {
 
