@@ -39,6 +39,7 @@ func setupHTTP(rpctype string, URL string, ntlmAuth bool, full bool) (net.Conn, 
 	}
 
 	if err != nil {
+		utils.Error.Println("RPC Setup Err", err)
 		return nil, err
 	}
 	var request string
@@ -87,7 +88,7 @@ func setupHTTP(rpctype string, URL string, ntlmAuth bool, full bool) (net.Conn, 
 			if full == false {
 				return nil, fmt.Errorf("Failed with initial setup for %s : %s\n", rpctype, err)
 			}
-			utils.Trace.Printf("Failed with initial setup for %s trying again...\n", rpctype)
+			//utils.Trace.Printf("Failed with initial setup for %s trying again...\n", rpctype)
 			return setupHTTP(rpctype, URL, ntlmAuth, false)
 		}
 
@@ -101,7 +102,7 @@ func setupHTTP(rpctype string, URL string, ntlmAuth bool, full bool) (net.Conn, 
 				}
 			}
 		}
-		utils.Trace.Println(string(data))
+		//utils.Trace.Println(string(data))
 
 		ntlmChallengeString := strings.Replace(ntlmChallengeHeader, "NTLM ", "", 1)
 		challengeBytes, err := utils.DecBase64(ntlmChallengeString)
@@ -131,7 +132,7 @@ func setupHTTP(rpctype string, URL string, ntlmAuth bool, full bool) (net.Conn, 
 		authenticate, err = session.GenerateAuthenticateMessage()
 
 		if err != nil {
-			//panic(err)
+			utils.Error.Println("Authentication Err")
 			return nil, err
 		}
 	}
@@ -183,7 +184,7 @@ func RPCOpen(URL string, readySignal chan bool, errOccurred chan error) (err err
 		readySignal <- false
 		errOccurred <- err
 		return err
-	case <-time.After(time.Second * 2): // call timed out
+	case <-time.After(time.Second * 20): // call timed out
 		readySignal <- true
 	}
 
@@ -194,7 +195,7 @@ func RPCOpen(URL string, readySignal chan bool, errOccurred chan error) (err err
 			_, err = rpcInConn.Write(data[:n])
 		}
 		if err != nil && err != io.EOF {
-			utils.Error.Println(err)
+			utils.Error.Println("RPCIN_ERROR: ", err)
 			break
 		}
 	}
@@ -493,7 +494,9 @@ func RPCWrite(data []byte) {
 //RPCOutWrite function writes to the RPC_OUT_DATA channel,
 //this should only happen once, for ConnA1
 func RPCOutWrite(data []byte) {
-	rpcOutConn.Write(data)
+	if rpcOutConn != nil {
+		rpcOutConn.Write(data)
+	}
 }
 
 //RPCRead function takes a call ID and searches for the response in
@@ -518,7 +521,8 @@ func RPCRead(callID int) (RPCResponse, error) {
 	select {
 	case resp := <-c:
 		return resp, nil
-	case <-time.After(time.Second * 10): // call timed out
+	case <-time.After(time.Second * 15): // call timed out
+		utils.Error.Println("RPC Timeout")
 		//check if there is a 401 or other error message
 		for k, v := range httpResponses {
 			st := string(v)
