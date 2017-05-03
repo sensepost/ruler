@@ -513,14 +513,18 @@ func createForm(c *cli.Context) error {
 	if c.Bool("rule") == true {
 		rname := utils.GenerateString(6)
 		utils.Info.Printf("Rule trigger set. Adding new rule with name %s\n", rname)
-		triggerword := strings.Split(c.String("subject"), " ")[0]
+		triggerword := utils.GenerateString(8)
 		utils.Info.Printf("Adding new rule with trigger of %s\n", triggerword)
+		if c.Bool("send") == false {
+			utils.Info.Printf("Autosend disabled. You'll need to trigger the rule by sending an email with the keyword \"%s\" present in the subject. \n", triggerword)
+		}
 		//create delete rule
 		if _, err := mapi.ExecuteDeleteRuleAdd(rname, triggerword); err != nil {
 			utils.Error.Println("Failed to create the trigger rule")
 		} else {
 			utils.Info.Println("Trigger rule created.")
 		}
+		c.Set("subject", triggerword)
 	}
 
 	//trigger the email if the send option is enabled
