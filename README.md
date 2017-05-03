@@ -348,6 +348,18 @@ Deleting an existing is done in a similar way to deleting rules.
 ./ruler --email john@msf.com form delete --suffix superduper
 ```
 
+### Trigger Form with a Rule
+
+Nick Landers ([@monoxgas]) found that a form without event triggers, would call the VBScript payload on delete. This delete can be automated by creating a client-side rule to delete the message as it arrives in the mailbox.
+
+This is a great way to auto-trigger the form, without requiring any user interaction. Ruler can automate this for you if you supply the ```--rule``` flag:
+
+```
+./ruler --email john@msf.com form add --suffix superduper --input /tmp/command.txt --rule --send
+```
+
+You will need to delete the newly created rule once your payload has triggered. This can be done using the delete command outlined [above].
+
 # Attacking Exchange
 
 The library included with Ruler allows for the creation of custom message using MAPI. This along with the Exchnage documentation is a great starting point for new research. For an example of using this library in another project, see [SensePost Liniaal].
@@ -359,3 +371,5 @@ The library included with Ruler allows for the creation of custom message using 
 [Ruler on YouTube]:<https://www.youtube.com/watch?v=C07GS4M8BZk>
 [Releases]: <https://github.com/sensepost/ruler/releases>
 [SensePost Liniaal]:<https://github.com/sensepost/liniaal>
+[@monoxgas]:<https://twitter.com/monoxgas>
+[above]:<https://github.com/sensepost/ruler#delete-existing-rules-clean-up-after--yourself>
