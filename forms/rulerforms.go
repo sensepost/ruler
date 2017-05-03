@@ -186,7 +186,7 @@ func CreateFormTriggerMessage(suffix, subject, body string) ([]byte, error) {
 //DeleteForm is used to delete a specific form stored in an associated table
 func DeleteForm(suffix string, folderid []byte) ([]byte, error) {
 
-	columns := make([]mapi.PropertyTag, 2)
+	columns := make([]mapi.PropertyTag, 1)
 	columns[0] = mapi.PidTagOfflineAddressBookName
 	columns[1] = mapi.PidTagMid
 

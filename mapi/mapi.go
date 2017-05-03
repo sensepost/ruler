@@ -2041,7 +2041,7 @@ func GetTableContents(folderid []byte, assoc bool, columns []PropertyTag) (*RopQ
 
 	setColumns := RopSetColumnsRequest{RopID: 0x12, LogonID: AuthSession.LogonID, SetColumnFlags: 0x00}
 	setColumns.InputHandle = 0x01
-	setColumns.PropertyTagCount = uint16(len(columns))
+	setColumns.PropertyTagCount = 2 //uint16(len(columns))
 	setColumns.PropertyTags = make([]PropertyTag, setColumns.PropertyTagCount)
 	for k, v := range columns {
 		setColumns.PropertyTags[k] = v
@@ -2068,18 +2068,19 @@ func GetTableContents(folderid []byte, assoc bool, columns []PropertyTag) (*RopQ
 		bufPtr := 10
 		var p int
 		var e error
-
+		utils.Info.Println(execResponse)
 		setColumnsResp := RopSetColumnsResponse{}
 		if p, e = setColumnsResp.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
 			return nil, e
 		}
 		bufPtr += p
-
+		utils.Info.Println("Display")
 		rows := RopQueryRowsResponse{}
 
 		if _, e = rows.Unmarshal(execResponse.RopBuffer[bufPtr:], setColumns.PropertyTags); e != nil {
 			return nil, e
 		}
+		utils.Info.Println("Display")
 		return &rows, nil
 	}
 
@@ -2122,6 +2123,60 @@ func DisplayRules() ([]Rule, error) {
 		return nil, err
 	}
 	return rules, nil
+
+	//return nil, ErrUnknown
+}
+
+//ExecuteDeleteRuleAdd adds a new mailrule for deleting a message
+//This should be merged with ExecuteMailRuleAdd
+func ExecuteDeleteRuleAdd(rulename, triggerword string) (*ExecuteResponse, error) {
+	execRequest := ExecuteRequest{}
+	execRequest.Init()
+	execRequest.MaxRopOut = 262144
+
+	addRule := RopModifyRulesRequest{RopID: 0x41, LoginID: AuthSession.LogonID, InputHandleIndex: 0x00, ModifyRulesFlag: 0x00, RulesCount: 0x01, RuleData: RuleData{RuleDataFlags: 0x01}}
+
+	propertyValues := make([]TaggedPropertyValue, 8)
+	//RUle Name
+	propertyValues[0] = TaggedPropertyValue{PidTagRuleName, utils.UniString(rulename)}                                                                                                                                         //PidTagRuleSequence
+	propertyValues[1] = TaggedPropertyValue{PidTagRuleSequence, []byte{0x0A, 0x00, 0x00, 0x00}}                                                                                                                                //PidTagRuleState (Enabled)
+	propertyValues[2] = TaggedPropertyValue{PidTagRuleState, []byte{0x01, 0x00, 0x00, 0x00}}                                                                                                                                   //PidTagRuleCondition
+	propertyValues[3] = TaggedPropertyValue{PidTagRuleCondition, utils.BodyToBytes(RuleCondition{0x03, []byte{0x01, 0x00, 0x01, 0x00}, []byte{0x1F, 0x00, 0x37, 0x00, 0x1f, 0x00, 0x37, 0x00}, utils.UniString(triggerword)})} //PidTagRuleActions
+
+	actionData := ActionData{}
+	actionData.ActionElem = []byte{0x00, 0x00, 0x14}
+	actionData.ActionName = utils.UTF16BE(rulename, 1)
+	actionData.Element = []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x5F, 0x00, 0x00, 0x00, 0x05, 0x00, 0xff, 0xff, 0x00, 0x00, 0x0c, 0x00, 0x43, 0x52, 0x75, 0x6c, 0x65, 0x45, 0x6c, 0x65, 0x6d, 0x65, 0x6e, 0x74, 0x90, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x80, 0x64, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x80, 0xCD, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
+	actionData.Triggger = utils.UTF16BE(triggerword, 1)
+	actionData.Elem = []byte{0x80, 0x4A, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x80, 0x42, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
+	actionData.EndPoint = []byte{}
+
+	ruleAction := RuleAction{Actions: 1, ActionType: 0x05, ActionFlavor: 0, ActionFlags: 0}
+	ruleAction.ActionLen = uint16(len(utils.BodyToBytes(actionData)) + 9)
+	ruleAction.ActionData = actionData
+
+	pdat := ruleAction.Marshal()
+
+	propertyValues[4] = TaggedPropertyValue{PidTagRuleActions, pdat}                              //PidTagRuleProvider
+	propertyValues[5] = TaggedPropertyValue{PidTagRuleProvider, utils.UniString("RuleOrganizer")} //PidTagRuleLevel
+	propertyValues[6] = TaggedPropertyValue{PidTagRuleLevel, []byte{0x00, 0x00, 0x00, 0x00}}      //PidTagRuleProviderData
+	propertyValues[7] = TaggedPropertyValue{PidTagRuleProviderData, []byte{0x10, 0x00, 0x00, 0x00, 0x14, 0x00, 0x01, 0x00, 0x00, 0x00, 0x28, 0x7d, 0xd2, 0x27, 0x14, 0xc4, 0xe4, 0x40}}
+	//propertyValues[8] = TaggedPropertyValue{PidTagRuleUserFlags, []byte{0x0, 0x0, 0x0, 0xf}} //PidTagRuleSequence
+
+	addRule.RuleData.PropertyValues = propertyValues
+	addRule.RuleData.PropertyValueCount = uint16(len(propertyValues))
+
+	ruleBytes := utils.BodyToBytes(addRule)
+	execRequest.RopBuffer.ROP.RopsList = ruleBytes
+	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x01, 0x00, 0x00, AuthSession.LogonID} //append(AuthSession.RulesHandle, []byte{0xFF, 0xFF, 0xFF, 0xFF}...)
+
+	execResponse, err := sendMapiRequest(execRequest)
+
+	if err != nil {
+		return nil, &TransportError{err}
+	}
+	utils.Trace.Println(execResponse)
+	return nil, err
 
 	//return nil, ErrUnknown
 }

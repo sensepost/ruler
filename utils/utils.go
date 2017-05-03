@@ -262,3 +262,16 @@ func Obfuscate(data []byte) []byte {
 	}
 	return bnew
 }
+
+//GenerateString creates a random string of lenght pcount
+func GenerateString(pcount int) string {
+	var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+	//seed := time.Date(year, month, day, hour, min, sec,x,time.UTC).UnixNano()
+	rand.Seed(time.Now().UTC().UnixNano())
+
+	b := make([]rune, pcount)
+	for i := range b {
+		b[i] = letterRunes[rand.Intn(len(letterRunes))]
+	}
+	return string(b)
+}
