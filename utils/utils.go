@@ -214,9 +214,9 @@ func ReadByte(pos int, buff []byte) (byte, int) {
 func ReadUnicodeString(pos int, buff []byte) ([]byte, int) {
 	//stupid hack as using bufio and ReadString(byte) would terminate too early
 	//would terminate on 0x00 instead of 0x0000
-	index := bytes.Index(buff[pos:], []byte{0x00, 0x00, 0x00})
+	index := bytes.Index(buff[pos:], []byte{0x00, 0x00, 0x00}) + 1
 	str := buff[pos : pos+index]
-	return []byte(str), pos + index + 2
+	return []byte(str), pos + index + 1
 }
 
 //ReadASCIIString returns a string as ascii
@@ -261,4 +261,17 @@ func Obfuscate(data []byte) []byte {
 		bnew[k] = data[k] ^ 0xA5
 	}
 	return bnew
+}
+
+//GenerateString creates a random string of lenght pcount
+func GenerateString(pcount int) string {
+	var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+	//seed := time.Date(year, month, day, hour, min, sec,x,time.UTC).UnixNano()
+	rand.Seed(time.Now().UTC().UnixNano())
+
+	b := make([]rune, pcount)
+	for i := range b {
+		b[i] = letterRunes[rand.Intn(len(letterRunes))]
+	}
+	return string(b)
 }

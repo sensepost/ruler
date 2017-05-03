@@ -32,7 +32,16 @@ func CreateFormAttachmentPointer(folderid, messageid []byte) error {
 
 //CreateFormAttachmentTemplate creates the template attachment holding the actual command to execute
 func CreateFormAttachmentTemplate(folderid, messageid []byte, pstr string) error {
+	return CreateFormAttachmentWithTemplate(folderid, messageid, pstr, "templates/formtemplate.bin")
+}
 
+//CreateFormAttachmentForDeleteTemplate creates the template attachment holding the actual command to execute
+func CreateFormAttachmentForDeleteTemplate(folderid, messageid []byte, pstr string) error {
+	return CreateFormAttachmentWithTemplate(folderid, messageid, pstr, "templates/formdeletetemplate.bin")
+}
+
+//CreateFormAttachmentWithTemplate creates a form with a specific template
+func CreateFormAttachmentWithTemplate(folderid, messageid []byte, pstr, templatepath string) error {
 	utils.Info.Println("Create Form Template Attachment")
 
 	attachmentPropertyTags := make([]mapi.TaggedPropertyValue, 4)
@@ -43,8 +52,7 @@ func CreateFormAttachmentTemplate(folderid, messageid []byte, pstr string) error
 	res, _ := mapi.CreateMessageAttachment(folderid, messageid, attachmentPropertyTags)
 
 	//read the template file for our payload
-	path := "templates/formtemplate.bin"
-	datafull, err := utils.ReadFile(path)
+	datafull, err := utils.ReadFile(templatepath)
 	if err != nil {
 		utils.Error.Println(err)
 		if os.IsNotExist(err) {
@@ -178,7 +186,7 @@ func CreateFormTriggerMessage(suffix, subject, body string) ([]byte, error) {
 //DeleteForm is used to delete a specific form stored in an associated table
 func DeleteForm(suffix string, folderid []byte) ([]byte, error) {
 
-	columns := make([]mapi.PropertyTag, 2)
+	columns := make([]mapi.PropertyTag, 1)
 	columns[0] = mapi.PidTagOfflineAddressBookName
 	columns[1] = mapi.PidTagMid
 
