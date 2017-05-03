@@ -586,7 +586,7 @@ func main() {
 	app := cli.NewApp()
 	app.Name = "ruler"
 	app.Usage = "A tool to abuse Exchange Services"
-	app.Version = "2.1.0"
+	app.Version = "2.1.3"
 	app.Author = "Etienne Stalmans <etienne@sensepost.com>, @_staaldraad"
 	app.Description = `         _
  _ __ _   _| | ___ _ __
