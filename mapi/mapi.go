@@ -1695,7 +1695,7 @@ func GetMessageFast(folderid, messageid []byte, columns []PropertyTag) (*RopFast
 			return nil, e
 		}
 
-		utils.Trace.Printf("Doing Chunked Transfer. Chunks [%d]", pprops.TotalStepCount)
+		//utils.Trace.Printf("Doing Chunked Transfer. Chunks [%d]", pprops.TotalStepCount)
 
 		//Rop release if we are done.. otherwise get rest of stream
 		if pprops.TransferStatus == 0x0001 {
@@ -2352,15 +2352,9 @@ func DecodeBufferToRows(buff []byte, cols []PropertyTag) []PropertyRow {
 
 	var pos = 0
 	var rows []PropertyRow
-	var flag byte
-	fmt.Println(buff)
 	for _, property := range cols {
 		trow := PropertyRow{}
-		flag, pos = utils.ReadByte(pos, buff)
-		if flag != 0x00 {
-			trow.ValueArray, pos = utils.ReadBytes(pos, 5, buff)
-			rows = append(rows, trow)
-		} else if property.PropertyType == PtypInteger32 {
+		if property.PropertyType == PtypInteger32 {
 			trow.ValueArray, pos = utils.ReadBytes(pos, 2, buff)
 			rows = append(rows, trow)
 		} else if property.PropertyType == PtypString {
