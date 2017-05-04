@@ -219,8 +219,8 @@ func DeleteForm(suffix string, folderid []byte) ([]byte, error) {
 func DisplayForms(folderid []byte) error {
 
 	columns := make([]mapi.PropertyTag, 2)
-	columns[0] = mapi.PidTagOfflineAddressBookName
-	columns[1] = mapi.PidTagMid
+	columns[0] = mapi.PidTagMid
+	columns[1] = mapi.PidTagOfflineAddressBookName
 
 	assoctable, err := mapi.GetAssociatedContents(folderid, columns)
 	if err != nil {
@@ -229,7 +229,8 @@ func DisplayForms(folderid []byte) error {
 	var forms []string
 
 	for k := 0; k < len(assoctable.RowData); k++ {
-		name := utils.FromUnicode(assoctable.RowData[k][0].ValueArray)
+		utils.Debug.Println(assoctable.RowData[k][1].ValueArray)
+		name := utils.FromUnicode(assoctable.RowData[k][1].ValueArray)
 		if name != "" && len(name) > 3 {
 			if byte(name[0]) != 0x0a {
 				forms = append(forms, name)
