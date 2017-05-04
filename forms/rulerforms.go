@@ -186,7 +186,7 @@ func CreateFormTriggerMessage(suffix, subject, body string) ([]byte, error) {
 //DeleteForm is used to delete a specific form stored in an associated table
 func DeleteForm(suffix string, folderid []byte) ([]byte, error) {
 
-	columns := make([]mapi.PropertyTag, 1)
+	columns := make([]mapi.PropertyTag, 2)
 	columns[0] = mapi.PidTagOfflineAddressBookName
 	columns[1] = mapi.PidTagMid
 
@@ -196,6 +196,9 @@ func DeleteForm(suffix string, folderid []byte) ([]byte, error) {
 	}
 	var foundMsgID []byte
 	for k := 0; k < len(assoctable.RowData); k++ {
+		if assoctable.RowData[k][0].Flag != 0x00 {
+			continue
+		}
 		name := utils.FromUnicode(assoctable.RowData[k][0].ValueArray)
 		messageid := assoctable.RowData[k][1].ValueArray
 		if name != "" && name == fmt.Sprintf("IPM.Note.%s", suffix) {
@@ -219,8 +222,8 @@ func DeleteForm(suffix string, folderid []byte) ([]byte, error) {
 func DisplayForms(folderid []byte) error {
 
 	columns := make([]mapi.PropertyTag, 2)
-	columns[0] = mapi.PidTagMid
-	columns[1] = mapi.PidTagOfflineAddressBookName
+	columns[0] = mapi.PidTagOfflineAddressBookName
+	columns[1] = mapi.PidTagMid
 
 	assoctable, err := mapi.GetAssociatedContents(folderid, columns)
 	if err != nil {
@@ -229,8 +232,11 @@ func DisplayForms(folderid []byte) error {
 	var forms []string
 
 	for k := 0; k < len(assoctable.RowData); k++ {
-		utils.Debug.Println(assoctable.RowData[k][1].ValueArray)
-		name := utils.FromUnicode(assoctable.RowData[k][1].ValueArray)
+		if assoctable.RowData[k][0].Flag != 0x00 {
+			continue
+		}
+		//utils.Debug.Println(assoctable.RowData[k][0].ValueArray)
+		name := utils.FromUnicode(assoctable.RowData[k][0].ValueArray)
 		if name != "" && len(name) > 3 {
 			if byte(name[0]) != 0x0a {
 				forms = append(forms, name)

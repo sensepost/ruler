@@ -2326,6 +2326,7 @@ func DecodeRulesResponse(resp []byte, properties []PropertyTag) ([]Rule, []byte,
 	}
 
 	rows := RopQueryRowsResponse{}
+
 	tpos, err = rows.Unmarshal(resp[pos:], properties)
 	if err != nil {
 		return nil, nil, err
@@ -2351,9 +2352,15 @@ func DecodeBufferToRows(buff []byte, cols []PropertyTag) []PropertyRow {
 
 	var pos = 0
 	var rows []PropertyRow
+	var flag byte
+	fmt.Println(buff)
 	for _, property := range cols {
 		trow := PropertyRow{}
-		if property.PropertyType == PtypInteger32 {
+		flag, pos = utils.ReadByte(pos, buff)
+		if flag != 0x00 {
+			trow.ValueArray, pos = utils.ReadBytes(pos, 5, buff)
+			rows = append(rows, trow)
+		} else if property.PropertyType == PtypInteger32 {
 			trow.ValueArray, pos = utils.ReadBytes(pos, 2, buff)
 			rows = append(rows, trow)
 		} else if property.PropertyType == PtypString {

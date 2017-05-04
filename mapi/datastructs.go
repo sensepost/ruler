@@ -1425,6 +1425,7 @@ func (execRequest *ExecuteRequest) Init() {
 //Unmarshal func
 func (queryRows *RopQueryRowsResponse) Unmarshal(resp []byte, properties []PropertyTag) (int, error) {
 	pos := 0
+	var flag byte
 	queryRows.RopID, pos = utils.ReadByte(pos, resp)
 	queryRows.InputHandle, pos = utils.ReadByte(pos, resp)
 	queryRows.ReturnValue, pos = utils.ReadUint32(pos, resp)
@@ -1435,12 +1436,21 @@ func (queryRows *RopQueryRowsResponse) Unmarshal(resp []byte, properties []Prope
 	queryRows.RowCount, pos = utils.ReadUint16(pos, resp)
 
 	rows := make([][]PropertyRow, queryRows.RowCount)
+	//check if flagged properties
 
 	for k := 0; k < int(queryRows.RowCount); k++ {
 		trow := PropertyRow{}
-		trow.Flag, pos = utils.ReadByte(pos, resp)
+		//check if has flag (is flaggedpropertyrow)
+		flag, pos = utils.ReadByte(pos, resp)
 		for _, property := range properties {
-			if property.PropertyType == PtypInteger32 {
+
+			if flag == 0x01 {
+				trow.Flag, pos = utils.ReadByte(pos, resp)
+			}
+			if trow.Flag != 0x00 {
+				trow.ValueArray, pos = utils.ReadBytes(pos, 4, resp)
+				rows[k] = append(rows[k], trow)
+			} else if property.PropertyType == PtypInteger32 {
 				trow.ValueArray, pos = utils.ReadBytes(pos, 2, resp)
 				rows[k] = append(rows[k], trow)
 			} else if property.PropertyType == PtypInteger64 {
