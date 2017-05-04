@@ -65,8 +65,8 @@ func setupHTTP(rpctype string, URL string, ntlmAuth bool, full bool) (net.Conn, 
 	}
 
 	var authenticate *ntlm.AuthenticateMessage
-
 	if ntlmAuth == true {
+
 		//we should probably extract the NTLM type from the server response and use appropriate
 		session, err := ntlm.CreateClientSession(ntlm.Version2, ntlm.ConnectionlessMode)
 		b, _ := session.GenerateNegotiateMessage()
@@ -180,11 +180,16 @@ func RPCOpen(URL string, readySignal chan bool, errOccurred chan error) (err err
 	go RPCOpenOut(URL, readySignal, errOccurred)
 
 	select {
-	case <-readySignal:
-		readySignal <- false
-		errOccurred <- err
-		return err
-	case <-time.After(time.Second * 20): // call timed out
+	case c := <-readySignal:
+		if c == true {
+			//utils.Warning.Println("Got ready!")
+			readySignal <- true
+		} else {
+			readySignal <- false
+			return err
+		}
+	case <-time.After(time.Second * 10): // call timed out
+		//utils.Warning.Println("Got timedou!")
 		readySignal <- true
 	}
 
@@ -205,7 +210,7 @@ func RPCOpen(URL string, readySignal chan bool, errOccurred chan error) (err err
 //RPCOpenOut function opens the RPC_OUT_DATA channel
 //starts our listening "loop" which scans for new responses and pushes
 //these to our list of recieved responses
-func RPCOpenOut(URL string, readySignal chan bool, errOccurred chan error) (err error) {
+func RPCOpenOut(URL string, readySignal chan<- bool, errOccurred chan<- error) (err error) {
 
 	rpcOutConn, err = setupHTTP("RPC_OUT_DATA", URL, AuthSession.RPCNtlm, true)
 	if err != nil {
@@ -228,6 +233,7 @@ func RPCOpenOut(URL string, readySignal chan bool, errOccurred chan error) (err 
 			responses = append(responses, r)
 		}
 	}
+
 	return nil
 }
 
@@ -290,7 +296,6 @@ func RPCBind() error {
 		}
 		err = rpcntlmsession.ProcessChallengeMessage(challenge)
 		if err != nil {
-
 			return fmt.Errorf("Bad Process Challenge %s", err)
 		}
 
@@ -343,6 +348,9 @@ func EcDoRPCExt2(MAPI []byte, auxLen uint32) ([]byte, error) {
 	return resp.PDU[28:], err
 }
 
+//EcDoRPCAbk makes a request for NSPI addressbook
+//Not fully implemented
+//TODO: complete this
 func EcDoRPCAbk(MAPI []byte, l int) ([]byte, error) {
 	RPCWriteN(MAPI, uint32(l), 0x03)
 	//RPCWrite(req.Marshal())
@@ -559,10 +567,10 @@ func SplitData(data []byte, atEOF bool) (advance int, token []byte, err error) {
 		if data[0] == 0x05 { //we have an RPC packet start, rather than a fragmented packet
 			if len(data) < 10 { //get packet length, if possible
 				return 0, nil, nil //don't have enough packet start again
-			} else {
-				p, _ := utils.ReadUint16(8, data)
-				end = int(p)
 			}
+			p, _ := utils.ReadUint16(8, data)
+			end = int(p)
+
 			if len(data) != end {
 				return 0, nil, nil
 			}

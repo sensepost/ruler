@@ -2027,6 +2027,7 @@ func GetTableContents(folderid []byte, assoc bool, columns []PropertyTag) (*RopQ
 	var contentsTable *RopGetContentsTableResponse
 	var svrhndl []byte
 	var err error
+	var inputHndl uint8 = 0x03
 	if assoc == false {
 		contentsTable, svrhndl, err = GetContentsTable(folderid)
 	} else {
@@ -2040,8 +2041,8 @@ func GetTableContents(folderid []byte, assoc bool, columns []PropertyTag) (*RopQ
 	execRequest.Init()
 
 	setColumns := RopSetColumnsRequest{RopID: 0x12, LogonID: AuthSession.LogonID, SetColumnFlags: 0x00}
-	setColumns.InputHandle = 0x01
-	setColumns.PropertyTagCount = 2 //uint16(len(columns))
+	setColumns.InputHandle = inputHndl
+	setColumns.PropertyTagCount = uint16(len(columns))
 	setColumns.PropertyTags = make([]PropertyTag, setColumns.PropertyTagCount)
 	for k, v := range columns {
 		setColumns.PropertyTags[k] = v
@@ -2049,10 +2050,10 @@ func GetTableContents(folderid []byte, assoc bool, columns []PropertyTag) (*RopQ
 
 	fullReq := setColumns.Marshal()
 
-	queryRows := RopQueryRowsRequest{RopID: 0x15, LogonID: AuthSession.LogonID, InputHandle: 0x01, QueryRowsFlags: 0x00, ForwardRead: 0x01, RowCount: uint16(contentsTable.RowCount)}
+	queryRows := RopQueryRowsRequest{RopID: 0x15, LogonID: AuthSession.LogonID, InputHandle: inputHndl, QueryRowsFlags: 0x00, ForwardRead: 0x01, RowCount: uint16(contentsTable.RowCount)}
 	fullReq = append(fullReq, queryRows.Marshal()...)
 
-	ropRelease := RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandle: 0x01}
+	ropRelease := RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandle: inputHndl}
 	fullReq = append(fullReq, ropRelease.Marshal()...)
 
 	execRequest.RopBuffer.ROP.RopsList = fullReq
@@ -2068,19 +2069,19 @@ func GetTableContents(folderid []byte, assoc bool, columns []PropertyTag) (*RopQ
 		bufPtr := 10
 		var p int
 		var e error
-		utils.Info.Println(execResponse)
+
 		setColumnsResp := RopSetColumnsResponse{}
 		if p, e = setColumnsResp.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
 			return nil, e
 		}
 		bufPtr += p
-		utils.Info.Println("Display")
+
 		rows := RopQueryRowsResponse{}
 
 		if _, e = rows.Unmarshal(execResponse.RopBuffer[bufPtr:], setColumns.PropertyTags); e != nil {
 			return nil, e
 		}
-		utils.Info.Println("Display")
+
 		return &rows, nil
 	}
 
@@ -2170,12 +2171,12 @@ func ExecuteDeleteRuleAdd(rulename, triggerword string) (*ExecuteResponse, error
 	execRequest.RopBuffer.ROP.RopsList = ruleBytes
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x01, 0x00, 0x00, AuthSession.LogonID} //append(AuthSession.RulesHandle, []byte{0xFF, 0xFF, 0xFF, 0xFF}...)
 
-	execResponse, err := sendMapiRequest(execRequest)
+	_, err := sendMapiRequest(execRequest)
 
 	if err != nil {
 		return nil, &TransportError{err}
 	}
-	utils.Trace.Println(execResponse)
+	//utils.Trace.Println(execResponse)
 	return nil, err
 
 	//return nil, ErrUnknown
@@ -2325,6 +2326,7 @@ func DecodeRulesResponse(resp []byte, properties []PropertyTag) ([]Rule, []byte,
 	}
 
 	rows := RopQueryRowsResponse{}
+
 	tpos, err = rows.Unmarshal(resp[pos:], properties)
 	if err != nil {
 		return nil, nil, err
@@ -2350,9 +2352,15 @@ func DecodeBufferToRows(buff []byte, cols []PropertyTag) []PropertyRow {
 
 	var pos = 0
 	var rows []PropertyRow
+	var flag byte
+	fmt.Println(buff)
 	for _, property := range cols {
 		trow := PropertyRow{}
-		if property.PropertyType == PtypInteger32 {
+		flag, pos = utils.ReadByte(pos, buff)
+		if flag != 0x00 {
+			trow.ValueArray, pos = utils.ReadBytes(pos, 5, buff)
+			rows = append(rows, trow)
+		} else if property.PropertyType == PtypInteger32 {
 			trow.ValueArray, pos = utils.ReadBytes(pos, 2, buff)
 			rows = append(rows, trow)
 		} else if property.PropertyType == PtypString {
