@@ -59,6 +59,21 @@ type Session struct {
 	RPCNtlmSessionKey   []byte
 }
 
+//YamlConfig holds the data that a user supplies with a yaml config file
+type YamlConfig struct {
+	Username   string
+	Email      string
+	Password   string
+	Hash       string
+	Domain     string
+	UserDN     string
+	Mailbox    string
+	RPCURL     string
+	RPC        bool
+	RPCEncrypt bool
+	MapiURL    string
+}
+
 //AutodiscoverResp structure for unmarshal
 type AutodiscoverResp struct {
 	Response Response

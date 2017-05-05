@@ -11,6 +11,8 @@ import (
 	"os"
 	"reflect"
 	"time"
+
+	"gopkg.in/yaml.v2"
 )
 
 var (
@@ -274,4 +276,18 @@ func GenerateString(pcount int) string {
 		b[i] = letterRunes[rand.Intn(len(letterRunes))]
 	}
 	return string(b)
+}
+
+//ReadYml reads the supplied config file, Unmarshals the data into the global config struct.
+func ReadYml(yml string) (YamlConfig, error) {
+	var config YamlConfig
+	data, err := ioutil.ReadFile(yml)
+	if err != nil {
+		return YamlConfig{}, err
+	}
+	err = yaml.Unmarshal(data, &config)
+	if err != nil {
+		return YamlConfig{}, err
+	}
+	return config, err
 }

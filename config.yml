@@ -1,0 +1,11 @@
+username: ""
+email: ""
+password: ""
+hash: ""
+domain: ""
+userdn: ""
+mailbox: ""
+rpcurl: "https://outlook.office365.com/rpc/rpcproxy.dll"
+rpc: true
+rpcencrypt: true
+mapiurl: "https://outlook.office365.com/mapi/emsmdb/"
