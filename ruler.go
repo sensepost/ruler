@@ -184,7 +184,7 @@ func connect(c *cli.Context) error {
 		return fmt.Errorf("Missing global argument. Use --domain (if needed), --username and --email")
 	}
 	//if no password or hash was supplied, read from stdin
-	if c.GlobalString("password") == "" && c.GlobalString("hash") == "" {
+	if c.GlobalString("password") == "" && c.GlobalString("hash") == "" && c.GlobalString("config") == "" {
 		fmt.Printf("Password: ")
 		var pass []byte
 		pass, err = gopass.GetPasswd()
@@ -280,21 +280,65 @@ func connect(c *cli.Context) error {
 	var resp *utils.AutodiscoverResp
 	var rawAutodiscover string
 
-	//unless user specified nocache, check cache for existing autodiscover
-	if c.GlobalBool("nocache") == false {
-		resp = autodiscover.CheckCache(config.Email)
-	}
+	var mapiURL, abkURL, userDN string
 
-	//var err error
 	//try connect to MAPI/HTTP first -- this is faster and the code-base is more stable
 	//unless of course the global "RPC" flag has been set, which specifies we should just use
 	//RPC/HTTP from the get-go
-	if !c.GlobalBool("rpc") {
-		var mapiURL, abkURL, userDN string
+	if c.GlobalString("config") != "" {
+		var yamlConfig utils.YamlConfig
+		if yamlConfig, err = utils.ReadYml(c.GlobalString("config")); err != nil {
+			utils.Error.Println("Invalid Config file.")
+			return err
+		}
 
-		resp, rawAutodiscover, err = autodiscover.GetMapiHTTP(config.Email, url, resp)
-		if err != nil {
-			exit(err)
+		//set all fields from yamlConfig into config (this overrides cmdline options)
+		if yamlConfig.Username != "" {
+			config.User = yamlConfig.Username
+		}
+		if yamlConfig.Password != "" {
+			config.Pass = yamlConfig.Password
+		}
+		if yamlConfig.Email != "" {
+			config.Email = yamlConfig.Email
+		}
+		if yamlConfig.Hash != "" {
+			if config.NTHash, err = hex.DecodeString(yamlConfig.Hash); err != nil {
+				return fmt.Errorf("Invalid hash provided. Hex decode failed")
+			}
+		}
+
+		if config.Pass == "" {
+			fmt.Printf("Password: ")
+			var pass []byte
+			pass, err = gopass.GetPasswd()
+			if err != nil {
+				// Handle gopass.ErrInterrupted or getch() read error
+				return fmt.Errorf("Password or hash required. Supply NTLM hash with --hash")
+			}
+			config.Pass = string(pass)
+		}
+
+		if yamlConfig.RPC == true {
+			//create RPC URL
+			config.RPCURL = fmt.Sprintf("%s?%s:6001", yamlConfig.RPCURL, yamlConfig.Mailbox)
+			config.RPCEncrypt = yamlConfig.RPCEncrypt
+			//mapi.Init(&config, yamlConfig.UserDN, "", "", mapi.RPC)
+		} else {
+			mapiURL = fmt.Sprintf("%s?MailboxId=%s", yamlConfig.MapiURL, yamlConfig.Mailbox)
+			//mapi.Init(&config, yamlConfig.UserDN, mapiURL, "", mapi.HTTP)
+		}
+		userDN = yamlConfig.UserDN
+
+	} else if !c.GlobalBool("rpc") {
+		if c.GlobalBool("nocache") == false { //unless user specified nocache, check cache for existing autodiscover
+			resp = autodiscover.CheckCache(config.Email)
+		}
+		if resp == nil {
+			resp, rawAutodiscover, err = autodiscover.GetMapiHTTP(config.Email, url, resp)
+			if err != nil {
+				exit(err)
+			}
 		}
 		mapiURL = mapi.ExtractMapiURL(resp)
 		abkURL = mapi.ExtractMapiAddressBookURL(resp)
@@ -309,7 +353,7 @@ func connect(c *cli.Context) error {
 			if resp.Response.User.LegacyDN == "" {
 				return fmt.Errorf("Both MAPI/HTTP and RPC/HTTP failed. Are the credentials valid? \n%s", resp.Response.Error)
 			}
-			mapi.Init(&config, resp.Response.User.LegacyDN, "", "", mapi.RPC)
+
 			if c.GlobalBool("nocache") == false {
 				autodiscover.CreateCache(config.Email, rawAutodiscover) //store the autodiscover for future use
 			}
@@ -318,7 +362,7 @@ func connect(c *cli.Context) error {
 			utils.Trace.Println("MAPI URL found: ", mapiURL)
 			utils.Trace.Println("MAPI AddressBook URL found: ", abkURL)
 
-			mapi.Init(&config, userDN, mapiURL, abkURL, mapi.HTTP)
+			//mapi.Init(&config, userDN, mapiURL, abkURL, mapi.HTTP)
 			if c.GlobalBool("nocache") == false {
 				autodiscover.CreateCache(config.Email, rawAutodiscover) //store the autodiscover for future use
 			}
@@ -326,14 +370,26 @@ func connect(c *cli.Context) error {
 
 	} else {
 		utils.Trace.Println("RPC/HTTP forced, trying RPC/HTTP")
-		resp, rawAutodiscover, config.RPCURL, config.RPCMailbox, config.RPCNtlm, err = autodiscover.GetRPCHTTP(config.Email, url, resp)
-		if err != nil {
-			exit(err)
+		if c.GlobalBool("nocache") == false { //unless user specified nocache, check cache for existing autodiscover
+			resp = autodiscover.CheckCache(config.Email)
 		}
-		mapi.Init(&config, resp.Response.User.LegacyDN, "", "", mapi.RPC)
+		if resp == nil {
+			resp, rawAutodiscover, config.RPCURL, config.RPCMailbox, config.RPCNtlm, err = autodiscover.GetRPCHTTP(config.Email, url, resp)
+			if err != nil {
+				exit(err)
+			}
+		}
+		userDN = resp.Response.User.LegacyDN
+
 		if c.GlobalBool("nocache") == false {
 			autodiscover.CreateCache(config.Email, rawAutodiscover) //store the autodiscover for future use
 		}
+	}
+
+	if config.RPCURL != "" {
+		mapi.Init(&config, userDN, "", "", mapi.RPC)
+	} else {
+		mapi.Init(&config, userDN, mapiURL, abkURL, mapi.HTTP)
 	}
 
 	//now we should do the login
@@ -630,6 +686,11 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 			Name:  "cookie",
 			Value: "",
 			Usage: "Any third party cookies such as SSO that are needed",
+		},
+		cli.StringFlag{
+			Name:  "config",
+			Value: "",
+			Usage: "The path to a config file to use",
 		},
 		cli.StringFlag{
 			Name:  "url",
