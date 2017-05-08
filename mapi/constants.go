@@ -606,3 +606,4 @@ var PidTag6827 = PropertyTag{PtypString8, 0x6827}
 var PidTag6B00 = PropertyTag{PtypString8, 0x6B00}
 var PidTag6902 = PropertyTag{0x001E, 0x6902}
 var PidTag6900 = PropertyTag{0x0003, 0x6900}
+var PidTagComment = PropertyTag{PtypString, 0x3004}

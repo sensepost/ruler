@@ -1025,22 +1025,16 @@ func WriteAttachmentProperty(folderid, messageid []byte, attachmentid uint32, pr
 		if _, e = setStreamSizeResp.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
 			return nil, e
 		}
-		/*
-			utils.Debug.Println("Get Message: ", getMessageResp)
-			utils.Debug.Println("Get AttachTbl: ", getAttachmentTblResp)
-			utils.Debug.Println("Get Attach: ", getAttachmentResp)
-			utils.Debug.Println("Open Stream: ", openStreamResp)
-			utils.Debug.Println("Set Stream: ", setStreamSizeResp)
-			utils.Debug.Println("Stream Size: ", len(propData))
-		*/
+
 		serverHandles := execResponse.RopBuffer[len(execResponse.RopBuffer)-12:]
 		//messageHandles := execResponse.RopBuffer[len(execResponse.RopBuffer)-12:]
-
+		utils.Debug.Printf("Starting Upload")
 		//lets split it..
 		index := 0
-		split := 2000
+		split := 3000
 		piecescnt := len(propData) / split
 		for kk := 0; kk < piecescnt; kk++ {
+			utils.Debug.Printf("Writing %d of %d", kk, piecescnt)
 			var body []byte
 			if index+split < len(propData) {
 				body = propData[index : index+split]
@@ -1067,7 +1061,8 @@ func WriteAttachmentProperty(folderid, messageid []byte, attachmentid uint32, pr
 			}
 
 		}
-		if len(propData) < split || piecescnt == 0 || len(propData) > split*piecescnt {
+		if len(propData) < split || piecescnt == 0 || len(propData) >= split*piecescnt {
+			utils.Debug.Printf("Writing final piece %d of %d", piecescnt, piecescnt)
 			body := propData[index:]
 			execRequest := ExecuteRequest{}
 			execRequest.Init()
