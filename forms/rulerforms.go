@@ -1,6 +1,7 @@
 package forms
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
 	"os"
@@ -89,9 +90,9 @@ func CreateFormAttachmentWithTemplate(folderid, messageid []byte, pstr, template
 }
 
 //CreateFormMessage creates the associate message that holds the form data
-func CreateFormMessage(suffix string) ([]byte, error) {
+func CreateFormMessage(suffix, assocRule string) ([]byte, error) {
 	folderid := mapi.AuthSession.Folderids[mapi.INBOX]
-	propertyTagx := make([]mapi.TaggedPropertyValue, 8)
+	propertyTagx := make([]mapi.TaggedPropertyValue, 9)
 	var err error
 
 	propertyTagx[0] = mapi.TaggedPropertyValue{PropertyTag: mapi.PidTagMessageClass, PropertyValue: utils.UniString("IPM.Microsoft.FolderDesign.FormsDescription")}
@@ -102,6 +103,7 @@ func CreateFormMessage(suffix string) ([]byte, error) {
 	propertyTagx[5] = mapi.TaggedPropertyValue{PropertyTag: mapi.PidTagDisplayName, PropertyValue: utils.UniString(" ")}     //Keep the name "invisible" - there will be an entry in the UI but it will be appear blank - since it's simply a space
 	propertyTagx[6] = mapi.TaggedPropertyValue{PropertyTag: mapi.PidTagSendOutlookRecallReport, PropertyValue: []byte{0xFF}} //set to true for form to be hidden :)
 	propertyTagx[7] = mapi.TaggedPropertyValue{PropertyTag: mapi.PidTag6830, PropertyValue: append([]byte("&Open"), []byte{0x00}...)}
+	propertyTagx[8] = mapi.TaggedPropertyValue{PropertyTag: mapi.PidTagComment, PropertyValue: utils.UniString(assocRule)} //set this to indicate that a rule is present for this form
 
 	//create the message in the "associated" contents table for the inbox
 	msg, err := mapi.CreateAssocMessage(folderid, propertyTagx)
@@ -186,15 +188,17 @@ func CreateFormTriggerMessage(suffix, subject, body string) ([]byte, error) {
 //DeleteForm is used to delete a specific form stored in an associated table
 func DeleteForm(suffix string, folderid []byte) ([]byte, error) {
 
-	columns := make([]mapi.PropertyTag, 2)
+	columns := make([]mapi.PropertyTag, 3)
 	columns[0] = mapi.PidTagOfflineAddressBookName
 	columns[1] = mapi.PidTagMid
+	columns[2] = mapi.PidTagComment
 
 	assoctable, err := mapi.GetAssociatedContents(folderid, columns)
 	if err != nil {
 		return nil, err
 	}
 	var foundMsgID []byte
+	var hasRule string
 	for k := 0; k < len(assoctable.RowData); k++ {
 		if assoctable.RowData[k][0].Flag != 0x00 {
 			continue
@@ -203,6 +207,7 @@ func DeleteForm(suffix string, folderid []byte) ([]byte, error) {
 		messageid := assoctable.RowData[k][1].ValueArray
 		if name != "" && name == fmt.Sprintf("IPM.Note.%s", suffix) {
 			foundMsgID = messageid
+			hasRule = utils.FromUnicode(assoctable.RowData[k][2].ValueArray)
 			break
 		}
 	}
@@ -211,8 +216,35 @@ func DeleteForm(suffix string, folderid []byte) ([]byte, error) {
 	}
 
 	//delete the message
-	if _, err := mapi.DeleteMessages(folderid, 1, foundMsgID); err != nil {
+	if _, err = mapi.DeleteMessages(folderid, 1, foundMsgID); err != nil {
 		return nil, err
+	}
+
+	utils.Info.Println("Form deleted successfully.")
+
+	if hasRule != "NORULE" && hasRule != "" {
+		utils.Question.Print("The form has an associated rule, delete this? [y/N]: ")
+		reader := bufio.NewReader(os.Stdin)
+		ans, _ := reader.ReadString('\n')
+		if ans == "y\n" || ans == "Y\n" || ans == "yes\n" {
+			rules, er := mapi.DisplayRules()
+			if er != nil {
+				return nil, er
+			}
+			for _, v := range rules {
+				if utils.FromUnicode(v.RuleName) == hasRule {
+					ruleid := v.RuleID
+					err = mapi.ExecuteMailRuleDelete(ruleid)
+					if err != nil {
+						utils.Error.Printf("Failed to delete rule")
+						return nil, err
+					}
+					utils.Info.Println("Rule deleted successfully")
+				}
+			}
+		} else {
+			utils.Info.Printf("Rule not deleted. To delete rule, use rule name [%s]\n", hasRule)
+		}
 	}
 
 	return nil, nil
@@ -235,12 +267,10 @@ func DisplayForms(folderid []byte) error {
 		if assoctable.RowData[k][0].Flag != 0x00 {
 			continue
 		}
-		//utils.Debug.Println(assoctable.RowData[k][0].ValueArray)
+
 		name := utils.FromUnicode(assoctable.RowData[k][0].ValueArray)
 		if name != "" && len(name) > 3 {
-			if byte(name[0]) != 0x0a {
-				forms = append(forms, name)
-			}
+			forms = append(forms, name)
 		}
 	}
 	if len(forms) > 0 {
@@ -252,5 +282,32 @@ func DisplayForms(folderid []byte) error {
 		utils.Info.Printf("No Forms Found\n")
 	}
 
+	return nil
+}
+
+//CheckForm verfies that a form does not already exist.
+//having multiple forms with same suffix causes issues in outlook..
+func CheckForm(folderid []byte, suffix string) error {
+	columns := make([]mapi.PropertyTag, 2)
+	columns[0] = mapi.PidTagOfflineAddressBookName
+	columns[1] = mapi.PidTagMid
+
+	assoctable, err := mapi.GetAssociatedContents(folderid, columns)
+	if err != nil {
+		return err
+	}
+
+	formname := fmt.Sprintf("IPM.Note.%s", suffix)
+
+	for k := 0; k < len(assoctable.RowData); k++ {
+		if assoctable.RowData[k][0].Flag != 0x00 {
+			continue
+		}
+		//utils.Debug.Println(assoctable.RowData[k][0].ValueArray)
+		name := utils.FromUnicode(assoctable.RowData[k][0].ValueArray)
+		if name != "" && name == formname {
+			return fmt.Errorf("Form with suffix [%s] already exists. You can not have multiple forms with the same suffix.", formname)
+		}
+	}
 	return nil
 }

@@ -31,7 +31,6 @@ func Init(
 	Question = log.New(infoHandle, "\033[91m[?] \033[0m", 0)
 	Warning = log.New(warningHandle,
 		"\033[91m[WARNING] \033[0m", 0)
-
 	Error = log.New(errorHandle,
 		"\033[31mERROR\033[0m: ", log.Ldate|log.Ltime)
 }

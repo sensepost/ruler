@@ -3,9 +3,9 @@ email: ""
 password: ""
 hash: ""
 domain: ""
-userdn: ""
-mailbox: ""
+userdn: "/o=First Organization/ou=Exchange Administrative Group(FYDIBOHF23SPDLT)/cn=Recipients/cn=0003BFFDFEF9FB24"
+mailbox: "0003bffd-fef9-fb24-0000-000000000000@outlook.com"
 rpcurl: "https://outlook.office365.com/rpc/rpcproxy.dll"
-rpc: true
+rpc: false
 rpcencrypt: true
 mapiurl: "https://outlook.office365.com/mapi/emsmdb/"
