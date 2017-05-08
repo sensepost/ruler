@@ -24,6 +24,7 @@ var callcounter int
 var responses = make([]RPCResponse, 0)
 var httpResponses = make([][]byte, 0)
 var rpcntlmsession ntlm.ClientSession
+var fragged bool = false
 
 //AuthSession Keep track of session data
 var AuthSession *utils.Session
@@ -188,7 +189,7 @@ func RPCOpen(URL string, readySignal chan bool, errOccurred chan error) (err err
 			readySignal <- false
 			return err
 		}
-	case <-time.After(time.Second * 10): // call timed out
+	case <-time.After(time.Second * 5): // call timed out
 		//utils.Warning.Println("Got timedou!")
 		readySignal <- true
 	}
@@ -605,5 +606,59 @@ func SplitData(data []byte, atEOF bool) (advance int, token []byte, err error) {
 		return len(data), data, nil
 	}
 
-	return
+	return 0, nil, nil
+}
+
+//SplitData is used to scan through the input stream and split data into individual responses
+func SsplitData(data []byte, atEOF bool) (advance int, token []byte, err error) {
+	if atEOF && len(data) == 0 {
+		return 0, nil, nil
+	}
+
+	//check if HTTP response
+	if string(data[0:4]) == "HTTP" {
+		for k := range data {
+			if bytes.Equal(data[k:k+4], []byte{0x0d, 0x0a, 0x0d, 0x0a}) {
+				if bytes.Equal(data[k+4:k+5], []byte{0x31}) {
+					fragged = true
+				}
+				return k + 4, data[0:k], nil //data[0:k], nil
+			}
+		}
+	}
+
+	if fragged {
+		//find next 0x0d,0x0a
+		for k := range data {
+			if bytes.Equal(data[k:k+2], []byte{0x0d, 0x0a}) {
+				if len(data) < 12 {
+					return 0, nil, nil
+				}
+				fragLen := int(utils.DecodeUint16(data[k+10 : k+12]))
+
+				if len(data) < fragLen {
+					return 0, nil, nil
+				}
+				dbuf := data[k+2 : k+fragLen+2]
+
+				return k + len(dbuf) + 4, dbuf, nil
+			}
+		}
+	} else {
+		if len(data) < 12 {
+			return 0, nil, nil
+		}
+		fragLen := int(utils.DecodeUint16(data[8:10]))
+		if len(data) < fragLen {
+			return 0, nil, nil
+		}
+		dbuf := data[:fragLen]
+		return len(dbuf), dbuf, nil
+	}
+
+	if atEOF {
+		return len(data), data, nil
+	}
+
+	return 0, nil, nil
 }
