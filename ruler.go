@@ -179,10 +179,6 @@ func sendMessage(subject, body string) error {
 //Function to connect to the Exchange server
 func connect(c *cli.Context) error {
 	var err error
-	//check that name, trigger and location were supplied
-	//if c.GlobalString("email") == "" && c.GlobalString("username") == "" {
-
-	//}
 	//if no password or hash was supplied, read from stdin
 	if c.GlobalString("password") == "" && c.GlobalString("hash") == "" && c.GlobalString("config") == "" {
 		fmt.Printf("Password: ")
@@ -203,9 +199,7 @@ func connect(c *cli.Context) error {
 	//setup our autodiscover service
 	config.Domain = c.GlobalString("domain")
 	config.User = c.GlobalString("username")
-
 	config.Email = c.GlobalString("email")
-
 	config.Basic = c.GlobalBool("basic")
 	config.Insecure = c.GlobalBool("insecure")
 	config.Verbose = c.GlobalBool("verbose")
