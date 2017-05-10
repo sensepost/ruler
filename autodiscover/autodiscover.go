@@ -386,7 +386,7 @@ func redirectAutodiscover(redirdom string) (string, error) {
 	return resp.Header.Get("Location"), nil
 }
 
-//InsecureRedirects allows forwarding the Authorization header even when we shouldn't
+//InsecureRedirectsO365 allows forwarding the Authorization header even when we shouldn't
 type InsecureRedirectsO365 struct {
 	Transport http.RoundTripper
 	User      string
