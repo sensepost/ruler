@@ -259,7 +259,7 @@ func connect(autodiscoverURL, user, password string, basic, insecure bool) Resul
 	if err != nil {
 		//check if this error was because of ntml auth when basic auth was expected.
 		if m, _ := regexp.Match("illegal base64", []byte(err.Error())); m == true {
-			client = http.Client{}
+			client = http.Client{Transport: InsecureRedirectsO365{User: user, Pass: password, Insecure: insecure}}
 			resp, err = client.Do(req)
 		} else {
 			result.Error = err
