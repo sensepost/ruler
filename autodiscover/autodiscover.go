@@ -285,7 +285,7 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, string, er
 	if err != nil {
 		//check if this error was because of ntml auth when basic auth was expected.
 		if m, _ := regexp.Match("illegal base64", []byte(err.Error())); m == true {
-			client = http.Client{Transport: InsecureRedirects{}}
+			client = http.Client{Transport: InsecureRedirectsO365{User: SessionConfig.Email, Pass: SessionConfig.Pass, Insecure: SessionConfig.Insecure}}
 			resp, err = client.Do(req)
 			if err != nil {
 				return nil, "", err
@@ -387,14 +387,17 @@ func redirectAutodiscover(redirdom string) (string, error) {
 }
 
 //InsecureRedirects allows forwarding the Authorization header even when we shouldn't
-type InsecureRedirects struct {
+type InsecureRedirectsO365 struct {
 	Transport http.RoundTripper
+	User      string
+	Pass      string
+	Insecure  bool
 }
 
 //RoundTrip custom redirector that allows us to forward the auth header, even when the domain changes.
 //This is needed as some office365 domains will redirect from autodiscover.domain.com to autodiscover.outlook.com
 //and Go does not forward Sensitive headers such as Authorization (https://golang.org/src/net/http/client.go#41)
-func (l InsecureRedirects) RoundTrip(req *http.Request) (resp *http.Response, err error) {
+func (l InsecureRedirectsO365) RoundTrip(req *http.Request) (resp *http.Response, err error) {
 	t := l.Transport
 	if t == nil {
 		t = http.DefaultTransport
@@ -412,18 +415,18 @@ func (l InsecureRedirects) RoundTrip(req *http.Request) (resp *http.Response, er
 		r, _ := parseTemplate(autodiscoverXML)
 		//if the domains are different, we need to force the auth cookie to be passed along.. this is for redirects to office365
 		client := http.Client{Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: SessionConfig.Insecure},
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: l.Insecure},
 		}}
 
 		req, err = http.NewRequest("POST", URL.String(), strings.NewReader(r))
 		req.Header.Add("Content-Type", "text/xml")
 		req.Header.Add("User-Agent", "ruler")
 
-		req.Header.Add("X-MapiHttpCapability", "1")            //we want MAPI info
-		req.Header.Add("X-AnchorMailbox", SessionConfig.Email) //we want MAPI info
+		req.Header.Add("X-MapiHttpCapability", "1") //we want MAPI info
+		req.Header.Add("X-AnchorMailbox", l.User)   //we want MAPI info
 
 		req.URL, _ = url.Parse(resp.Header.Get("Location"))
-		req.SetBasicAuth(SessionConfig.Email, SessionConfig.Pass)
+		req.SetBasicAuth(l.User, l.Pass)
 
 		resp, err = client.Do(req)
 
