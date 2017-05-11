@@ -321,6 +321,7 @@ func connect(c *cli.Context) error {
 			//create RPC URL
 			config.RPCURL = fmt.Sprintf("%s?%s:6001", yamlConfig.RPCURL, yamlConfig.Mailbox)
 			config.RPCEncrypt = yamlConfig.RPCEncrypt
+			config.RPCNtlm = yamlConfig.Ntlm
 		} else {
 			mapiURL = fmt.Sprintf("%s?MailboxId=%s", yamlConfig.MapiURL, yamlConfig.Mailbox)
 		}

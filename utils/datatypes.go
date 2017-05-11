@@ -71,6 +71,7 @@ type YamlConfig struct {
 	RPCURL     string
 	RPC        bool
 	RPCEncrypt bool
+	Ntlm       bool
 	MapiURL    string
 }
 
