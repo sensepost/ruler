@@ -43,3 +43,8 @@ The library included with Ruler allows for the creation of custom message using 
 [Releases]: <https://github.com/sensepost/ruler/releases>
 [SensePost Liniaal]:<https://github.com/sensepost/liniaal>
 [wiki]:<https://github.com/sensepost/ruler/wiki>
+[BruteForce]:<https://github.com/sensepost/ruler/wiki/Brute-Force>
+[Rules]:<https://github.com/sensepost/ruler/wiki/Rules>
+[Forms]:<https://github.com/sensepost/ruler/wiki/Forms>
+[GAL]:<https://github.com/sensepost/ruler/wiki/GAL>
+[getting-started guide]:<https://github.com/sensepost/ruler/wiki/Getting-Started>
