@@ -26,3 +26,5 @@ _testmain.go
 ruler-*
 ruler
 logs/
+
+build.sh
