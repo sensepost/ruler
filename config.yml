@@ -8,4 +8,5 @@ mailbox: "0003bffd-fef9-fb24-0000-000000000000@outlook.com"
 rpcurl: "https://outlook.office365.com/rpc/rpcproxy.dll"
 rpc: false
 rpcencrypt: true
+ntlm: true
 mapiurl: "https://outlook.office365.com/mapi/emsmdb/"
