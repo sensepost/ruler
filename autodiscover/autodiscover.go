@@ -239,7 +239,6 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, string, er
 
 	if m, _ := regexp.Match("http[s]?://", []byte(domain)); m == true {
 		autodiscoverURL = domain
-		autodiscoverStep = 2
 	} else {
 		//create the autodiscover url
 		if autodiscoverStep == 0 {
@@ -352,6 +351,9 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, string, er
 		}
 		if SessionConfig.Verbose == true {
 			utils.Error.Printf("Failed, StatusCode [%d]\n", resp.StatusCode)
+		}
+		if m, _ := regexp.Match("http[s]?://", []byte(domain)); m == true {
+			return nil, "", fmt.Errorf("Failed to authenticate: StatusCode [%d]\n", resp.StatusCode)
 		}
 		if autodiscoverStep < 2 {
 			autodiscoverStep++
