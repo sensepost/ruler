@@ -2,7 +2,10 @@
 
 Ruler is a tool that allows you to interact with Exchange servers remotely, through either the MAPI/HTTP or RPC/HTTP protocol. The main aim is abuse the client-side Outlook features and gain a shell remotely.
 
-The full low-down on how Ruler was implemented and some background regarding MAPI can be found in our blog posts: [Ruler release], [Pass the Hash with Ruler], [Outlook forms and shells].
+The full low-down on how Ruler was implemented and some background regarding MAPI can be found in our blog posts:
+* [Ruler release]
+* [Pass the Hash with Ruler]
+* [Outlook forms and shells].
 
 For a demo of it in action: [Ruler on YouTube]
 
