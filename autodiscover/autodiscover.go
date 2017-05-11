@@ -239,6 +239,7 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, string, er
 
 	if m, _ := regexp.Match("http[s]?://", []byte(domain)); m == true {
 		autodiscoverURL = domain
+		autodiscoverStep = 2
 	} else {
 		//create the autodiscover url
 		if autodiscoverStep == 0 {
