@@ -35,6 +35,10 @@ Ruler has multiple functions, these have their own documentation that can be fou
 
 The library included with Ruler allows for the creation of custom message using MAPI. This along with the Exchnage documentation is a great starting point for new research. For an example of using this library in another project, see [SensePost Liniaal].
 
+# License
+[![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey.svg)](http://creativecommons.org/licenses/by-nc-sa/4.0/)
+Wadi is licensed under a Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License (http://creativecommons.org/licenses/by-nc-sa/4.0/) Permissions beyond the scope of this license may be available at http://sensepost.com/contact us/.
+
 
 [Ruler Release]: <https://sensepost.com/blog/2016/mapi-over-http-and-mailrule-pwnage/>
 [Pass the hash with Ruler]: <https://sensepost.com/blog/2017/pass-the-hash-with-ruler/>
