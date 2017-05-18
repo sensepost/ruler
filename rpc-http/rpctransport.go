@@ -388,6 +388,7 @@ func DoConnectExRequest(MAPI []byte, auxLen uint32) ([]byte, error) {
 	//decrypt response PDU
 	if AuthSession.RPCNetworkAuthLevel == RPC_C_AUTHN_LEVEL_PKT_PRIVACY {
 		dec, _ := rpcntlmsession.UnSeal(resp.PDU[8:])
+		fmt.Println(string(dec))
 		AuthSession.ContextHandle = dec[4:20] //decrypted
 	} else {
 		AuthSession.ContextHandle = resp.PDU[12:28]
@@ -552,6 +553,7 @@ func RPCRead(callID int) (RPCResponse, error) {
 		for k, v := range httpResponses {
 			st := string(v)
 			if er := strings.Split(strings.Split(st, "\r\n")[0], " "); er[1] != "200" {
+				utils.Debug.Println(st)
 				return RPCResponse{}, fmt.Errorf("Invalid HTTP response: %s", er)
 			}
 			httpResponses = append(httpResponses[:k], httpResponses[k+1:]...)

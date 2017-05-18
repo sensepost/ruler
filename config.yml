@@ -3,8 +3,8 @@ email: ""
 password: ""
 hash: ""
 domain: ""
-userdn: "/o=First Organization/ou=Exchange Administrative Group(FYDIBOHF23SPDLT)/cn=Recipients/cn=0003BFFDFEF9FB24"
-mailbox: "0003bffd-fef9-fb24-0000-000000000000@outlook.com"
+userdn: "/o=ExchangeLabs/ou=Exchange Administrative Group (FYDIBOHF23SPDLT)/cn=Recipients/cn=130d3c8295784d0aa504b05fe83a"
+mailbox: "d4094721-eafc-483d-adf4-4f39fe6bbc"
 rpcurl: "https://outlook.office365.com/rpc/rpcproxy.dll"
 rpc: false
 rpcencrypt: true

@@ -28,3 +28,4 @@ ruler
 logs/
 
 build.sh
+config.yml
