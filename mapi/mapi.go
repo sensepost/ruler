@@ -56,16 +56,32 @@ func Init(config *utils.Session, lid, URL, ABKURL string, transport int) {
 	if transport == HTTP {
 		AuthSession.URL, _ = url.Parse(URL)
 		AuthSession.ABKURL, _ = url.Parse(ABKURL)
-		client = http.Client{
-			Transport: &httpntlm.NtlmTransport{
-				Domain:    AuthSession.Domain,
-				User:      AuthSession.User,
-				Password:  AuthSession.Pass,
-				NTHash:    AuthSession.NTHash,
-				Insecure:  AuthSession.Insecure,
-				CookieJar: AuthSession.CookieJar,
-			},
-			Jar: AuthSession.CookieJar,
+		if AuthSession.Basic == true {
+			var Transport http.Transport
+			if AuthSession.Proxy == "" {
+				Transport = http.Transport{
+					TLSClientConfig: &tls.Config{InsecureSkipVerify: AuthSession.Insecure},
+				}
+			} else {
+				proxyURL, _ := url.Parse(AuthSession.Proxy)
+				Transport = http.Transport{Proxy: http.ProxyURL(proxyURL),
+					TLSClientConfig: &tls.Config{InsecureSkipVerify: AuthSession.Insecure},
+				}
+			}
+			client = http.Client{Jar: AuthSession.CookieJar, Transport: &Transport}
+		} else {
+			client = http.Client{
+				Transport: &httpntlm.NtlmTransport{
+					Domain:    AuthSession.Domain,
+					User:      AuthSession.User,
+					Password:  AuthSession.Pass,
+					NTHash:    AuthSession.NTHash,
+					Insecure:  AuthSession.Insecure,
+					CookieJar: AuthSession.CookieJar,
+					Proxy:     AuthSession.Proxy,
+				},
+				Jar: AuthSession.CookieJar,
+			}
 		}
 	} else {
 		AuthSession.URL, _ = url.Parse(AuthSession.RPCURL)
@@ -105,10 +121,12 @@ func sendMapiRequest(mapi ExecuteRequest) (*ExecuteResponse, error) {
 	var err error
 	if AuthSession.Transport == HTTP { //this is always going to be an "Execute" request
 		if rawResp, err = mapiRequestHTTP(AuthSession.URL.String(), "Execute", mapi.Marshal()); err != nil {
+			utils.Debug.Println(rawResp)
 			return nil, err
 		}
 	} else {
 		if rawResp, err = mapiRequestRPC(mapi); err != nil {
+			utils.Debug.Println(rawResp)
 			return nil, err
 		}
 	}
@@ -145,10 +163,7 @@ func mapiRequestHTTP(URL, mapiType string, body []byte) ([]byte, error) {
 	if err != nil {
 		//check if this error was because of ntml auth when basic auth was expected.
 		if m, _ := regexp.Match("illegal base64", []byte(err.Error())); m == true {
-			AuthSession.Client = http.Client{Jar: AuthSession.CookieJar, Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{InsecureSkipVerify: AuthSession.Insecure},
-			}}
-			resp, err = AuthSession.Client.Do(req)
+			resp, err = client.Do(req)
 		} else {
 			return nil, err //&TransportError{err}
 		}
@@ -422,6 +437,12 @@ func AuthenticateFetchMailbox(essdn []byte) (*RopLogonResponse, error) {
 
 		logonResponse := RopLogonResponse{}
 		logonResponse.Unmarshal(execResponse.RopBuffer)
+		if len(logonResponse.FolderIds) == 0 {
+			if AuthSession.Admin {
+				return nil, fmt.Errorf("Unable to retrieve mailbox as admin")
+			}
+			return nil, fmt.Errorf("Unable to retrieve mailbox as user")
+		}
 		specialFolders(logonResponse.FolderIds)
 		return &logonResponse, nil
 	}

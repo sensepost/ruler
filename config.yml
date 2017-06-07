@@ -1,12 +1,12 @@
 username: ""
-email: ""
-password: ""
+email: "etienne@0x04.cc"
+password: "Koosis'ndoos"
 hash: ""
 domain: ""
-userdn: "/o=ExchangeLabs/ou=Exchange Administrative Group (FYDIBOHF23SPDLT)/cn=Recipients/cn=130d3c8295784d0aa504b05fe83a"
-mailbox: "d4094721-eafc-483d-adf4-4f39fe6bbc"
+userdn: "/o=ExchangeLabs/ou=Exchange Administrative Group (FYDIBOHF23SPDLT)/cn=Recipients/cn=130d3c8295784d0aa504b05fe83acd7b-etienne"
+mailbox: "d4094721-eafc-483d-adf4-4f39fe6bbc22@0x04.cc"
 rpcurl: "https://outlook.office365.com/rpc/rpcproxy.dll"
-rpc: false
+rpc: true 
 rpcencrypt: true
-ntlm: true
+ntlm: false 
 mapiurl: "https://outlook.office365.com/mapi/emsmdb/"

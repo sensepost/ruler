@@ -206,7 +206,7 @@ func connect(c *cli.Context) error {
 	config.Admin = c.GlobalBool("admin")
 	config.RPCEncrypt = !c.GlobalBool("noencrypt")
 	config.CookieJar, _ = cookiejar.New(nil)
-
+	config.Proxy = c.GlobalString("proxy")
 	//add supplied cookie to the cookie jar
 	if c.GlobalString("cookie") != "" {
 		//split into cookies and then into name : value
@@ -722,6 +722,11 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 			Name:  "url",
 			Value: "",
 			Usage: "If you know the Autodiscover URL or the autodiscover service is failing. Requires full URI, https://autodisc.d.com/autodiscover/autodiscover.xml",
+		},
+		cli.StringFlag{
+			Name:  "proxy",
+			Value: "",
+			Usage: "If you need to use an upstream proxy. Works with https://user:pass@ip:port or https://ip:port",
 		},
 		cli.BoolFlag{
 			Name:  "insecure,k",

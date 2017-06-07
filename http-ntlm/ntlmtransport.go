@@ -10,10 +10,12 @@ package httpntlm
 import (
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"net/http/cookiejar"
+	"net/url"
 	"strings"
 	"time"
 
@@ -26,10 +28,13 @@ type NtlmTransport struct {
 	Domain    string
 	User      string
 	Password  string
+	Proxy     string
 	NTHash    []byte
 	Insecure  bool
 	CookieJar *cookiejar.Jar
 }
+
+var Transport http.Transport
 
 // RoundTrip method send http request and tries to perform NTLM authentication
 func (t NtlmTransport) RoundTrip(req *http.Request) (res *http.Response, err error) {
@@ -50,9 +55,21 @@ func (t NtlmTransport) RoundTrip(req *http.Request) (res *http.Response, err err
 	r, _ := http.NewRequest("GET", req.URL.String(), strings.NewReader(""))
 	r.Header.Add("Authorization", "NTLM "+utils.EncBase64(b.Bytes()))
 
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: t.Insecure},
+	if t.Proxy == "" {
+		Transport = http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: t.Insecure},
+		}
+	} else {
+		proxyURL, e := url.Parse(t.Proxy)
+		if e != nil {
+			return nil, fmt.Errorf("Invalid proxy url format %s", e)
+		}
+		Transport = http.Transport{Proxy: http.ProxyURL(proxyURL),
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: t.Insecure},
+		}
 	}
+
+	tr := &Transport
 
 	client := http.Client{Transport: tr, Timeout: time.Minute, Jar: t.CookieJar}
 

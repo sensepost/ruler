@@ -107,7 +107,6 @@ func setupHTTP(rpctype string, URL string, ntlmAuth bool, full bool) (net.Conn, 
 				}
 			}
 		}
-		//utils.Trace.Println(string(data))
 
 		ntlmChallengeString := strings.Replace(ntlmChallengeHeader, "NTLM ", "", 1)
 		challengeBytes, err := utils.DecBase64(ntlmChallengeString)
@@ -127,10 +126,12 @@ func setupHTTP(rpctype string, URL string, ntlmAuth bool, full bool) (net.Conn, 
 		// parse NTLM challenge
 		challenge, err := ntlm.ParseChallengeMessage(challengeBytes)
 		if err != nil {
+			utils.Debug.Println(string(data))
 			return nil, err
 		}
 		err = session.ProcessChallengeMessage(challenge)
 		if err != nil {
+			utils.Debug.Println(string(data))
 			return nil, err
 		}
 		// authenticate user
@@ -138,6 +139,7 @@ func setupHTTP(rpctype string, URL string, ntlmAuth bool, full bool) (net.Conn, 
 
 		if err != nil {
 			utils.Error.Println("Authentication Err")
+			utils.Debug.Println(string(data))
 			return nil, err
 		}
 	}
@@ -308,6 +310,7 @@ func RPCBind() error {
 		authenticate, err := rpcntlmsession.GenerateAuthenticateMessageAV()
 
 		if err != nil {
+			utils.Debug.Println(string(resp.Body))
 			return fmt.Errorf("Bad authenticate message %s", err)
 		}
 
@@ -346,7 +349,7 @@ func EcDoRPCExt2(MAPI []byte, auxLen uint32) ([]byte, error) {
 	}
 
 	if len(resp.PDU) < 28 {
-		utils.Error.Println(resp)
+		utils.Debug.Println(resp)
 		return nil, fmt.Errorf("Invalid response.")
 	}
 
@@ -384,17 +387,17 @@ func DoConnectExRequest(MAPI []byte, auxLen uint32) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-
+	var dec []byte
 	//decrypt response PDU
 	if AuthSession.RPCNetworkAuthLevel == RPC_C_AUTHN_LEVEL_PKT_PRIVACY {
-		dec, _ := rpcntlmsession.UnSeal(resp.PDU[8:])
-		fmt.Println(string(dec))
+		dec, _ = rpcntlmsession.UnSeal(resp.PDU[8:])
 		AuthSession.ContextHandle = dec[4:20] //decrypted
 	} else {
 		AuthSession.ContextHandle = resp.PDU[12:28]
 	}
 
 	if utils.DecodeUint32(AuthSession.ContextHandle[0:4]) == 0x0000 {
+		utils.Debug.Printf("%s\n%x\n", string(dec), resp)
 		return nil, fmt.Errorf("\nUnable to obtain a session context\nTry again using the --encrypt flag. It is possible that the target requires 'Encrypt traffic between Outlook and Exchange' to be enabled")
 	}
 
@@ -552,9 +555,13 @@ func RPCRead(callID int) (RPCResponse, error) {
 		//check if there is a 401 or other error message
 		for k, v := range httpResponses {
 			st := string(v)
-			if er := strings.Split(strings.Split(st, "\r\n")[0], " "); er[1] != "200" {
+
+			if er := strings.Split(strings.Split(st, "\r\n")[0], " "); len(er) > 1 && er[1] != "200" {
 				utils.Debug.Println(st)
 				return RPCResponse{}, fmt.Errorf("Invalid HTTP response: %s", er)
+			} else if len(er) <= 1 {
+				utils.Debug.Println(st)
+				return RPCResponse{}, fmt.Errorf("Invalid HTTP response: %s", st)
 			}
 			httpResponses = append(httpResponses[:k], httpResponses[k+1:]...)
 		}
