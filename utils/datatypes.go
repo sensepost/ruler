@@ -17,6 +17,7 @@ type Config struct {
 	Insecure bool
 	Verbose  bool
 	Admin    bool
+	Proxy    string
 }
 
 //Session stores authentication cookies ect
@@ -25,6 +26,7 @@ type Session struct {
 	Pass          string
 	Email         string
 	Domain        string
+	Proxy         string
 	Basic         bool
 	Insecure      bool
 	Verbose       bool

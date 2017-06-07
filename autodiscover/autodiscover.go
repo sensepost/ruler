@@ -23,6 +23,8 @@ import (
 var SessionConfig *utils.Session
 var autodiscoverStep int
 var secondaryEmail string //a secondary email to use, edge case seen in office365
+var Transport http.Transport
+var useBasic = false
 
 //the xml for the autodiscover service
 const autodiscoverXML = `<?xml version="1.0" encoding="utf-8"?><Autodiscover xmlns="http://schemas.microsoft.com/exchange/autodiscover/outlook/requestschema/2006">
@@ -198,13 +200,39 @@ func CreateCache(email, autodiscover string) {
 
 //Autodiscover function to retrieve mailbox details using the autodiscover mechanism from MS Exchange
 func Autodiscover(domain string) (*utils.AutodiscoverResp, string, error) {
+	if SessionConfig.Proxy == "" {
+		Transport = http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: SessionConfig.Insecure},
+		}
+	} else {
+		proxyURL, err := url.Parse(SessionConfig.Proxy)
+		if err != nil {
+			return nil, "", fmt.Errorf("Invalid proxy url format %s", err)
+		}
+		Transport = http.Transport{Proxy: http.ProxyURL(proxyURL),
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: SessionConfig.Insecure},
+		}
+	}
 	return autodiscover(domain, false)
 }
 
 //MAPIDiscover function to do the autodiscover request but specify the MAPI header
 //indicating that the MAPI end-points should be returned
 func MAPIDiscover(domain string) (*utils.AutodiscoverResp, string, error) {
-	//fmt.Println("Doing Autodiscover for domain")
+	//set transport
+	if SessionConfig.Proxy == "" {
+		Transport = http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: SessionConfig.Insecure},
+		}
+	} else {
+		proxyURL, err := url.Parse(SessionConfig.Proxy)
+		if err != nil {
+			return nil, "", fmt.Errorf("Invalid proxy url format %s", err)
+		}
+		Transport = http.Transport{Proxy: http.ProxyURL(proxyURL),
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: SessionConfig.Insecure},
+		}
+	}
 	return autodiscover(domain, true)
 }
 
@@ -214,9 +242,7 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, string, er
 	autodiscoverResp := utils.AutodiscoverResp{}
 	//for now let's rely on autodiscover.domain/autodiscover/autodiscover.xml
 	//var client http.Client
-	client := http.Client{Transport: &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: SessionConfig.Insecure},
-	}}
+	client := http.Client{Transport: &Transport}
 
 	if SessionConfig.Basic == false {
 		//check if this is a first request or a redirect
@@ -290,13 +316,13 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, string, er
 			if err != nil {
 				return nil, "", err
 			}
+			useBasic = true
 		} else {
 			if autodiscoverStep < 2 {
 				autodiscoverStep++
 				return autodiscover(domain, mapi)
 			}
 			//we've done all three steps of autodiscover and all three failed
-
 			return nil, "", err
 		}
 	}
@@ -310,7 +336,7 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, string, er
 
 	//check if we got a 200 response
 	if resp.StatusCode == 200 {
-
+		SessionConfig.Basic = useBasic
 		err := autodiscoverResp.Unmarshal(body)
 		if err != nil {
 			if SessionConfig.Verbose == true {
@@ -376,9 +402,7 @@ func redirectAutodiscover(redirdom string) (string, error) {
 	//create the autodiscover url
 	autodiscoverURL := fmt.Sprintf("http://autodiscover.%s/autodiscover/autodiscover.xml", redirdom)
 	req, _ := http.NewRequest("GET", autodiscoverURL, nil)
-	var DefaultTransport http.RoundTripper = &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: SessionConfig.Insecure},
-	}
+	var DefaultTransport = &Transport
 	resp, err := DefaultTransport.RoundTrip(req)
 	if err != nil {
 		return "", err
@@ -402,8 +426,9 @@ type InsecureRedirectsO365 struct {
 //and Go does not forward Sensitive headers such as Authorization (https://golang.org/src/net/http/client.go#41)
 func (l InsecureRedirectsO365) RoundTrip(req *http.Request) (resp *http.Response, err error) {
 	t := l.Transport
+
 	if t == nil {
-		t = http.DefaultTransport
+		t = &Transport
 	}
 	resp, err = t.RoundTrip(req)
 	if err != nil {
