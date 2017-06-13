@@ -347,7 +347,6 @@ func connect(c *cli.Context) error {
 		userDN = resp.Response.User.LegacyDN
 
 		if mapiURL == "" { //try RPC
-			utils.Error.Println(resp)
 			resp, rawAutodiscover, config.RPCURL, config.RPCMailbox, config.RPCNtlm, err = autodiscover.GetRPCHTTP(config.Email, url, resp)
 			if err != nil {
 				exit(err)
