@@ -123,6 +123,10 @@ func setupHTTP(rpctype string, URL string, ntlmAuth bool, full bool) (net.Conn, 
 			session.SetNTHash(AuthSession.NTHash)
 		}
 
+		if len(challengeBytes) == 0 {
+			utils.Debug.Println(string(data))
+			return nil, fmt.Errorf("Authentication Error. No NTLM Challenge")
+		}
 		// parse NTLM challenge
 		challenge, err := ntlm.ParseChallengeMessage(challengeBytes)
 		if err != nil {
@@ -138,7 +142,6 @@ func setupHTTP(rpctype string, URL string, ntlmAuth bool, full bool) (net.Conn, 
 		authenticate, err = session.GenerateAuthenticateMessage()
 
 		if err != nil {
-			utils.Error.Println("Authentication Err")
 			utils.Debug.Println(string(data))
 			return nil, err
 		}

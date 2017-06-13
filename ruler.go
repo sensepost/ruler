@@ -347,8 +347,8 @@ func connect(c *cli.Context) error {
 		userDN = resp.Response.User.LegacyDN
 
 		if mapiURL == "" { //try RPC
-			//fmt.Println("No MAPI URL found. Trying RPC/HTTP")
-			resp, _, config.RPCURL, config.RPCMailbox, config.RPCNtlm, err = autodiscover.GetRPCHTTP(config.Email, url, resp)
+			utils.Error.Println(resp)
+			resp, rawAutodiscover, config.RPCURL, config.RPCMailbox, config.RPCNtlm, err = autodiscover.GetRPCHTTP(config.Email, url, resp)
 			if err != nil {
 				exit(err)
 			}
@@ -371,6 +371,7 @@ func connect(c *cli.Context) error {
 		}
 
 	} else {
+
 		if config.User == "" && config.Email == "" {
 			return fmt.Errorf("Missing username and/or email argument. Use --domain (if needed), --username and --email or the --config")
 		}
@@ -379,12 +380,12 @@ func connect(c *cli.Context) error {
 		if c.GlobalBool("nocache") == false { //unless user specified nocache, check cache for existing autodiscover
 			resp = autodiscover.CheckCache(config.Email)
 		}
-		if resp == nil {
-			resp, rawAutodiscover, config.RPCURL, config.RPCMailbox, config.RPCNtlm, err = autodiscover.GetRPCHTTP(config.Email, url, resp)
-			if err != nil {
-				exit(err)
-			}
+
+		resp, rawAutodiscover, config.RPCURL, config.RPCMailbox, config.RPCNtlm, err = autodiscover.GetRPCHTTP(config.Email, url, resp)
+		if err != nil {
+			exit(err)
 		}
+
 		userDN = resp.Response.User.LegacyDN
 
 		if c.GlobalBool("nocache") == false {

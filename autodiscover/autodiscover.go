@@ -117,6 +117,7 @@ func GetRPCHTTP(email, autoURLPtr string, resp *utils.AutodiscoverResp) (*utils.
 	url := ""
 	user := ""
 	ntlmAuth := false
+
 	for _, v := range resp.Response.Account.Protocol {
 		if v.Type == "EXPR" {
 			if v.SSL == "Off" {
