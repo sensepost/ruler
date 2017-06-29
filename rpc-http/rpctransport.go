@@ -558,7 +558,6 @@ func RPCRead(callID int) (RPCResponse, error) {
 		//check if there is a 401 or other error message
 		for k, v := range httpResponses {
 			st := string(v)
-
 			if er := strings.Split(strings.Split(st, "\r\n")[0], " "); len(er) > 1 && er[1] != "200" {
 				utils.Debug.Println(st)
 				return RPCResponse{}, fmt.Errorf("Invalid HTTP response: %s", er)

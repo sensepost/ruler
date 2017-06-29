@@ -376,9 +376,6 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, string, er
 			SessionConfig.Email = secondaryEmail
 			return autodiscover(domain, mapi)
 		}
-		if SessionConfig.Verbose == true {
-			utils.Error.Printf("Failed, StatusCode [%d]\n", resp.StatusCode)
-		}
 		if m, _ := regexp.Match("http[s]?://", []byte(domain)); m == true {
 			return nil, "", fmt.Errorf("Failed to authenticate: StatusCode [%d]\n", resp.StatusCode)
 		}

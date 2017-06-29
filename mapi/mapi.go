@@ -52,10 +52,13 @@ func ExtractRPCURL(resp *utils.AutodiscoverResp) string {
 func Init(config *utils.Session, lid, URL, ABKURL string, transport int) {
 	AuthSession = config
 	AuthSession.LID = lid
-	//AuthSession.CookieJar, _ = cookiejar.New(nil)
+
 	if transport == HTTP {
 		AuthSession.URL, _ = url.Parse(URL)
 		AuthSession.ABKURL, _ = url.Parse(ABKURL)
+		if AuthSession.URL.Host == "outlook.office365.com" {
+			AuthSession.Basic = true
+		}
 		if AuthSession.Basic == true {
 			var Transport http.Transport
 			if AuthSession.Proxy == "" {
@@ -161,6 +164,7 @@ func mapiRequestHTTP(URL, mapiType string, body []byte) ([]byte, error) {
 	resp, err := client.Do(req)
 
 	if err != nil {
+		utils.Trace.Println("v")
 		//check if this error was because of ntml auth when basic auth was expected.
 		if m, _ := regexp.Match("illegal base64", []byte(err.Error())); m == true {
 			resp, err = client.Do(req)
@@ -364,7 +368,7 @@ func AuthenticateRPC() (*RopLogonResponse, error) {
 	}
 
 	utils.Trace.Println("User DN: ", string(connRequest.UserDN))
-	utils.Info.Println("Got Context, Doing ROPLogin")
+	utils.Trace.Println("Got Context, Doing ROPLogin")
 
 	AuthSession.UserDN = append([]byte(AuthSession.LID), []byte{0x00}...)
 	return AuthenticateFetchMailbox(AuthSession.UserDN) //connRequest.UserDN)
@@ -397,7 +401,7 @@ func AuthenticateHTTP() (*RopLogonResponse, error) {
 
 	if connResponse.StatusCode == 0 {
 		utils.Trace.Println("User DN: ", string(connRequest.UserDN))
-		utils.Info.Println("Got Context, Doing ROPLogin")
+		utils.Trace.Println("Got Context, Doing ROPLogin")
 
 		AuthSession.UserDN = connRequest.UserDN
 		return AuthenticateFetchMailbox(connRequest.UserDN)
@@ -2105,7 +2109,29 @@ func GetTableContents(folderid []byte, assoc bool, columns []PropertyTag) (*RopQ
 }
 
 //DisplayRules function get's a folder from the folders id
+//this is more of a wrapper to facilitate legacy code until I get around to changing it in ruler.go
 func DisplayRules() ([]Rule, error) {
+	cols := make([]PropertyTag, 2)
+	cols[0] = PidTagRuleID
+	cols[1] = PidTagRuleName
+	rows, err := FetchRules(cols)
+	if err != nil {
+		return nil, err
+	}
+
+	rules := make([]Rule, int(rows.RowCount))
+
+	for k := 0; k < int(rows.RowCount); k++ {
+		rule := Rule{}
+		rule.RuleID = rows.RowData[k][0].ValueArray
+		rule.RuleName = rows.RowData[k][1].ValueArray
+		rules[k] = rule
+	}
+	return rules, nil
+}
+
+//FetchRules function returns rules along with the associated columns
+func FetchRules(columns []PropertyTag) (*RopQueryRowsResponse, error) {
 
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
@@ -2115,9 +2141,7 @@ func DisplayRules() ([]Rule, error) {
 	setColumns := RopSetColumnsRequest{RopID: 0x12, LogonID: AuthSession.LogonID}
 	setColumns.InputHandle = 0x01
 	setColumns.PropertyTagCount = 0x02
-	setColumns.PropertyTags = make([]PropertyTag, 2)
-	setColumns.PropertyTags[0] = PidTagRuleID
-	setColumns.PropertyTags[1] = PidTagRuleName
+	setColumns.PropertyTags = columns
 
 	//RopQueryRows
 	queryRows := RopQueryRowsRequest{RopID: 0x15, LogonID: AuthSession.LogonID, InputHandle: 0x01, QueryRowsFlags: 0x00, ForwardRead: 0x01, RowCount: 0x32}
@@ -2134,14 +2158,34 @@ func DisplayRules() ([]Rule, error) {
 	if err != nil {
 		return nil, &TransportError{err}
 	}
+	if execResponse.StatusCode != 255 {
+		bufPtr := 10
+		rulesTableResponse := RopGetRulesTableResponse{}
+		p, err := rulesTableResponse.Unmarshal(execResponse.RopBuffer[bufPtr:])
+		bufPtr += p
 
-	rules, _, err := DecodeRulesResponse(execResponse.RopBuffer, setColumns.PropertyTags)
-	if rules == nil || err != nil {
-		return nil, err
+		if err != nil {
+			return nil, err
+		}
+		cols := RopSetColumnsResponse{}
+		p, err = cols.Unmarshal(execResponse.RopBuffer[bufPtr:])
+		bufPtr += p
+
+		if err != nil {
+			return nil, err
+		}
+
+		rows := RopQueryRowsResponse{}
+
+		_, err = rows.Unmarshal(execResponse.RopBuffer[bufPtr:], columns)
+		if err != nil {
+			return nil, err
+		}
+
+		return &rows, nil
 	}
-	return rules, nil
 
-	//return nil, ErrUnknown
+	return nil, ErrUnknown
 }
 
 //ExecuteDeleteRuleAdd adds a new mailrule for deleting a message
@@ -2318,48 +2362,6 @@ func DecodeGetTableResponse(resp []byte, columns []PropertyTag) (*RopGetProperti
 	}
 
 	return &properties, nil
-}
-
-//DecodeRulesResponse func
-func DecodeRulesResponse(resp []byte, properties []PropertyTag) ([]Rule, []byte, error) {
-
-	pos, tpos := 10, 0
-	var err error
-
-	rulesTableResponse := RopGetRulesTableResponse{}
-	tpos, err = rulesTableResponse.Unmarshal(resp[pos:])
-	pos += tpos
-
-	if err != nil {
-		return nil, nil, err
-	}
-	columns := RopSetColumnsResponse{}
-	tpos, err = columns.Unmarshal(resp[pos:])
-	pos += tpos
-
-	if err != nil {
-		return nil, nil, err
-	}
-
-	rows := RopQueryRowsResponse{}
-
-	tpos, err = rows.Unmarshal(resp[pos:], properties)
-	if err != nil {
-		return nil, nil, err
-	}
-	pos += tpos
-
-	rules := make([]Rule, int(rows.RowCount))
-
-	for k := 0; k < int(rows.RowCount); k++ {
-		rule := Rule{}
-		rule.RuleID = rows.RowData[k][0].ValueArray
-		rule.RuleName = rows.RowData[k][1].ValueArray
-		rules[k] = rule
-	}
-	ruleshandle := resp[pos+4:]
-
-	return rules, ruleshandle, nil
 }
 
 //DecodeBufferToRows returns the property rows contained in the buffer, takes a list
