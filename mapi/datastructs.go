@@ -839,8 +839,8 @@ type ActionData struct {
 	ActionName []byte
 	Element    []byte
 	//TriggerLen  uint8
-	Triggger []byte
-	Elem     []byte
+	Trigger []byte
+	Elem    []byte
 	//EndpointLen uint8
 	EndPoint []byte
 	Footer   []byte
@@ -1467,6 +1467,17 @@ func (queryRows *RopQueryRowsResponse) Unmarshal(resp []byte, properties []Prope
 				pos = p
 				trow.ValueArray, pos = utils.ReadBytes(pos, int(cnt), resp)
 				rows[k] = append(rows[k], trow)
+			} else if property.PropertyType == PtypRuleAction {
+				//Unmarshal the ruleaction and then add it into the ValueArray again. messy
+				//or grab the action len, which is the second uint16 and use this to determine how much to read
+				//read ahead to get the length
+				_, pos = utils.ReadUint16(pos, resp)
+				//read length but don't advance the buffer
+				l, _ := utils.ReadUint16(pos, resp)
+				//read the whole RuleAction into the valueArray, this means
+				pos -= 2 //reset the position
+				trow.ValueArray, pos = utils.ReadBytes(pos, int(l+4), resp)
+				rows[k] = append(rows[k], trow)
 			}
 		}
 
@@ -1679,6 +1690,32 @@ func (ropOpenMessageResponse *RopOpenMessageResponse) Unmarshal(resp []byte) (in
 	ropOpenMessageResponse.ColumnCount, pos = utils.ReadUint16(pos, resp)
 	ropOpenMessageResponse.RowCount, pos = utils.ReadByte(pos, resp)
 
+	return pos, nil
+}
+
+//Unmarshal func
+func (ruleAction *RuleAction) Unmarshal(resp []byte) (int, error) {
+	pos := 0
+	ruleAction.Actions, pos = utils.ReadUint16(pos, resp)
+	ruleAction.ActionLen, pos = utils.ReadUint16(pos, resp)
+	ruleAction.ActionType, pos = utils.ReadByte(pos, resp)
+	ruleAction.ActionFlavor, pos = utils.ReadUint32(pos, resp)
+	ruleAction.ActionFlags, pos = utils.ReadUint32(pos, resp)
+	ad := ActionData{}
+	ad.Unmarshal(resp)
+	return pos, nil
+}
+
+//Unmarshal func
+func (actionData *ActionData) Unmarshal(resp []byte) (int, error) {
+	pos := 0
+	actionData.ActionElem, pos = utils.ReadBytes(pos, 4, resp)
+	actionData.ActionName, pos = utils.ReadUTF16BE(pos, resp)
+	actionData.Element, pos = utils.ReadBytes(pos, 1, resp)
+	actionData.Trigger, pos = utils.ReadBytes(pos, 1, resp)
+	actionData.Elem, pos = utils.ReadBytes(pos, 1, resp)
+	actionData.EndPoint, pos = utils.ReadBytes(pos, 1, resp)
+	actionData.Footer, pos = utils.ReadBytes(pos, 1, resp)
 	return pos, nil
 }
 

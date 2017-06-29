@@ -221,6 +221,11 @@ func ReadUnicodeString(pos int, buff []byte) ([]byte, int) {
 	return []byte(str), pos + index + 2
 }
 
+func ReadUTF16BE(pos int, buff []byte) ([]byte, int) {
+	Info.Printf("%x\n", buff)
+	return buff, 0
+}
+
 //ReadASCIIString returns a string as ascii
 func ReadASCIIString(pos int, buff []byte) ([]byte, int) {
 	bf := bytes.NewBuffer(buff[pos:])
