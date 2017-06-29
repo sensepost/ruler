@@ -1702,7 +1702,7 @@ func (ruleAction *RuleAction) Unmarshal(resp []byte) (int, error) {
 	ruleAction.ActionFlavor, pos = utils.ReadUint32(pos, resp)
 	ruleAction.ActionFlags, pos = utils.ReadUint32(pos, resp)
 	ad := ActionData{}
-	ad.Unmarshal(resp)
+	ad.Unmarshal(resp[pos:])
 	return pos, nil
 }
 
