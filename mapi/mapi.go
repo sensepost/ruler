@@ -133,7 +133,7 @@ func sendMapiRequest(mapi ExecuteRequest) (*ExecuteResponse, error) {
 			return nil, err
 		}
 	}
-	//fmt.Println(string(rawResp))
+	//utils.Debug.Println(string(rawResp))
 	executeResponse := ExecuteResponse{}
 	executeResponse.Unmarshal(rawResp)
 	return &executeResponse, nil
@@ -2140,7 +2140,7 @@ func FetchRules(columns []PropertyTag) (*RopQueryRowsResponse, error) {
 	//RopSetColumns
 	setColumns := RopSetColumnsRequest{RopID: 0x12, LogonID: AuthSession.LogonID}
 	setColumns.InputHandle = 0x01
-	setColumns.PropertyTagCount = 0x02
+	setColumns.PropertyTagCount = uint16(len(columns))
 	setColumns.PropertyTags = columns
 
 	//RopQueryRows
@@ -2158,6 +2158,7 @@ func FetchRules(columns []PropertyTag) (*RopQueryRowsResponse, error) {
 	if err != nil {
 		return nil, &TransportError{err}
 	}
+
 	if execResponse.StatusCode != 255 {
 		bufPtr := 10
 		rulesTableResponse := RopGetRulesTableResponse{}
