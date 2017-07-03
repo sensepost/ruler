@@ -1716,7 +1716,7 @@ func (actionData *ActionData) Unmarshal(resp []byte) (int, error) {
 	actionData.ActionName, pos = utils.ReadUTF16BE(pos, resp)
 	actionData.Element, pos = utils.ReadBytes(pos, 89, resp)
 	actionData.Trigger, pos = utils.ReadUTF16BE(pos, resp)
-	actionData.Elem, pos = utils.ReadBytes(pos, 8, resp)
+	actionData.Elem, pos = utils.ReadBytes(pos, 12, resp)
 	if len(resp[pos:]) > 6 {
 		actionData.EndPoint, pos = utils.ReadUTF16BE(pos, resp)
 		//actionData.Footer, pos = utils.ReadBytes(pos, 1, resp)

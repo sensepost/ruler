@@ -93,7 +93,7 @@ func Init(config *utils.Session, lid, URL, ABKURL string, transport int) {
 	AuthSession.Transport = transport
 	AuthSession.ClientSet = false
 	AuthSession.ReqCounter = 1
-	AuthSession.LogonID = 0x08f
+	AuthSession.LogonID = 0x0b
 	AuthSession.Authenticated = false
 
 	//default to Encrypt + Sign for NTLM
