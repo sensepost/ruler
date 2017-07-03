@@ -1701,21 +1701,26 @@ func (ruleAction *RuleAction) Unmarshal(resp []byte) (int, error) {
 	ruleAction.ActionType, pos = utils.ReadByte(pos, resp)
 	ruleAction.ActionFlavor, pos = utils.ReadUint32(pos, resp)
 	ruleAction.ActionFlags, pos = utils.ReadUint32(pos, resp)
-	ad := ActionData{}
-	ad.Unmarshal(resp[pos:])
+	if ruleAction.ActionType == 0x05 {
+		ad := ActionData{}
+		ad.Unmarshal(resp[pos:])
+		ruleAction.ActionData = ad
+	}
 	return pos, nil
 }
 
 //Unmarshal func
 func (actionData *ActionData) Unmarshal(resp []byte) (int, error) {
 	pos := 0
-	actionData.ActionElem, pos = utils.ReadBytes(pos, 4, resp)
+	actionData.ActionElem, pos = utils.ReadBytes(pos, 3, resp)
 	actionData.ActionName, pos = utils.ReadUTF16BE(pos, resp)
-	actionData.Element, pos = utils.ReadBytes(pos, 1, resp)
-	actionData.Trigger, pos = utils.ReadBytes(pos, 1, resp)
-	actionData.Elem, pos = utils.ReadBytes(pos, 1, resp)
-	actionData.EndPoint, pos = utils.ReadBytes(pos, 1, resp)
-	actionData.Footer, pos = utils.ReadBytes(pos, 1, resp)
+	actionData.Element, pos = utils.ReadBytes(pos, 89, resp)
+	actionData.Trigger, pos = utils.ReadUTF16BE(pos, resp)
+	actionData.Elem, pos = utils.ReadBytes(pos, 8, resp)
+	if len(resp[pos:]) > 6 {
+		actionData.EndPoint, pos = utils.ReadUTF16BE(pos, resp)
+		//actionData.Footer, pos = utils.ReadBytes(pos, 1, resp)
+	}
 	return pos, nil
 }
 

@@ -224,9 +224,9 @@ func ReadUnicodeString(pos int, buff []byte) ([]byte, int) {
 //ReadUTF16BE reads the unicode string that the outlook rule file uses
 //this basically means there is a length byte that we need to skip over
 func ReadUTF16BE(pos int, buff []byte) ([]byte, int) {
-	pos++ //length byte but we don't really need this
+	pos += 1 //length byte but we don't really need this
 	str, pos := ReadUnicodeString(pos, buff)
-	return str, pos
+	return str[:len(str)-2], pos
 }
 
 //ReadASCIIString returns a string as ascii
