@@ -80,7 +80,7 @@ func UniString(str string) []byte {
 }
 
 //UTF16BE func to encode strings for the CRuleElement
-func UTF16BE(str string, trail int) []byte {
+func UTF16BE(str string) []byte {
 	bt := make([]byte, (len(str) * 2))
 	cnt := 0
 	for _, v := range str {
@@ -89,9 +89,7 @@ func UTF16BE(str string, trail int) []byte {
 		bt[cnt] = 0x00
 		cnt++
 	}
-	if trail == 1 {
-		bt = append(bt, []byte{0x01}...)
-	}
+
 	byteNum := new(bytes.Buffer)
 	binary.Write(byteNum, binary.BigEndian, uint16(len(bt)/2))
 
@@ -231,13 +229,11 @@ func ReadUTF16BE(pos int, buff []byte) ([]byte, int) {
 	var str []byte
 	if k == 0 {
 		str, pos = ReadUnicodeString(pos, buff)
-		//str = str[:len(str)]
 	} else {
 		str, pos = ReadBytes(pos, k*2, buff) //
-		pos += 2
+		//pos += 2
 	}
 
-	//return str[:len(str)-2], pos
 	return str, pos
 }
 
@@ -288,7 +284,7 @@ func Obfuscate(data []byte) []byte {
 //GenerateString creates a random string of lenght pcount
 func GenerateString(pcount int) string {
 	var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
-	//seed := time.Date(year, month, day, hour, min, sec,x,time.UTC).UnixNano()
+
 	rand.Seed(time.Now().UTC().UnixNano())
 
 	b := make([]rune, pcount)

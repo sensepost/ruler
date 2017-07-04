@@ -836,14 +836,26 @@ type RuleAction struct {
 type ActionData struct {
 	ActionElem []byte
 	//NameLen    uint8
-	ActionName []byte
-	Element    []byte
+	ActionName   []byte
+	Element      []byte
+	ActionCount  []byte
+	CRuleElement []byte
+	Conditions   []CRuleAction
+	Told         []byte
 	//TriggerLen  uint8
 	Trigger []byte
 	Elem    []byte
 	//EndpointLen uint8
 	EndPoint []byte
 	Footer   []byte
+}
+
+type CRuleAction struct {
+	Head  byte
+	Tag   []byte
+	Items uint32
+	Pad   uint32
+	Value []byte
 }
 
 //TaggedPropertyValue struct
@@ -1714,13 +1726,42 @@ func (actionData *ActionData) Unmarshal(resp []byte) (int, error) {
 	pos := 0
 	actionData.ActionElem, pos = utils.ReadBytes(pos, 3, resp)
 	actionData.ActionName, pos = utils.ReadUTF16BE(pos, resp)
-	actionData.Element, pos = utils.ReadBytes(pos, 89, resp)
-	actionData.Trigger, pos = utils.ReadUTF16BE(pos, resp)
-	actionData.Elem, pos = utils.ReadBytes(pos, 12, resp)
-	if len(resp[pos:]) > 6 {
-		actionData.EndPoint, pos = utils.ReadUTF16BE(pos, resp)
-		//actionData.Footer, pos = utils.ReadBytes(pos, 1, resp)
+	actionData.Element, pos = utils.ReadBytes(pos, 21, resp)
+	actionData.ActionCount, pos = utils.ReadBytes(pos, 2, resp)
+
+	actionData.CRuleElement, pos = utils.ReadBytes(pos, 34, resp)
+	actionData.Conditions = make([]CRuleAction, int(utils.DecodeUint16(actionData.ActionCount))-1)
+	//conditions read test
+	//fmt.Printf("%x\n", resp[pos:])
+	tp := pos
+	for i := 0; i < int(utils.DecodeUint16(actionData.ActionCount))-1; i++ {
+		//fmt.Printf("Action %d\n", i)
+		action := CRuleAction{}
+
+		action.Head, tp = utils.ReadByte(tp, resp)
+		action.Tag, tp = utils.ReadBytes(tp, 5, resp)
+		action.Items, tp = utils.ReadUint32(tp, resp)
+		//fmt.Printf("%x,%x,%x\n", action.Head, action.Tag, action.Items)
+		if action.Tag[1] == 0xCD || action.Tag[1] == 0x49 { //subject and start application
+			action.Pad, tp = utils.ReadUint32(tp, resp)
+			action.Value, tp = utils.ReadUTF16BE(tp, resp)
+			for j := 1; j < int(action.Items); j++ {
+				var tpac []byte
+				action.Pad, tp = utils.ReadUint32(tp, resp)
+				tpac, tp = utils.ReadUTF16BE(tp, resp)
+				action.Value = append(action.Value, tpac...)
+			}
+		} else if action.Tag[1] == 0xEF { //guid
+			action.Pad, tp = utils.ReadUint32(tp, resp)
+			action.Value, tp = utils.ReadBytes(tp, 16, resp)
+		} else if action.Items > 0 {
+			action.Pad, tp = utils.ReadUint32(tp, resp)
+			action.Value, tp = utils.ReadBytes(tp, 4, resp)
+		}
+		actionData.Conditions[i] = action
 	}
+	pos = tp
+
 	return pos, nil
 }
 
