@@ -11,6 +11,8 @@ import (
 	"os"
 	"reflect"
 	"time"
+
+	"gopkg.in/yaml.v2"
 )
 
 var (
@@ -78,7 +80,7 @@ func UniString(str string) []byte {
 }
 
 //UTF16BE func to encode strings for the CRuleElement
-func UTF16BE(str string, trail int) []byte {
+func UTF16BE(str string) []byte {
 	bt := make([]byte, (len(str) * 2))
 	cnt := 0
 	for _, v := range str {
@@ -87,9 +89,7 @@ func UTF16BE(str string, trail int) []byte {
 		bt[cnt] = 0x00
 		cnt++
 	}
-	if trail == 1 {
-		bt = append(bt, []byte{0x01}...)
-	}
+
 	byteNum := new(bytes.Buffer)
 	binary.Write(byteNum, binary.BigEndian, uint16(len(bt)/2))
 
@@ -214,9 +214,30 @@ func ReadByte(pos int, buff []byte) (byte, int) {
 func ReadUnicodeString(pos int, buff []byte) ([]byte, int) {
 	//stupid hack as using bufio and ReadString(byte) would terminate too early
 	//would terminate on 0x00 instead of 0x0000
-	index := bytes.Index(buff[pos:], []byte{0x00, 0x00, 0x00}) + 1
+	index := bytes.Index(buff[pos:], []byte{0x00, 0x00})
+	if index == -1 {
+		return nil, 0
+	}
 	str := buff[pos : pos+index]
-	return []byte(str), pos + index + 1
+	return []byte(str), pos + index + 2
+}
+
+//ReadUTF16BE reads the unicode string that the outlook rule file uses
+//this basically means there is a length byte that we need to skip over
+func ReadUTF16BE(pos int, buff []byte) ([]byte, int) {
+
+	lenb := (buff[pos : pos+1])
+	k := int(lenb[0])
+	pos += 1 //length byte but we don't really need this
+	var str []byte
+	if k == 0 {
+		str, pos = ReadUnicodeString(pos, buff)
+	} else {
+		str, pos = ReadBytes(pos, k*2, buff) //
+		//pos += 2
+	}
+
+	return str, pos
 }
 
 //ReadASCIIString returns a string as ascii
@@ -266,7 +287,7 @@ func Obfuscate(data []byte) []byte {
 //GenerateString creates a random string of lenght pcount
 func GenerateString(pcount int) string {
 	var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
-	//seed := time.Date(year, month, day, hour, min, sec,x,time.UTC).UnixNano()
+
 	rand.Seed(time.Now().UTC().UnixNano())
 
 	b := make([]rune, pcount)
@@ -274,4 +295,18 @@ func GenerateString(pcount int) string {
 		b[i] = letterRunes[rand.Intn(len(letterRunes))]
 	}
 	return string(b)
+}
+
+//ReadYml reads the supplied config file, Unmarshals the data into the global config struct.
+func ReadYml(yml string) (YamlConfig, error) {
+	var config YamlConfig
+	data, err := ioutil.ReadFile(yml)
+	if err != nil {
+		return YamlConfig{}, err
+	}
+	err = yaml.Unmarshal(data, &config)
+	if err != nil {
+		return YamlConfig{}, err
+	}
+	return config, err
 }

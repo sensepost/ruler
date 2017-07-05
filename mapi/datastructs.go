@@ -426,6 +426,22 @@ type RopGetAttachmentTableResponse struct {
 	ReturnValue       uint32
 }
 
+//RopGetValidAttachmentsRequest struct holiding the request used to get all attachment ids
+type RopGetValidAttachmentsRequest struct {
+	RopID            uint8 //0x52
+	LogonID          uint8
+	InputHandleIndex uint8
+}
+
+//RopGetValidAttachmentsResponse struct holiding all attachment ids
+type RopGetValidAttachmentsResponse struct {
+	RopID             uint8 //0x52
+	InputHandleIndex  uint8
+	ReturnValue       uint32
+	AttachmentIdCount uint16
+	AttachmentIDArray []uint32
+}
+
 //RopOpenAttachmentRequest to open an existing attachment
 type RopOpenAttachmentRequest struct {
 	RopID               uint8 //0x22
@@ -836,14 +852,26 @@ type RuleAction struct {
 type ActionData struct {
 	ActionElem []byte
 	//NameLen    uint8
-	ActionName []byte
-	Element    []byte
+	ActionName   []byte
+	Element      []byte
+	ActionCount  []byte
+	CRuleElement []byte
+	Conditions   []CRuleAction
+	Told         []byte
 	//TriggerLen  uint8
-	Triggger []byte
-	Elem     []byte
+	Trigger []byte
+	Elem    []byte
 	//EndpointLen uint8
 	EndPoint []byte
 	Footer   []byte
+}
+
+type CRuleAction struct {
+	Head  byte
+	Tag   []byte
+	Items uint32
+	Pad   uint32
+	Value []byte
 }
 
 //TaggedPropertyValue struct
@@ -1095,6 +1123,11 @@ func (createAttach RopCreateAttachmentRequest) Marshal() []byte {
 
 //Marshal turn RopOpenAttachmentRequest into Bytes
 func (getAttach RopOpenAttachmentRequest) Marshal() []byte {
+	return utils.BodyToBytes(getAttach)
+}
+
+//Marshal turn RopGetValidAttachmentsRequest into Bytes
+func (getAttach RopGetValidAttachmentsRequest) Marshal() []byte {
 	return utils.BodyToBytes(getAttach)
 }
 
@@ -1425,6 +1458,7 @@ func (execRequest *ExecuteRequest) Init() {
 //Unmarshal func
 func (queryRows *RopQueryRowsResponse) Unmarshal(resp []byte, properties []PropertyTag) (int, error) {
 	pos := 0
+	var flag byte
 	queryRows.RopID, pos = utils.ReadByte(pos, resp)
 	queryRows.InputHandle, pos = utils.ReadByte(pos, resp)
 	queryRows.ReturnValue, pos = utils.ReadUint32(pos, resp)
@@ -1435,12 +1469,21 @@ func (queryRows *RopQueryRowsResponse) Unmarshal(resp []byte, properties []Prope
 	queryRows.RowCount, pos = utils.ReadUint16(pos, resp)
 
 	rows := make([][]PropertyRow, queryRows.RowCount)
+	//check if flagged properties
 
 	for k := 0; k < int(queryRows.RowCount); k++ {
 		trow := PropertyRow{}
-		trow.Flag, pos = utils.ReadByte(pos, resp)
+		//check if has flag (is flaggedpropertyrow)
+		flag, pos = utils.ReadByte(pos, resp)
 		for _, property := range properties {
-			if property.PropertyType == PtypInteger32 {
+
+			if flag == 0x01 {
+				trow.Flag, pos = utils.ReadByte(pos, resp)
+			}
+			if trow.Flag != 0x00 {
+				trow.ValueArray, pos = utils.ReadBytes(pos, 4, resp)
+				rows[k] = append(rows[k], trow)
+			} else if property.PropertyType == PtypInteger32 {
 				trow.ValueArray, pos = utils.ReadBytes(pos, 2, resp)
 				rows[k] = append(rows[k], trow)
 			} else if property.PropertyType == PtypInteger64 {
@@ -1456,6 +1499,17 @@ func (queryRows *RopQueryRowsResponse) Unmarshal(resp []byte, properties []Prope
 				cnt, p := utils.ReadUint16(pos, resp)
 				pos = p
 				trow.ValueArray, pos = utils.ReadBytes(pos, int(cnt), resp)
+				rows[k] = append(rows[k], trow)
+			} else if property.PropertyType == PtypRuleAction {
+				//Unmarshal the ruleaction and then add it into the ValueArray again. messy
+				//or grab the action len, which is the second uint16 and use this to determine how much to read
+				//read ahead to get the length
+				_, pos = utils.ReadUint16(pos, resp)
+				//read length but don't advance the buffer
+				l, _ := utils.ReadUint16(pos, resp)
+				//read the whole RuleAction into the valueArray, this means
+				pos -= 2 //reset the position
+				trow.ValueArray, pos = utils.ReadBytes(pos, int(l+4), resp)
 				rows[k] = append(rows[k], trow)
 			}
 		}
@@ -1554,6 +1608,27 @@ func (getAttachment *RopOpenAttachmentResponse) Unmarshal(resp []byte) (int, err
 
 	if getAttachment.ReturnValue != 0 {
 		return pos, &ErrorCode{getAttachment.ReturnValue}
+	}
+
+	return pos, nil
+}
+
+//Unmarshal function to produce RopCreateMessageResponse struct
+func (getAttachments *RopGetValidAttachmentsResponse) Unmarshal(resp []byte) (int, error) {
+	pos := 0
+
+	getAttachments.RopID, pos = utils.ReadByte(pos, resp)
+	getAttachments.InputHandleIndex, pos = utils.ReadByte(pos, resp)
+	getAttachments.ReturnValue, pos = utils.ReadUint32(pos, resp)
+
+	if getAttachments.ReturnValue != 0 {
+		return pos, &ErrorCode{getAttachments.ReturnValue}
+	}
+
+	getAttachments.AttachmentIdCount, pos = utils.ReadUint16(pos, resp)
+	getAttachments.AttachmentIDArray = make([]uint32, int(getAttachments.AttachmentIdCount))
+	for i := 0; i < int(getAttachments.AttachmentIdCount); i++ {
+		getAttachments.AttachmentIDArray[i], pos = utils.ReadUint32(pos, resp)
 	}
 
 	return pos, nil
@@ -1668,6 +1743,66 @@ func (ropOpenMessageResponse *RopOpenMessageResponse) Unmarshal(resp []byte) (in
 	}
 	ropOpenMessageResponse.ColumnCount, pos = utils.ReadUint16(pos, resp)
 	ropOpenMessageResponse.RowCount, pos = utils.ReadByte(pos, resp)
+
+	return pos, nil
+}
+
+//Unmarshal func
+func (ruleAction *RuleAction) Unmarshal(resp []byte) (int, error) {
+	pos := 0
+	ruleAction.Actions, pos = utils.ReadUint16(pos, resp)
+	ruleAction.ActionLen, pos = utils.ReadUint16(pos, resp)
+	ruleAction.ActionType, pos = utils.ReadByte(pos, resp)
+	ruleAction.ActionFlavor, pos = utils.ReadUint32(pos, resp)
+	ruleAction.ActionFlags, pos = utils.ReadUint32(pos, resp)
+	if ruleAction.ActionType == 0x05 {
+		ad := ActionData{}
+		ad.Unmarshal(resp[pos:])
+		ruleAction.ActionData = ad
+	}
+	return pos, nil
+}
+
+//Unmarshal func
+func (actionData *ActionData) Unmarshal(resp []byte) (int, error) {
+	pos := 0
+	actionData.ActionElem, pos = utils.ReadBytes(pos, 3, resp)
+	actionData.ActionName, pos = utils.ReadUTF16BE(pos, resp)
+	actionData.Element, pos = utils.ReadBytes(pos, 21, resp)
+	actionData.ActionCount, pos = utils.ReadBytes(pos, 2, resp)
+
+	actionData.CRuleElement, pos = utils.ReadBytes(pos, 34, resp)
+	actionData.Conditions = make([]CRuleAction, int(utils.DecodeUint16(actionData.ActionCount))-1)
+	//conditions read test
+	//fmt.Printf("%x\n", resp[pos:])
+	tp := pos
+	for i := 0; i < int(utils.DecodeUint16(actionData.ActionCount))-1; i++ {
+		//fmt.Printf("Action %d\n", i)
+		action := CRuleAction{}
+
+		action.Head, tp = utils.ReadByte(tp, resp)
+		action.Tag, tp = utils.ReadBytes(tp, 5, resp)
+		action.Items, tp = utils.ReadUint32(tp, resp)
+		//fmt.Printf("%x,%x,%x\n", action.Head, action.Tag, action.Items)
+		if action.Tag[1] == 0xCD || action.Tag[1] == 0x49 { //subject and start application
+			action.Pad, tp = utils.ReadUint32(tp, resp)
+			action.Value, tp = utils.ReadUTF16BE(tp, resp)
+			for j := 1; j < int(action.Items); j++ {
+				var tpac []byte
+				action.Pad, tp = utils.ReadUint32(tp, resp)
+				tpac, tp = utils.ReadUTF16BE(tp, resp)
+				action.Value = append(action.Value, tpac...)
+			}
+		} else if action.Tag[1] == 0xEF { //guid
+			action.Pad, tp = utils.ReadUint32(tp, resp)
+			action.Value, tp = utils.ReadBytes(tp, 16, resp)
+		} else if action.Items > 0 {
+			action.Pad, tp = utils.ReadUint32(tp, resp)
+			action.Value, tp = utils.ReadBytes(tp, 4, resp)
+		}
+		actionData.Conditions[i] = action
+	}
+	pos = tp
 
 	return pos, nil
 }

