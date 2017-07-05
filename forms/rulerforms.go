@@ -256,7 +256,6 @@ func DisplayForms(folderid []byte) error {
 	columns := make([]mapi.PropertyTag, 2)
 	columns[0] = mapi.PidTagOfflineAddressBookName
 	columns[1] = mapi.PidTagMid
-
 	assoctable, err := mapi.GetAssociatedContents(folderid, columns)
 	if err != nil {
 		return err
@@ -267,7 +266,6 @@ func DisplayForms(folderid []byte) error {
 		if assoctable.RowData[k][0].Flag != 0x00 {
 			continue
 		}
-
 		name := utils.FromUnicode(assoctable.RowData[k][0].ValueArray)
 		if name != "" && len(name) > 3 {
 			forms = append(forms, name)

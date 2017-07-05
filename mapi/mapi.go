@@ -1430,6 +1430,166 @@ func DeleteMessages(folderid []byte, messageIDCount int, messageIDs []byte) (*Ro
 	return nil, ErrUnknown
 }
 
+func OpenAttachment(folderid, messageid []byte, attachId uint32, columns []PropertyTag) (*RopFastTransferSourceGetBufferResponse, error) {
+	execRequest := ExecuteRequest{}
+	execRequest.Init()
+
+	ropRelease := RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandle: 0x01}
+	fullReq := ropRelease.Marshal()
+
+	getMessage := RopOpenMessageRequest{RopID: 0x03, LogonID: AuthSession.LogonID}
+	getMessage.InputHandle = 0x00
+	getMessage.OutputHandle = 0x01
+	getMessage.FolderID = folderid
+	getMessage.MessageID = messageid
+	getMessage.CodePageID = 0xFFF
+	getMessage.OpenModeFlags = 0x03
+
+	fullReq = append(fullReq, getMessage.Marshal()...)
+
+	getAttachmentTbl := RopGetAttachmentTableRequest{RopID: 0x21, LogonID: AuthSession.LogonID, InputHandleIndex: 0x01, OutputHandleIndex: 0x02, TableFlags: 0x00}
+	getAttachment := RopOpenAttachmentRequest{RopID: 0x022, LogonID: AuthSession.LogonID, InputHandleIndex: 0x01, OutputHandleIndex: 0x02, OpenAttachmentFlags: 0x01, AttachmentID: attachId}
+
+	fullReq = append(fullReq, getAttachmentTbl.Marshal()...)
+	fullReq = append(fullReq, getAttachment.Marshal()...)
+
+	fastTransfer := RopFastTransferSourceCopyPropertiesRequest{RopID: 0x69, LogonID: AuthSession.LogonID, InputHandle: 0x02, OutputHandle: 0x03}
+	fastTransfer.Level = 0
+	fastTransfer.CopyFlags = 2
+	fastTransfer.SendOptions = 1
+	fastTransfer.PropertyTagCount = uint16(len(columns))
+	fastTransfer.PropertyTags = columns
+
+	fullReq = append(fullReq, fastTransfer.Marshal()...)
+
+	fastTransferBuffer := RopFastTransferSourceGetBufferRequest{RopID: 0x4E, LogonID: AuthSession.LogonID, InputHandle: 0x03}
+	fastTransferBuffer.BufferSize = 0xBABE
+	fastTransferBuffer.MaximumBufferSize = 0xBABE
+
+	fullReq = append(fullReq, fastTransferBuffer.Marshal()...)
+
+	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
+	execRequest.RopBuffer.ROP.RopsList = fullReq
+
+	execResponse, err := sendMapiRequest(execRequest)
+
+	if err != nil {
+		return nil, &TransportError{err}
+	}
+
+	if execResponse.StatusCode != 255 {
+		bufPtr := 10
+		var p int
+		var e error
+
+		getMessageResp := RopOpenMessageResponse{}
+		if p, e = getMessageResp.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+			return nil, e
+		}
+		bufPtr += p
+
+		getAttachmentTblResp := RopGetAttachmentTableResponse{}
+		if p, e = getAttachmentTblResp.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+			return nil, e
+		}
+		bufPtr += p
+
+		getAttachmentResp := RopOpenAttachmentResponse{}
+		if p, e = getAttachmentResp.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+			return nil, e
+		}
+
+		bufPtr += p
+
+		props := RopFastTransferSourceCopyPropertiesResponse{}
+		if p, e = props.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+			return nil, e
+		}
+
+		bufPtr += p
+
+		pprops := RopFastTransferSourceGetBufferResponse{}
+		if p, e = pprops.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+			return nil, e
+		}
+
+		//Rop release if we are done.. otherwise get rest of stream
+		if pprops.TransferStatus == 0x0001 {
+			buff, _ := FastTransferFetchStep(execResponse.RopBuffer[bufPtr+p:])
+
+			if buff != nil {
+				pprops.TransferBuffer = append(pprops.TransferBuffer, buff...)
+			}
+		}
+
+		ReleaseObject(0x01)
+		return &pprops, nil
+	}
+	return nil, ErrUnknown
+}
+
+//GetAttachments retrieves all the valid attachment IDs for a message
+func GetAttachments(folderid, messageid []byte) (*RopGetValidAttachmentsResponse, error) {
+	return nil, fmt.Errorf("This function is not working at present. Weird response from exchange: Invalid rop type found: GetValidAttachments")
+	/*
+		execRequest := ExecuteRequest{}
+		execRequest.Init()
+
+		ropRelease := RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandle: 0x01}
+		fullReq := ropRelease.Marshal()
+
+		getMessage := RopOpenMessageRequest{RopID: 0x03, LogonID: AuthSession.LogonID}
+		getMessage.InputHandle = 0x00
+		getMessage.OutputHandle = 0x01
+		getMessage.FolderID = folderid
+		getMessage.MessageID = messageid
+		getMessage.CodePageID = 0xFFF
+		getMessage.OpenModeFlags = 0x03
+
+		fullReq = append(fullReq, getMessage.Marshal()...)
+		getAttachmentTbl := RopGetAttachmentTableRequest{RopID: 0x21, LogonID: AuthSession.LogonID, InputHandleIndex: 0x01, OutputHandleIndex: 0x02, TableFlags: 0x00}
+		getAttachments := RopGetValidAttachmentsRequest{RopID: 0x52, LogonID: AuthSession.LogonID, InputHandleIndex: 0x00}
+
+		fullReq = append(fullReq, getAttachmentTbl.Marshal()...)
+		fullReq = append(fullReq, getAttachments.Marshal()...)
+		//fullReq := getAttachments.Marshal()
+
+		execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
+		execRequest.RopBuffer.ROP.RopsList = fullReq
+
+		execResponse, err := sendMapiRequest(execRequest)
+
+		if err != nil {
+			return nil, &TransportError{err}
+		}
+
+		if execResponse.StatusCode != 255 {
+			bufPtr := 10
+			var p int
+			var e error
+
+			getMessageResp := RopOpenMessageResponse{}
+			if p, e = getMessageResp.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+				return nil, e
+			}
+			bufPtr += p
+
+			getAttachmentTblResp := RopGetAttachmentTableResponse{}
+			if p, e = getAttachmentTblResp.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+				return nil, e
+			}
+			bufPtr += p
+
+			getAttachmentsResp := RopGetValidAttachmentsResponse{}
+			if p, e = getAttachmentsResp.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+				return nil, e
+			}
+			return &getAttachmentsResp, nil
+		}
+		return nil, ErrUnknown
+	*/
+}
+
 //EmptyFolder is used to delete all contents of a folder
 func EmptyFolder(folderid []byte) (*RopEmptyFolderResponse, error) {
 	execRequest := ExecuteRequest{}
@@ -2205,6 +2365,8 @@ func ExecuteDeleteRuleAdd(rulename, triggerword string) (*ExecuteResponse, error
 	propertyValues[2] = TaggedPropertyValue{PidTagRuleState, []byte{0x01, 0x00, 0x00, 0x00}}                                                                                                                                   //PidTagRuleCondition
 	propertyValues[3] = TaggedPropertyValue{PidTagRuleCondition, utils.BodyToBytes(RuleCondition{0x03, []byte{0x01, 0x00, 0x01, 0x00}, []byte{0x1F, 0x00, 0x37, 0x00, 0x1f, 0x00, 0x37, 0x00}, utils.UniString(triggerword)})} //PidTagRuleActions
 
+	//still uses old hardcoded data struct. we can change this going forward and use the
+	//CRuleAction elements
 	actionData := ActionData{}
 	actionData.ActionElem = []byte{0x00, 0x00, 0x14}
 	actionData.ActionName = utils.UTF16BE(rulename)
@@ -2261,12 +2423,14 @@ func ExecuteMailRuleAdd(rulename, triggerword, triggerlocation string, delete bo
 	propertyValues[2] = TaggedPropertyValue{PidTagRuleState, []byte{0x01, 0x00, 0x00, 0x00}}                                                                                                                                   //PidTagRuleCondition
 	propertyValues[3] = TaggedPropertyValue{PidTagRuleCondition, utils.BodyToBytes(RuleCondition{0x03, []byte{0x01, 0x00, 0x01, 0x00}, []byte{0x1F, 0x00, 0x37, 0x00, 0x1f, 0x00, 0x37, 0x00}, utils.UniString(triggerword)})} //PidTagRuleActions
 
+	//still uses old hardcoded data struct. we can change this going forward and use the
+	//CRuleAction elements
 	actionData := ActionData{}
 	actionData.ActionElem = []byte{0x00, 0x00, 0x14}
 	actionData.ActionName = utils.UTF16BE(rulename)
-	actionData.Element = []byte{0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0xa8, 0x00, 0x00, 0x00}
-	actionData.ActionCount = []byte{0x06, 0x00}
-	actionData.CRuleElement = []byte{0xff, 0xff, 0x00, 0x00, 0x0c, 0x00, 0x43, 0x52, 0x75, 0x6c, 0x65, 0x45, 0x6c, 0x65, 0x6d, 0x65, 0x6e, 0x74, 0x90, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00}
+	actionData.Element = []byte{0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0xa8, 0x00, 0x00}
+	actionData.ActionCount = []byte{0x00, 0x06}
+	actionData.CRuleElement = []byte{0x00, 0xff, 0xff, 0x00, 0x00, 0x0c, 0x00, 0x43, 0x52, 0x75, 0x6c, 0x65, 0x45, 0x6c, 0x65, 0x6d, 0x65, 0x6e, 0x74, 0x90, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00}
 	actionData.Told = []byte{0x01, 0x80, 0x64, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x80, 0xcd, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
 	actionData.Trigger = utils.UTF16BE(triggerword)
 	actionData.Elem = []byte{0x01, 0x80, 0x49, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
@@ -2382,7 +2546,9 @@ func DecodeBufferToRows(buff []byte, cols []PropertyTag) []PropertyRow {
 			trow.ValueArray, pos = utils.ReadUnicodeString(pos, buff)
 			rows = append(rows, trow)
 		} else if property.PropertyType == PtypBinary {
+
 			cnt, p := utils.ReadUint16(pos, buff)
+			fmt.Println("Got a Binary Row", cnt)
 			pos = p
 			trow.ValueArray, pos = utils.ReadBytes(pos, int(cnt), buff)
 			rows = append(rows, trow)

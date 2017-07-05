@@ -215,6 +215,9 @@ func ReadUnicodeString(pos int, buff []byte) ([]byte, int) {
 	//stupid hack as using bufio and ReadString(byte) would terminate too early
 	//would terminate on 0x00 instead of 0x0000
 	index := bytes.Index(buff[pos:], []byte{0x00, 0x00})
+	if index == -1 {
+		return nil, 0
+	}
 	str := buff[pos : pos+index]
 	return []byte(str), pos + index + 2
 }

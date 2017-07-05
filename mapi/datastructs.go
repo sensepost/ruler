@@ -426,6 +426,22 @@ type RopGetAttachmentTableResponse struct {
 	ReturnValue       uint32
 }
 
+//RopGetValidAttachmentsRequest struct holiding the request used to get all attachment ids
+type RopGetValidAttachmentsRequest struct {
+	RopID            uint8 //0x52
+	LogonID          uint8
+	InputHandleIndex uint8
+}
+
+//RopGetValidAttachmentsResponse struct holiding all attachment ids
+type RopGetValidAttachmentsResponse struct {
+	RopID             uint8 //0x52
+	InputHandleIndex  uint8
+	ReturnValue       uint32
+	AttachmentIdCount uint16
+	AttachmentIDArray []uint32
+}
+
 //RopOpenAttachmentRequest to open an existing attachment
 type RopOpenAttachmentRequest struct {
 	RopID               uint8 //0x22
@@ -1110,6 +1126,11 @@ func (getAttach RopOpenAttachmentRequest) Marshal() []byte {
 	return utils.BodyToBytes(getAttach)
 }
 
+//Marshal turn RopGetValidAttachmentsRequest into Bytes
+func (getAttach RopGetValidAttachmentsRequest) Marshal() []byte {
+	return utils.BodyToBytes(getAttach)
+}
+
 //Marshal turn RopSaveChangesAttachmentRequest into Bytes
 func (saveAttach RopSaveChangesAttachmentRequest) Marshal() []byte {
 	return utils.BodyToBytes(saveAttach)
@@ -1587,6 +1608,27 @@ func (getAttachment *RopOpenAttachmentResponse) Unmarshal(resp []byte) (int, err
 
 	if getAttachment.ReturnValue != 0 {
 		return pos, &ErrorCode{getAttachment.ReturnValue}
+	}
+
+	return pos, nil
+}
+
+//Unmarshal function to produce RopCreateMessageResponse struct
+func (getAttachments *RopGetValidAttachmentsResponse) Unmarshal(resp []byte) (int, error) {
+	pos := 0
+
+	getAttachments.RopID, pos = utils.ReadByte(pos, resp)
+	getAttachments.InputHandleIndex, pos = utils.ReadByte(pos, resp)
+	getAttachments.ReturnValue, pos = utils.ReadUint32(pos, resp)
+
+	if getAttachments.ReturnValue != 0 {
+		return pos, &ErrorCode{getAttachments.ReturnValue}
+	}
+
+	getAttachments.AttachmentIdCount, pos = utils.ReadUint16(pos, resp)
+	getAttachments.AttachmentIDArray = make([]uint32, int(getAttachments.AttachmentIdCount))
+	for i := 0; i < int(getAttachments.AttachmentIdCount); i++ {
+		getAttachments.AttachmentIDArray[i], pos = utils.ReadUint32(pos, resp)
 	}
 
 	return pos, nil
