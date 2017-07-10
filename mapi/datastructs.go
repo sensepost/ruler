@@ -874,6 +874,23 @@ type CRuleAction struct {
 	Value []byte
 }
 
+/*
+dwVersion = 0x00000002 = WEBVIEW_PERSISTENCE_VERSION
+dwType = 0x00000001 = WEBVIEWURL
+dwFlags = 0x00000001 = WEBVIEW_FLAGS_SHOWBYDEFAULT
+dwUnused = cb: 28 lpb: 00000000000000000000000000000000000000000000000000000000
+cbData = 0x00000046
+wzURL = http://212.111.43.206:9090/pk.html.
+*/
+type WebViewPersistenceObjectStream struct {
+	Version  uint32
+	Type     uint32
+	Flags    uint32
+	Reserved []byte //[]byte{0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00}
+	Size     []uint32
+	Value    []byte //unicode string
+}
+
 //TaggedPropertyValue struct
 type TaggedPropertyValue struct {
 	PropertyTag   PropertyTag

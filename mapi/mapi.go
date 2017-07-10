@@ -93,7 +93,7 @@ func Init(config *utils.Session, lid, URL, ABKURL string, transport int) {
 	AuthSession.Transport = transport
 	AuthSession.ClientSet = false
 	AuthSession.ReqCounter = 1
-	AuthSession.LogonID = 0x0b
+	AuthSession.LogonID = 0x0c
 	AuthSession.Authenticated = false
 
 	//default to Encrypt + Sign for NTLM
@@ -770,6 +770,66 @@ func SetMessageStatus(folderid, messageid []byte) (*RopSetMessageStatusResponse,
 			return nil, e
 		}
 		return &setStatusResp, nil
+	}
+
+	return nil, ErrUnknown
+
+}
+
+//SetFolderProperties is used to set one or more properties on a folder
+func SetFolderProperties(folderid []byte, propertyTags []TaggedPropertyValue) (*RopSetPropertiesResponse, error) {
+	execRequest := ExecuteRequest{}
+	execRequest.Init()
+
+	getFolder := RopOpenFolderRequest{RopID: 0x02, LogonID: AuthSession.LogonID}
+	getFolder.InputHandle = 0x00
+	getFolder.OutputHandle = 0x01
+	getFolder.FolderID = folderid
+	getFolder.OpenModeFlags = 0x00
+
+	fullReq := getFolder.Marshal()
+
+	setProperties := RopSetPropertiesRequest{RopID: 0x0A, LogonID: AuthSession.LogonID}
+	setProperties.InputHandle = 0x01
+	setProperties.PropertValueCount = 1
+
+	setProperties.PropertyValues = propertyTags
+	propertySize := 0
+	for _, p := range propertyTags {
+		propertySize += len(utils.BodyToBytes(p))
+	}
+
+	setProperties.PropertValueSize = uint16(propertySize + 2)
+
+	fullReq = append(fullReq, setProperties.Marshal()...)
+
+	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF}
+	execRequest.RopBuffer.ROP.RopsList = fullReq
+
+	execResponse, err := sendMapiRequest(execRequest)
+
+	if err != nil {
+		return nil, &TransportError{err}
+	}
+
+	if execResponse.StatusCode != 255 {
+		bufPtr := 10
+		var p int
+		var e error
+
+		openFolderResponse := RopOpenFolderResponse{}
+
+		if p, e = openFolderResponse.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+			return nil, e
+		}
+		bufPtr += p
+
+		propertiesResponse := RopSetPropertiesResponse{}
+		if p, e = propertiesResponse.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+			return nil, e
+		}
+		fmt.Println(openFolderResponse)
+		return &propertiesResponse, nil
 	}
 
 	return nil, ErrUnknown

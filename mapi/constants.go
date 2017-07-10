@@ -609,3 +609,4 @@ var PidTag6900 = PropertyTag{0x0003, 0x6900}
 var PidTagComment = PropertyTag{PtypString, 0x3004}
 
 var PidTagSenderEntryId = PropertyTag{PtypBinary, 0x0C19}
+var PidTagFolderWebViewInfo = PropertyTag{PtypBinary, 0x36DF}
