@@ -887,7 +887,7 @@ type WebViewPersistenceObjectStream struct {
 	Type     uint32
 	Flags    uint32
 	Reserved []byte //[]byte{0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00}
-	Size     []uint32
+	Size     uint32
 	Value    []byte //unicode string
 }
 
@@ -1151,6 +1151,11 @@ func (getAttach RopGetValidAttachmentsRequest) Marshal() []byte {
 //Marshal turn RopSaveChangesAttachmentRequest into Bytes
 func (saveAttach RopSaveChangesAttachmentRequest) Marshal() []byte {
 	return utils.BodyToBytes(saveAttach)
+}
+
+//Marshal turn RopGetHierarchyTableRequest into Bytes
+func (wvpObjectStream WebViewPersistenceObjectStream) Marshal() []byte {
+	return utils.BodyToBytes(wvpObjectStream)
 }
 
 //Unmarshal function to convert response into ConnectResponse struct
@@ -1860,5 +1865,19 @@ func (propTag *PropertyTag) Unmarshal(resp []byte) (int, error) {
 	pos := 0
 	propTag.PropertyType, pos = utils.ReadUint16(pos, resp)
 	propTag.PropertyID, pos = utils.ReadUint16(pos, resp)
+	return pos, nil
+}
+
+//Unmarshal function to produce RopCreateMessageResponse struct
+func (wvpObjectStream *WebViewPersistenceObjectStream) Unmarshal(resp []byte) (int, error) {
+	pos := 0
+
+	wvpObjectStream.Version, pos = utils.ReadUint32(pos, resp)
+	wvpObjectStream.Type, pos = utils.ReadUint32(pos, resp)
+	wvpObjectStream.Flags, pos = utils.ReadUint32(pos, resp)
+	wvpObjectStream.Reserved, pos = utils.ReadBytes(pos, 28, resp)
+	wvpObjectStream.Size, pos = utils.ReadUint32(pos, resp)
+	wvpObjectStream.Value, pos = utils.ReadUnicodeString(pos, resp)
+
 	return pos, nil
 }

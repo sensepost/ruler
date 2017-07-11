@@ -828,7 +828,7 @@ func SetFolderProperties(folderid []byte, propertyTags []TaggedPropertyValue) (*
 		if p, e = propertiesResponse.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
 			return nil, e
 		}
-		fmt.Println(openFolderResponse)
+
 		return &propertiesResponse, nil
 	}
 
@@ -1735,10 +1735,15 @@ func DeleteFolder(folderid []byte) (*RopDeleteFolderResponse, error) {
 	return nil, ErrUnknown
 }
 
+func GetFolder(folderid int) (*RopOpenFolderResponse, error) {
+	folderResp, _, e := GetFolderProps(folderid, nil)
+	return folderResp, e
+}
+
 //GetFolder function get's a folder from the folders id
 //FolderIds can be any of the "specialFolders" as defined in Exchange
 //mapi/datastructs.go folder id/locations constants
-func GetFolder(folderid int, columns []PropertyTag) (*RopOpenFolderResponse, error) {
+func GetFolderProps(folderid int, columns []PropertyTag) (*RopOpenFolderResponse, *RopGetPropertiesSpecificResponse, error) {
 
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
@@ -1775,21 +1780,31 @@ func GetFolder(folderid int, columns []PropertyTag) (*RopOpenFolderResponse, err
 	execResponse, err := sendMapiRequest(execRequest)
 
 	if err != nil {
-		return nil, &TransportError{err}
+		return nil, nil, &TransportError{err}
 	}
 
 	if execResponse.StatusCode != 255 {
 		bufPtr := 10
 		openFolder := RopOpenFolderResponse{}
-		if _, e := openFolder.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
-			return nil, e
+		p, e := openFolder.Unmarshal(execResponse.RopBuffer[bufPtr:])
+		if e != nil {
+			return nil, nil, e
 		}
 		//this should be the handle to the folder
 		//fmt.Println(execResponse.RopBuffer[len(execResponse.RopBuffer)-4:])
-		return &openFolder, nil
+		if columns == nil {
+			return &openFolder, nil, nil
+		}
+
+		bufPtr += p
+		getPropertiesResponse := RopGetPropertiesSpecificResponse{}
+		_, e = getPropertiesResponse.Unmarshal(execResponse.RopBuffer[bufPtr:], columns)
+
+		return &openFolder, &getPropertiesResponse, e
+
 	}
 
-	return nil, ErrUnknown
+	return nil, nil, ErrUnknown
 }
 
 //GetMessage returns the specific fields from a message
