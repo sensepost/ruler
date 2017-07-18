@@ -38,6 +38,7 @@ func CreateFormAttachmentTemplate(folderid, messageid []byte, pstr string) error
 
 //CreateFormAttachmentForDeleteTemplate creates the template attachment holding the actual command to execute
 func CreateFormAttachmentForDeleteTemplate(folderid, messageid []byte, pstr string) error {
+    pstr = fmt.Sprintf("%s\nEnd Function",pstr)
 	return CreateFormAttachmentWithTemplate(folderid, messageid, pstr, "templates/formdeletetemplate.bin")
 }
 
