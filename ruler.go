@@ -163,7 +163,7 @@ func sendMessage(subject, body string) error {
 	propertyTags := make([]mapi.PropertyTag, 1)
 	propertyTags[0] = mapi.PidTagDisplayName
 
-	_, er := mapi.GetFolder(mapi.OUTBOX) //propertyTags)
+	_, er := mapi.GetFolder(mapi.OUTBOX, nil) //propertyTags)
 	if er != nil {
 		return er
 	}
@@ -1238,11 +1238,11 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 		},
 		{
 			Name:  "homepage",
-			Usage: "Interact with the forms function.",
+			Usage: "Interact with the homepage function.",
 			Subcommands: []cli.Command{
 				{
 					Name:  "add",
-					Usage: "creates a new form. ",
+					Usage: "creates a new homepage. ",
 					Flags: []cli.Flag{
 						cli.StringFlag{
 							Name:  "url,u",
@@ -1271,7 +1271,7 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 				},
 				{
 					Name:  "delete",
-					Usage: "delete an existing form",
+					Usage: "delete an existing homepage and resets to using folder view",
 					Flags: []cli.Flag{},
 					Action: func(c *cli.Context) error {
 
@@ -1287,7 +1287,7 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 				},
 				{
 					Name:  "display",
-					Usage: "display existing homepage",
+					Usage: "display current homepage setting",
 
 					Action: func(c *cli.Context) error {
 

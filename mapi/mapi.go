@@ -133,7 +133,7 @@ func sendMapiRequest(mapi ExecuteRequest) (*ExecuteResponse, error) {
 			return nil, err
 		}
 	}
-	//utils.Debug.Println(string(rawResp))
+	//utils.Info.Println(string(rawResp))
 	executeResponse := ExecuteResponse{}
 	executeResponse.Unmarshal(rawResp)
 	return &executeResponse, nil
@@ -774,6 +774,73 @@ func SetMessageStatus(folderid, messageid []byte) (*RopSetMessageStatusResponse,
 
 	return nil, ErrUnknown
 
+}
+
+//GetMessage returns the specific fields from a message
+func GetPropertyIds(folderid, messageid []byte, propids []PropertyName) (*RopGetPropertyIdsFromNamesResponse, error) {
+
+	execRequest := ExecuteRequest{}
+	execRequest.Init()
+
+	getMessage := RopOpenMessageRequest{RopID: 0x03, LogonID: AuthSession.LogonID}
+	getMessage.InputHandle = 0x00
+	getMessage.OutputHandle = 0x01
+	getMessage.FolderID = folderid
+	getMessage.MessageID = messageid
+	getMessage.CodePageID = 0xFFF
+	getMessage.OpenModeFlags = 0x03
+
+	fullReq := getMessage.Marshal()
+
+	getPropertyIds := RopGetPropertyIdsFromNamesRequest{}
+	getPropertyIds.RopID = 0x56
+	getPropertyIds.LogonID = AuthSession.LogonID
+	getPropertyIds.InputHandle = 0x01
+	getPropertyIds.Flags = 0x02
+	getPropertyIds.PropertyNameCount = uint16(len(propids))
+	getPropertyIds.PropertyNames = propids
+
+	fullReq = append(fullReq, getPropertyIds.Marshal()...)
+	//fullReq := getPropertyIds.Marshal()
+
+	//ropRelease = RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandle: 0x01}
+	//fullReq = append(fullReq, ropRelease.Marshal()...)
+
+	execRequest.RopBuffer.ROP.RopsList = fullReq
+	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF}
+
+	//fetch folder
+	execResponse, err := sendMapiRequest(execRequest)
+
+	if err != nil {
+		return nil, &TransportError{err}
+	}
+
+	if execResponse.StatusCode != 255 {
+
+		bufPtr := 10
+
+		if execResponse.RopBuffer[bufPtr : bufPtr+1][0] != 0x03 {
+			bufPtr += 4
+		}
+
+		var p int
+		var e error
+
+		getMessageResponse := RopOpenMessageResponse{}
+
+		if p, e = getMessageResponse.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+			return nil, e
+		}
+
+		bufPtr += p
+
+		getPropertyIdsResp := RopGetPropertyIdsFromNamesResponse{}
+		_, e = getPropertyIdsResp.Unmarshal(execResponse.RopBuffer[bufPtr:])
+		return &getPropertyIdsResp, e
+	}
+
+	return nil, ErrUnknown
 }
 
 //SetFolderProperties is used to set one or more properties on a folder
@@ -1735,7 +1802,9 @@ func DeleteFolder(folderid []byte) (*RopDeleteFolderResponse, error) {
 	return nil, ErrUnknown
 }
 
-func GetFolder(folderid int) (*RopOpenFolderResponse, error) {
+//GetFoler for backwards compatibility
+//This function will be replaced in newer versions
+func GetFolder(folderid int, columns []PropertyTag) (*RopOpenFolderResponse, error) {
 	folderResp, _, e := GetFolderProps(folderid, nil)
 	return folderResp, e
 }
@@ -1805,6 +1874,53 @@ func GetFolderProps(folderid int, columns []PropertyTag) (*RopOpenFolderResponse
 	}
 
 	return nil, nil, ErrUnknown
+}
+
+//OpenMessage opens and returns a handle to a message
+func OpenMessage(folderid, messageid []byte) ([]byte, error) {
+
+	execRequest := ExecuteRequest{}
+	execRequest.Init()
+
+	ropRelease := RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandle: 0x01}
+	fullReq := ropRelease.Marshal()
+
+	getMessage := RopOpenMessageRequest{RopID: 0x03, LogonID: AuthSession.LogonID}
+	getMessage.InputHandle = 0x00
+	getMessage.OutputHandle = 0x01
+	getMessage.FolderID = folderid
+	getMessage.MessageID = messageid
+	getMessage.CodePageID = 0xFFF
+	getMessage.OpenModeFlags = 0x03
+
+	fullReq = append(fullReq, getMessage.Marshal()...)
+	execRequest.RopBuffer.ROP.RopsList = fullReq
+	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF}
+
+	//fetch folder
+	execResponse, err := sendMapiRequest(execRequest)
+
+	if err != nil {
+		return nil, &TransportError{err}
+	}
+
+	if execResponse.StatusCode != 255 {
+
+		bufPtr := 10
+
+		var e error
+		if execResponse.RopBuffer[bufPtr : bufPtr+1][0] != 0x03 {
+			bufPtr += 4
+		}
+
+		openMessage := RopOpenMessageResponse{}
+		if _, e = openMessage.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+			return nil, e
+		}
+		fmt.Printf("%x\n", execResponse.RopBuffer)
+		return execResponse.RopBuffer[len(execResponse.RopBuffer)-4:], nil
+	}
+	return nil, ErrUnknown
 }
 
 //GetMessage returns the specific fields from a message

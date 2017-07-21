@@ -181,6 +181,25 @@ type RopGetContentsTableResponse struct {
 	RowCount     uint32
 }
 
+//RopGetPropertyIdsFromNamesRequest struct to get property ids for LIDs
+type RopGetPropertyIdsFromNamesRequest struct {
+	RopID             uint8 //0x56
+	LogonID           uint8
+	InputHandle       uint8
+	Flags             uint8
+	PropertyNameCount uint16
+	PropertyNames     []PropertyName
+}
+
+//RopGetPropertyIdsFromNamesResponse struct to get property ids for LIDs
+type RopGetPropertyIdsFromNamesResponse struct {
+	RopID           uint8 //0x56
+	InputHandle     uint8
+	ReturnValue     uint32
+	PropertyIdCount uint16
+	PropertyIds     []byte //16 byte guids
+}
+
 //RopGetPropertiesSpecific struct to get propertiesfor a folder
 type RopGetPropertiesSpecific struct {
 	RopID             uint8 //0x07
@@ -874,6 +893,14 @@ type CRuleAction struct {
 	Value []byte
 }
 
+type PropertyName struct {
+	Kind     uint8  //0x00,0x01,0xff
+	GUID     []byte //16 byte guid
+	LID      []byte //OPTIONAL: if Kind == 0x00
+	NameSize []byte //OPTIONAL: 1 byte size if Kind == 0x01
+	Name     []byte //OPTIONAL: if Kind == 0x01
+}
+
 /*
 dwVersion = 0x00000002 = WEBVIEW_PERSISTENCE_VERSION
 dwType = 0x00000001 = WEBVIEWURL
@@ -1158,6 +1185,11 @@ func (wvpObjectStream WebViewPersistenceObjectStream) Marshal() []byte {
 	return utils.BodyToBytes(wvpObjectStream)
 }
 
+//Marshal turn RopGetPropertyIdsFromNamesRequest into Bytes
+func (getIds RopGetPropertyIdsFromNamesRequest) Marshal() []byte {
+	return utils.BodyToBytes(getIds)
+}
+
 //Unmarshal function to convert response into ConnectResponse struct
 func (connResponse *ConnectResponse) Unmarshal(resp []byte) error {
 	pos := 0
@@ -1412,6 +1444,23 @@ func (getPropertiesResponse *RopFastTransferSourceCopyPropertiesResponse) Unmars
 	if getPropertiesResponse.ReturnValue != 0 {
 		return pos, &ErrorCode{getPropertiesResponse.ReturnValue}
 	}
+	return pos, nil
+}
+
+//Unmarshal function to produce RopCreateMessageResponse struct
+func (getPropertiesResponse *RopGetPropertyIdsFromNamesResponse) Unmarshal(resp []byte) (int, error) {
+	pos := 0
+
+	getPropertiesResponse.RopID, pos = utils.ReadByte(pos, resp)
+	getPropertiesResponse.InputHandle, pos = utils.ReadByte(pos, resp)
+	getPropertiesResponse.ReturnValue, pos = utils.ReadUint32(pos, resp)
+
+	if getPropertiesResponse.ReturnValue != 0 {
+		return pos, &ErrorCode{getPropertiesResponse.ReturnValue}
+	}
+
+	getPropertiesResponse.PropertyIdCount, pos = utils.ReadUint16(pos, resp)
+	getPropertiesResponse.PropertyIds, pos = utils.ReadBytes(pos, int(getPropertiesResponse.PropertyIdCount)*16, resp)
 	return pos, nil
 }
 
@@ -1877,7 +1926,10 @@ func (wvpObjectStream *WebViewPersistenceObjectStream) Unmarshal(resp []byte) (i
 	wvpObjectStream.Flags, pos = utils.ReadUint32(pos, resp)
 	wvpObjectStream.Reserved, pos = utils.ReadBytes(pos, 28, resp)
 	wvpObjectStream.Size, pos = utils.ReadUint32(pos, resp)
-	wvpObjectStream.Value, pos = utils.ReadUnicodeString(pos, resp)
+
+	if wvpObjectStream.Size > 0 {
+		wvpObjectStream.Value, pos = utils.ReadUnicodeString(pos, resp)
+	}
 
 	return pos, nil
 }
