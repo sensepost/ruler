@@ -618,7 +618,7 @@ func SendMessage(triggerWord, body string) (*RopSubmitMessageResponse, error) {
 
 	setProperties := RopSetPropertiesRequest{RopID: 0x0A, LogonID: AuthSession.LogonID}
 	setProperties.InputHandle = 0x01
-	setProperties.PropertValueCount = 8
+	setProperties.PropertValueCount = 9
 
 	propertyTags := make([]TaggedPropertyValue, setProperties.PropertValueCount)
 	propertyTags[0] = TaggedPropertyValue{PidTagBody, utils.UniString(fmt.Sprintf("%s\n\r", body))}
@@ -630,6 +630,7 @@ func SendMessage(triggerWord, body string) (*RopSubmitMessageResponse, error) {
 	propertyTags[5] = TaggedPropertyValue{PidTagNativeBody, []byte{0x00, 0x00, 0x00, 0x01}}
 	propertyTags[6] = TaggedPropertyValue{PidTagSubject, utils.UniString(triggerWord)}
 	propertyTags[7] = TaggedPropertyValue{PidTagNormalizedSubject, utils.UniString(triggerWord)}
+	propertyTags[8] = TaggedPropertyValue{PidTagHidden, []byte{0x01}} //hide message during "composition"
 
 	setProperties.PropertyValues = propertyTags
 	propertySize := 0
