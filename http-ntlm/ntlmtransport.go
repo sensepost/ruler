@@ -128,6 +128,7 @@ func (t NtlmTransport) RoundTrip(req *http.Request) (res *http.Response, err err
 		req.Header.Set("Authorization", "NTLM "+utils.EncBase64(authenticate.Bytes()))
 
 		resp, err = client.Do(req)
+    defer resp.Body.Close()
 	}
 	return resp, err
 }
