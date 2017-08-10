@@ -11,6 +11,7 @@ import (
 	"os"
 	"strings"
 	"time"
+  "regexp"
 
 	"github.com/howeyc/gopass"
 	"github.com/sensepost/ruler/autodiscover"
@@ -35,6 +36,33 @@ func exit(err error) {
 		utils.Error.Println(err)
 	}
 	os.Exit(exitcode)
+}
+
+//function to perform an autodiscover
+func discover(c *cli.Context) error {
+ 	var err error
+
+ 	if c.GlobalString("domain") == "" && c.GlobalString("url") == "" && c.GlobalString("o365") == "" {
+ 		return fmt.Errorf("Either --domain or --url or --o365 are required")
+ 	}
+
+ 	if prepConfig(c.GlobalBool("admin"), c.GlobalBool("basic"), c.GlobalBool("insecure"), c.GlobalBool("noencrypt"), c.GlobalBool("o365"), c.GlobalBool("rpc"), c.GlobalBool("verbose"), c.GlobalString("config"), c.GlobalString("cookie"), c.GlobalString("domain"), "NoSuchUser@"+c.GlobalString("domain"), c.GlobalString("hash"), "Password1", c.GlobalString("proxy"), c.GlobalString("url"), "NoSuchUser") == nil {
+ 		err = doAutodiscover(c.GlobalBool("nocache"), c.GlobalString("config"), c.GlobalBool("rpc"))
+ 	}
+
+ 	if config.DiscoURL.String() == "" {
+ 		utils.Error.Printf("%s\nTry with the --o365 flag.\n",err)
+ 	} else if c.GlobalString("o365") != "" {
+ 		if m, _ := regexp.MatchString(".*401.*", err.Error()); m == true {
+ 			utils.Info.Printf("The autodiscover URL is: %s", config.DiscoURL.String())
+ 			utils.Info.Printf("The domain is hosted with Office 365.")
+ 		} else if  m, _ := regexp.MatchString(".*404.*", err.Error()); m == true {
+ 			utils.Error.Println("The domain is not hosted with Office 365")
+ 		}
+ 	} else {
+ 		utils.Info.Printf("The autodiscover URL is: %s", config.DiscoURL.String())
+ 	}
+ 	return nil
 }
 
 //function to perform a bruteforce
@@ -176,11 +204,23 @@ func sendMessage(subject, body string) error {
 	return nil
 }
 
-//Function to connect to the Exchange server
 func connect(c *cli.Context) error {
+	if prepConfig(c.GlobalBool("admin"), c.GlobalBool("basic"), c.GlobalBool("insecure"), c.GlobalBool("noencrypt"), c.GlobalBool("o365"), c.GlobalBool("rpc"), c.GlobalBool("verbose"), c.GlobalString("config"), c.GlobalString("cookie"), c.GlobalString("domain"), c.GlobalString("email"), c.GlobalString("hash"), c.GlobalString("password"), c.GlobalString("proxy"), c.GlobalString("url"), c.GlobalString("username")) == nil {
+		if doAutodiscover(c.GlobalBool("nocache"), c.GlobalString("config"), c.GlobalBool("rpc")) == nil {
+			return doLogin()
+		} else {
+			return nil
+		}
+	} else {
+		return nil
+	}
+}
+
+//Function to connect to the Exchange server
+func prepConfig(xadmin bool, xbasic bool, xinsecure bool, xnoencrypt bool, xo365 bool, xrpc bool, xverbose bool, xconfig string, xcookie string, xdomain string, xemail string, xhash string, xpassword string, xproxy string, xurl string, xusername string) error {
 	var err error
 	//if no password or hash was supplied, read from stdin
-	if c.GlobalString("password") == "" && c.GlobalString("hash") == "" && c.GlobalString("config") == "" {
+	if xpassword == "" && xhash == "" && xconfig == "" {
 		fmt.Printf("Password: ")
 		var pass []byte
 		pass, err = gopass.GetPasswd()
@@ -190,31 +230,31 @@ func connect(c *cli.Context) error {
 		}
 		config.Pass = string(pass)
 	} else {
-		config.Pass = c.GlobalString("password")
-		if config.NTHash, err = hex.DecodeString(c.GlobalString("hash")); err != nil {
+		config.Pass = xpassword
+		if config.NTHash, err = hex.DecodeString(xhash); err != nil {
 			return fmt.Errorf("Invalid hash provided. Hex decode failed")
 		}
 
 	}
 	//setup our autodiscover service
-	config.Domain = c.GlobalString("domain")
-	config.User = c.GlobalString("username")
-	config.Email = c.GlobalString("email")
-	config.Basic = c.GlobalBool("basic")
-	config.Insecure = c.GlobalBool("insecure")
-	config.Verbose = c.GlobalBool("verbose")
-	config.Admin = c.GlobalBool("admin")
-	config.RPCEncrypt = !c.GlobalBool("noencrypt")
+	config.Domain = xdomain
+	config.User = xusername
+	config.Email = xemail
+	config.Basic = xbasic
+	config.Insecure = xinsecure
+	config.Verbose = xverbose
+	config.Admin = xadmin
+	config.RPCEncrypt = !xnoencrypt
 	config.CookieJar, _ = cookiejar.New(nil)
-	config.Proxy = c.GlobalString("proxy")
+	config.Proxy = xproxy
 	//add supplied cookie to the cookie jar
-	if c.GlobalString("cookie") != "" {
+	if xcookie != "" {
 		//split into cookies and then into name : value
-		cookies := strings.Split(c.GlobalString("cookie"), ";")
+		cookies := strings.Split(xcookie, ";")
 		var cookieJarTmp []*http.Cookie
 		var cdomain string
 		//split and get the domain from the email
-		if eparts := strings.Split(c.GlobalString("email"), "@"); len(eparts) == 2 {
+		if eparts := strings.Split(xemail, "@"); len(eparts) == 2 {
 			cdomain = eparts[1]
 		} else {
 			return fmt.Errorf("[x] Invalid email address")
@@ -237,13 +277,13 @@ func connect(c *cli.Context) error {
 	config.CookieJar, _ = cookiejar.New(nil)
 
 	//add supplied cookie to the cookie jar
-	if c.GlobalString("cookie") != "" {
+	if xcookie != "" {
 		//split into cookies and then into name : value
-		cookies := strings.Split(c.GlobalString("cookie"), ";")
+		cookies := strings.Split(xcookie, ";")
 		var cookieJarTmp []*http.Cookie
 		var cdomain string
 		//split and get the domain from the email
-		if eparts := strings.Split(c.GlobalString("email"), "@"); len(eparts) == 2 {
+		if eparts := strings.Split(xemail, "@"); len(eparts) == 2 {
 			cdomain = eparts[1]
 		} else {
 			return fmt.Errorf("Invalid email address")
@@ -263,25 +303,27 @@ func connect(c *cli.Context) error {
 		config.CookieJar.SetCookies(u, cookieJarTmp)
 	}
 
-	url := c.GlobalString("url")
-
-	if c.GlobalBool("o365") == true {
-		url = "https://autodiscover-s.outlook.com/autodiscover/autodiscover.xml"
+	if xo365 == true {
+		config.DiscoURL, _ = url.Parse("https://autodiscover-s.outlook.com/autodiscover/autodiscover.xml")
+	} else {
+		config.DiscoURL, _ = url.Parse(xurl)
 	}
 
 	autodiscover.SessionConfig = &config
+	return nil
+}
 
+func doAutodiscover(xnocache bool, xconfig string, xrpc bool) error {
+	var err error
 	var resp *utils.AutodiscoverResp
 	var rawAutodiscover string
-
-	var mapiURL, abkURL, userDN string
 
 	//try connect to MAPI/HTTP first -- this is faster and the code-base is more stable
 	//unless of course the global "RPC" flag has been set, which specifies we should just use
 	//RPC/HTTP from the get-go
-	if c.GlobalString("config") != "" {
+	if xconfig != "" {
 		var yamlConfig utils.YamlConfig
-		if yamlConfig, err = utils.ReadYml(c.GlobalString("config")); err != nil {
+		if yamlConfig, err = utils.ReadYml(xconfig); err != nil {
 			utils.Error.Println("Invalid Config file.")
 			return err
 		}
@@ -323,31 +365,31 @@ func connect(c *cli.Context) error {
 			config.RPCEncrypt = yamlConfig.RPCEncrypt
 			config.RPCNtlm = yamlConfig.Ntlm
 		} else {
-			mapiURL = fmt.Sprintf("%s?MailboxId=%s", yamlConfig.MapiURL, yamlConfig.Mailbox)
+			config.URL, _ = url.Parse(fmt.Sprintf("%s?MailboxId=%s", yamlConfig.MapiURL, yamlConfig.Mailbox))
 		}
-		userDN = yamlConfig.UserDN
+		config.LID = yamlConfig.UserDN
 
-	} else if !c.GlobalBool("rpc") {
+	} else if !xrpc {
 
 		if config.User == "" && config.Email == "" {
 			return fmt.Errorf("Missing username and/or email argument. Use --domain (if needed), --username and --email or the --config")
 		}
 
-		if c.GlobalBool("nocache") == false { //unless user specified nocache, check cache for existing autodiscover
+		if xnocache == false { //unless user specified nocache, check cache for existing autodiscover
 			resp = autodiscover.CheckCache(config.Email)
 		}
 		if resp == nil {
-			resp, rawAutodiscover, err = autodiscover.GetMapiHTTP(config.Email, url, resp)
+			resp, rawAutodiscover, err = autodiscover.GetMapiHTTP(config.Email, config.DiscoURL.String(), resp)
 			if err != nil {
-				exit(err)
+				return err
 			}
 		}
-		mapiURL = mapi.ExtractMapiURL(resp)
-		abkURL = mapi.ExtractMapiAddressBookURL(resp)
-		userDN = resp.Response.User.LegacyDN
+		config.URL, _ = url.Parse(mapi.ExtractMapiURL(resp))
+		config.ABKURL, _ = url.Parse(mapi.ExtractMapiAddressBookURL(resp))
+		config.LID = resp.Response.User.LegacyDN
 
-		if mapiURL == "" { //try RPC
-			resp, rawAutodiscover, config.RPCURL, config.RPCMailbox, config.RPCNtlm, err = autodiscover.GetRPCHTTP(config.Email, url, resp)
+		if config.URL.String() == "" { //try RPC
+			resp, rawAutodiscover, config.RPCURL, config.RPCMailbox, config.RPCNtlm, err = autodiscover.GetRPCHTTP(config.Email, config.DiscoURL.String(), resp)
 			if err != nil {
 				exit(err)
 			}
@@ -355,16 +397,16 @@ func connect(c *cli.Context) error {
 				return fmt.Errorf("Both MAPI/HTTP and RPC/HTTP failed. Are the credentials valid? \n%s", resp.Response.Error)
 			}
 
-			if c.GlobalBool("nocache") == false {
+			if xnocache == false {
 				autodiscover.CreateCache(config.Email, rawAutodiscover) //store the autodiscover for future use
 			}
 		} else {
 
-			utils.Trace.Println("MAPI URL found: ", mapiURL)
-			utils.Trace.Println("MAPI AddressBook URL found: ", abkURL)
+			utils.Trace.Println("MAPI URL found: ", config.URL.String())
+			utils.Trace.Println("MAPI AddressBook URL found: ", config.ABKURL.String())
 
-			//mapi.Init(&config, userDN, mapiURL, abkURL, mapi.HTTP)
-			if c.GlobalBool("nocache") == false {
+			//mapi.Init(&config, config.LID, config.URL.String(), config.ABKURL.String(), mapi.HTTP)
+			if xnocache == false {
 				autodiscover.CreateCache(config.Email, rawAutodiscover) //store the autodiscover for future use
 			}
 		}
@@ -376,26 +418,30 @@ func connect(c *cli.Context) error {
 		}
 
 		utils.Trace.Println("RPC/HTTP forced, trying RPC/HTTP")
-		if c.GlobalBool("nocache") == false { //unless user specified nocache, check cache for existing autodiscover
+		if xnocache == false { //unless user specified nocache, check cache for existing autodiscover
 			resp = autodiscover.CheckCache(config.Email)
 		}
 
-		resp, rawAutodiscover, config.RPCURL, config.RPCMailbox, config.RPCNtlm, err = autodiscover.GetRPCHTTP(config.Email, url, resp)
+		resp, rawAutodiscover, config.RPCURL, config.RPCMailbox, config.RPCNtlm, err = autodiscover.GetRPCHTTP(config.Email, config.DiscoURL.String(), resp)
 		if err != nil {
 			exit(err)
 		}
 
-		userDN = resp.Response.User.LegacyDN
+		config.LID = resp.Response.User.LegacyDN
 
-		if c.GlobalBool("nocache") == false {
+		if xnocache == false {
 			autodiscover.CreateCache(config.Email, rawAutodiscover) //store the autodiscover for future use
 		}
 	}
+	return nil
+}
 
+func doLogin() error {
+	var err error
 	if config.RPCURL != "" {
-		mapi.Init(&config, userDN, "", "", mapi.RPC)
+		mapi.Init(&config, config.LID, "", "", mapi.RPC)
 	} else {
-		mapi.Init(&config, userDN, mapiURL, abkURL, mapi.HTTP)
+		mapi.Init(&config, config.LID, config.URL.String(), config.ABKURL.String(), mapi.HTTP)
 	}
 
 	//now we should do the login
@@ -411,7 +457,7 @@ func connect(c *cli.Context) error {
 		propertyTags := make([]mapi.PropertyTag, 2)
 		propertyTags[0] = mapi.PidTagDisplayName
 		propertyTags[1] = mapi.PidTagSubfolders
-		mapi.GetFolderProps(mapi.INBOX, propertyTags) //Open Inbox
+		mapi.GetFolder(mapi.INBOX, propertyTags) //Open Inbox
 	}
 	return nil
 }
@@ -993,6 +1039,25 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 				}
 				err = sendMessage(c.String("subject"), c.String("body"))
 				exit(err)
+				return nil
+			},
+		},
+    {
+			Name:    "autodiscover",
+			Aliases: []string{"u"},
+			Usage:   "Just run the autodiscover service to find the authentication point",
+			Flags: []cli.Flag{
+				cli.BoolFlag{
+					Name:  "verbose,v",
+					Usage: "Display each attempt",
+				},
+			},
+			Action: func(c *cli.Context) error {
+				err := discover(c)
+				if err != nil {
+					utils.Error.Println(err)
+					cli.OsExiter(1)
+				}
 				return nil
 			},
 		},

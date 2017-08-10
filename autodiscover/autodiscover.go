@@ -284,7 +284,9 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, string, er
 			autodiscoverURL = createAutodiscover(fmt.Sprintf("autodiscover.%s", domain), false)
 			if autodiscoverURL == "" {
 				return nil, "", fmt.Errorf("Invalid domain or no autodiscover DNS record found")
-			}
+			} else {
+ 				SessionConfig.DiscoURL, _ = url.Parse(autodiscoverURL)
+      }
 		}
 	}
 
@@ -377,7 +379,13 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, string, er
 			return autodiscover(domain, mapi)
 		}
 		if m, _ := regexp.Match("http[s]?://", []byte(domain)); m == true {
-			return nil, "", fmt.Errorf("Failed to authenticate: StatusCode [%d]\n", resp.StatusCode)
+      if resp.StatusCode == 404 { //this means the domain isn't hosted with o365
+ 				return nil, "", fmt.Errorf("Failed to authenticate and domain isn't hosted with Office365: StatusCode [%d]\n", resp.StatusCode)
+ 			} else if resp.StatusCode == 401 { //this means the domain is hosted with 0365
+ 				return nil, "", fmt.Errorf("Failed to authenticate but the domain is hosted with Office365: StatusCode [%d]\n", resp.StatusCode)
+ 			} else {
+ 				return nil, "", fmt.Errorf("Failed to authenticate: StatusCode [%d]\n", resp.StatusCode)
+ 			}
 		}
 		if autodiscoverStep < 2 {
 			autodiscoverStep++
