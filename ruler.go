@@ -88,10 +88,15 @@ func discover(c *cli.Context) error {
   config.RPCEncrypt = !c.GlobalBool("noencrypt")
   config.CookieJar, _ = cookiejar.New(nil)
   config.Proxy = c.GlobalString("proxy")
+  url := c.GlobalString("url")
+
+  if url == "" {
+    url = config.Domain
+  }
 
 	autodiscover.SessionConfig = &config
 
-  _, domain, err := autodiscover.Autodiscover(config.Domain)
+  _, domain, err := autodiscover.Autodiscover(url)
 
   if domain == "" && err != nil {
     return err
