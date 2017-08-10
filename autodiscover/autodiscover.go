@@ -284,9 +284,7 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, string, er
 			autodiscoverURL = createAutodiscover(fmt.Sprintf("autodiscover.%s", domain), false)
 			if autodiscoverURL == "" {
 				return nil, "", fmt.Errorf("Invalid domain or no autodiscover DNS record found")
-			} else {
- 				SessionConfig.DiscoURL, _ = url.Parse(autodiscoverURL)
-      }
+			}
 		}
 	}
 
@@ -332,6 +330,10 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, string, er
 
 	defer resp.Body.Close()
 
+  if resp.StatusCode == 401 || resp.StatusCode == 403 {
+    return nil, autodiscoverURL, fmt.Errorf("Access denied. Check your credentials")
+  }
+
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return nil, "", err
@@ -352,9 +354,7 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, string, er
 			return nil, "", fmt.Errorf("Error in autodiscover response, %s", err)
 		}
 		SessionConfig.NTLMAuth = req.Header.Get("Authorization")
-		if SessionConfig.Verbose == true {
-			//fmt.Println(string(body))
-		}
+
 		//check if we got a RedirectAddr ,
 		//if yes, get the new autodiscover url
 		if autodiscoverResp.Response.Account.Action == "redirectAddr" {
@@ -379,13 +379,7 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, string, er
 			return autodiscover(domain, mapi)
 		}
 		if m, _ := regexp.Match("http[s]?://", []byte(domain)); m == true {
-      if resp.StatusCode == 404 { //this means the domain isn't hosted with o365
- 				return nil, "", fmt.Errorf("Failed to authenticate and domain isn't hosted with Office365: StatusCode [%d]\n", resp.StatusCode)
- 			} else if resp.StatusCode == 401 { //this means the domain is hosted with 0365
- 				return nil, "", fmt.Errorf("Failed to authenticate but the domain is hosted with Office365: StatusCode [%d]\n", resp.StatusCode)
- 			} else {
- 				return nil, "", fmt.Errorf("Failed to authenticate: StatusCode [%d]\n", resp.StatusCode)
- 			}
+			return nil, "", fmt.Errorf("Failed to authenticate: StatusCode [%d]\n", resp.StatusCode)
 		}
 		if autodiscoverStep < 2 {
 			autodiscoverStep++
