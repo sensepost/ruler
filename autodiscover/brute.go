@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+    "crypto/tls"
 
 	"github.com/sensepost/ruler/http-ntlm"
 	"github.com/sensepost/ruler/utils"
@@ -22,7 +23,7 @@ type Result struct {
 	Error    error
 }
 
-var concurrency = 5 //limit the number of consecutive attempts
+var concurrency = 3 //limit the number of consecutive attempts
 
 func autodiscoverDomain(domain string) string {
 	var autodiscoverURL string
@@ -56,8 +57,10 @@ func autodiscoverDomain(domain string) string {
 
 	req, err := http.NewRequest("GET", autodiscoverURL, nil)
 	req.Header.Add("Content-Type", "text/xml")
-
-	client := http.Client{}
+    tr := &http.Transport{
+                TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+            }
+    client := http.Client{Transport:tr}
 	resp, err := client.Do(req)
 
 	if err != nil {
@@ -108,7 +111,7 @@ func BruteForce(domain, usersFile, passwordsFile string, basic, insecure, stopSu
 			if u == "" || p == "" {
 				continue
 			}
-
+      time.Sleep(time.Millisecond * 500) //lets not flood it
 			sem <- true
 
 			go func(u string, p string, i int) {
@@ -183,7 +186,7 @@ func UserPassBruteForce(domain, userpassFile string, basic, insecure, stopSucces
 		if u == "" {
 			continue
 		}
-
+    time.Sleep(time.Millisecond * 500) //lets not flood it
 		sem <- true
 
 		go func(u string, p string) {
@@ -231,7 +234,10 @@ func connect(autodiscoverURL, user, password string, basic, insecure bool) Resul
 	result := Result{user, password, -1, -1, nil}
 
 	cookie, _ := cookiejar.New(nil)
-	client := http.Client{}
+    tr := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+                          DisableKeepAlives:true, //should fix mutex issues
+    }
+    client := http.Client{Transport:tr}
 	if basic == false {
 		//check if this is a first request or a redirect
 		//create an ntml http client

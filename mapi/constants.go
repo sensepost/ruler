@@ -610,3 +610,5 @@ var PidTagComment = PropertyTag{PtypString, 0x3004}
 
 var PidTagSenderEntryId = PropertyTag{PtypBinary, 0x0C19}
 var PidTagFolderWebViewInfo = PropertyTag{PtypBinary, 0x36DF}
+var PidTagPurportedSenderDomain = PropertyTag{PtypString, 0x4083}
+var PidTagBodyContentLocation = PropertyTag{PtypString, 0x1014}
