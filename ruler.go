@@ -40,95 +40,93 @@ func exit(err error) {
 //function to perform an autodiscover
 func discover(c *cli.Context) error {
 
-
 	if c.GlobalString("domain") == "" {
 		return fmt.Errorf("Required param --domain is missing")
 	}
 
-  if c.Bool("dump") == true && (c.GlobalString("username") == "" && c.GlobalString("email") =="" ) {
-    return fmt.Errorf("--dump requires credentials to be set!")
-  }
+	if c.Bool("dump") == true && (c.GlobalString("username") == "" && c.GlobalString("email") == "") {
+		return fmt.Errorf("--dump requires credentials to be set!")
+	}
 
-  if c.Bool("dump") == true && c.String("out") == "" {
-    return fmt.Errorf("--dump requires an out file to be set with --out /path/to/file.txt")
-  }
+	if c.Bool("dump") == true && c.String("out") == "" {
+		return fmt.Errorf("--dump requires an out file to be set with --out /path/to/file.txt")
+	}
 
-  var err error
-  if c.Bool("dump") == true && c.GlobalString("password") == "" && c.GlobalString("hash") == "" {
-    fmt.Printf("Password: ")
-    var pass []byte
-    pass, err = gopass.GetPasswd()
-    if err != nil {
-      // Handle gopass.ErrInterrupted or getch() read error
-      return fmt.Errorf("Password or hash required. Supply NTLM hash with --hash")
-    }
-    config.Pass = string(pass)
-  } else {
-    config.Pass = c.GlobalString("password")
-    if config.NTHash, err = hex.DecodeString(c.GlobalString("hash")); err != nil {
-      return fmt.Errorf("Invalid hash provided. Hex decode failed")
-    }
-  }
-  //setup our autodiscover service
-  config.Domain = c.GlobalString("domain")
-  if c.GlobalString("username") == "" {
-    config.User = "nosuchuser"
-  } else {
-    config.User = c.GlobalString("username")
-  }
-  if c.GlobalString("email") == "" {
-    config.Email = "nosuchemail"
-  } else {
-    config.Email = c.GlobalString("email")
-  }
-  config.Basic = c.GlobalBool("basic")
-  config.Insecure = c.GlobalBool("insecure")
-  config.Verbose = c.GlobalBool("verbose")
-  config.Admin = c.GlobalBool("admin")
-  config.RPCEncrypt = !c.GlobalBool("noencrypt")
-  config.CookieJar, _ = cookiejar.New(nil)
-  config.Proxy = c.GlobalString("proxy")
-  url := c.GlobalString("url")
+	var err error
+	if c.Bool("dump") == true && c.GlobalString("password") == "" && c.GlobalString("hash") == "" {
+		fmt.Printf("Password: ")
+		var pass []byte
+		pass, err = gopass.GetPasswd()
+		if err != nil {
+			// Handle gopass.ErrInterrupted or getch() read error
+			return fmt.Errorf("Password or hash required. Supply NTLM hash with --hash")
+		}
+		config.Pass = string(pass)
+	} else {
+		config.Pass = c.GlobalString("password")
+		if config.NTHash, err = hex.DecodeString(c.GlobalString("hash")); err != nil {
+			return fmt.Errorf("Invalid hash provided. Hex decode failed")
+		}
+	}
+	//setup our autodiscover service
+	config.Domain = c.GlobalString("domain")
+	if c.GlobalString("username") == "" {
+		config.User = "nosuchuser"
+	} else {
+		config.User = c.GlobalString("username")
+	}
+	if c.GlobalString("email") == "" {
+		config.Email = "nosuchemail"
+	} else {
+		config.Email = c.GlobalString("email")
+	}
+	config.Basic = c.GlobalBool("basic")
+	config.Insecure = c.GlobalBool("insecure")
+	config.Verbose = c.GlobalBool("verbose")
+	config.Admin = c.GlobalBool("admin")
+	config.RPCEncrypt = !c.GlobalBool("noencrypt")
+	config.CookieJar, _ = cookiejar.New(nil)
+	config.Proxy = c.GlobalString("proxy")
+	url := c.GlobalString("url")
 
-  if url == "" {
-    url = config.Domain
-  }
+	if url == "" {
+		url = config.Domain
+	}
 
 	autodiscover.SessionConfig = &config
 
-  _, domain, err := autodiscover.Autodiscover(url)
+	_, domain, err := autodiscover.Autodiscover(url)
 
-  if domain == "" && err != nil {
-    return err
-  }
+	if domain == "" && err != nil {
+		return err
+	}
 
-  if c.Bool("dump") == true {
-    path := c.String("out")
-    utils.Info.Printf("Looks like the autodiscover service was found, Writing to: %s \n",path)
-    fout, _ := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0666)
-    _, err := fout.WriteString(domain)
-    if err != nil {
-      return fmt.Errorf("Couldn't write to file for some reason..", err)
-    }
-  } else {
-    utils.Info.Printf("Looks like the autodiscover service is at: %s \n",domain)
-    utils.Info.Println("Checking if domain is hosted on Office 365")
-    //smart check to see if domain is on office365
-    //A request to https://login.microsoftonline.com/<domain>/.well-known/openid-configuration
-    //response with 400 for none-hosted domains
-    //response with 200 for office365 domains
+	if c.Bool("dump") == true {
+		path := c.String("out")
+		utils.Info.Printf("Looks like the autodiscover service was found, Writing to: %s \n", path)
+		fout, _ := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0666)
+		_, err := fout.WriteString(domain)
+		if err != nil {
+			return fmt.Errorf("Couldn't write to file for some reason..", err)
+		}
+	} else {
+		utils.Info.Printf("Looks like the autodiscover service is at: %s \n", domain)
+		utils.Info.Println("Checking if domain is hosted on Office 365")
+		//smart check to see if domain is on office365
+		//A request to https://login.microsoftonline.com/<domain>/.well-known/openid-configuration
+		//response with 400 for none-hosted domains
+		//response with 200 for office365 domains
 
-
-    resp, _ := http.Get(fmt.Sprintf("https://login.microsoftonline.com/%s/.well-known/openid-configuration",config.Domain))
-    if resp.StatusCode == 400 {
-      utils.Info.Println("Domain is not hosted on Office 365")
-    } else if resp.StatusCode == 200 {
-      utils.Info.Println("Domain is hosted on Office 365")
-    } else {
-      utils.Error.Println("Received an unexpected response")
-      utils.Debug.Println(resp.StatusCode)
-    }
-  }
+		resp, _ := http.Get(fmt.Sprintf("https://login.microsoftonline.com/%s/.well-known/openid-configuration", config.Domain))
+		if resp.StatusCode == 400 {
+			utils.Info.Println("Domain is not hosted on Office 365")
+		} else if resp.StatusCode == 200 {
+			utils.Info.Println("Domain is hosted on Office 365")
+		} else {
+			utils.Error.Println("Received an unexpected response")
+			utils.Debug.Println(resp.StatusCode)
+		}
+	}
 
 	return nil
 }
@@ -830,6 +828,70 @@ func deleteHomePage() error {
 	return e
 }
 
+func searchFolders() error {
+	utils.Info.Println("Setting search criteria")
+
+	//x, err := mapi.CreateSearchFolder("searchxx")
+	//if err != nil {
+	//		return err
+	//	}
+	//	fmt.Println(x)
+
+	//	time.Sleep(time.Second * (time.Duration)(5))
+	FolderID := []byte{}
+	rows, er := mapi.GetSubFolders(mapi.AuthSession.Folderids[mapi.INBOX])
+	if er != nil || rows != nil {
+		for k := 0; k < len(rows.RowData); k++ {
+			//convert string from unicode and then check if it is our target folder
+			if utils.FromUnicode(rows.RowData[k][0].ValueArray) == "searchxx" {
+				FolderID = rows.RowData[k][1].ValueArray
+				break
+			}
+		}
+	} else {
+		utils.Error.Println(er)
+	}
+
+	folderid := mapi.AuthSession.Folderids[mapi.INBOX]
+	ret, e := mapi.SetSearchCriteria(1, folderid, FolderID)
+	fmt.Println(ret, e)
+	utils.Info.Println("Waiting for folder to populate")
+	for x := 0; x < 10; x++ {
+		time.Sleep(time.Second * (time.Duration)(5))
+		res, _ := mapi.GetSearchCriteria(1, folderid, FolderID)
+		//do check if search is complete
+		fmt.Printf("Search Flag: %x\n", res.SearchFlags)
+		if res.SearchFlags == 0x00001000 {
+			break
+		}
+	}
+	mapi.GetFolderFromID(FolderID, nil)
+	mapi.GetContents(FolderID)
+	/*
+		rows, err := mapi.GetContents(folderid)
+		fmt.Println(rows, err)
+		for k := 0; k < len(rows.RowData); k++ {
+			messageSubject := utils.FromUnicode(rows.RowData[k][0].ValueArray)
+			messageid := rows.RowData[k][1].ValueArray
+			columns := make([]mapi.PropertyTag, 1)
+			columns[0] = mapi.PidTagBody //Column for the Message Body containing our payload
+
+			buff, err := mapi.GetMessageFast(folderid, messageid, columns)
+			if err != nil {
+				continue
+			}
+			//convert buffer to rows
+			messagerows := mapi.DecodeBufferToRows(buff.TransferBuffer, columns)
+
+			payload := utils.FromUnicode(messagerows[0].ValueArray[:len(messagerows[0].ValueArray)-4])
+
+			fmt.Println(messageSubject, payload)
+
+		}
+	*/
+	return er
+}
+
 func main() {
 
 	app := cli.NewApp()
@@ -1091,7 +1153,7 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 				return nil
 			},
 		},
-    {
+		{
 			Name:    "autodiscover",
 			Aliases: []string{"u"},
 			Usage:   "Just run the autodiscover service to find the authentication point",
@@ -1100,9 +1162,9 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 					Name:  "dump,d",
 					Usage: "Dump the autodiscover record to a text file (this needs credentails)",
 				},
-        cli.StringFlag{
+				cli.StringFlag{
 					Name:  "out,o",
-          Value: "",
+					Value: "",
 					Usage: "The file to write to",
 				},
 			},
@@ -1420,6 +1482,31 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 						return nil
 					},
 				},
+			},
+		},
+		{
+			Name:  "search",
+			Usage: "Search for items",
+			Flags: []cli.Flag{
+				cli.BoolFlag{
+					Name:  "subject",
+					Usage: "Search the subject",
+				},
+				cli.StringFlag{
+					Name:  "term",
+					Value: "",
+					Usage: "The term to search for",
+				},
+			},
+			Action: func(c *cli.Context) error {
+				err := connect(c)
+				if err != nil {
+					utils.Error.Println(err)
+					cli.OsExiter(1)
+				}
+				err = searchFolders()
+				exit(err)
+				return nil
 			},
 		},
 	}

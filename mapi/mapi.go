@@ -133,7 +133,7 @@ func sendMapiRequest(mapi ExecuteRequest) (*ExecuteResponse, error) {
 			return nil, err
 		}
 	}
-	//utils.Info.Println(string(rawResp))
+	utils.Info.Println(string(rawResp))
 	executeResponse := ExecuteResponse{}
 	executeResponse.Unmarshal(rawResp)
 	return &executeResponse, nil
@@ -839,6 +839,204 @@ func GetPropertyIds(folderid, messageid []byte, propids []PropertyName) (*RopGet
 		getPropertyIdsResp := RopGetPropertyIdsFromNamesResponse{}
 		_, e = getPropertyIdsResp.Unmarshal(execResponse.RopBuffer[bufPtr:])
 		return &getPropertyIdsResp, e
+	}
+
+	return nil, ErrUnknown
+}
+
+//SetSearchCriteria function is used to set the search criteria on a folder or set of folders
+func SetSearchCriteria(folderidcount int, folderids []byte, searchFolder []byte) (*RopSetSearchCriteriaResponse, error) {
+	execRequest := ExecuteRequest{}
+	execRequest.Init()
+
+	getFolder := RopOpenFolderRequest{RopID: 0x02, LogonID: AuthSession.LogonID}
+	getFolder.InputHandle = 0x00
+	getFolder.OutputHandle = 0x01
+	getFolder.FolderID = searchFolder
+	getFolder.OpenModeFlags = 0x00
+
+	fullReq := getFolder.Marshal()
+
+	setCriteria := RopSetSearchCriteriaRequest{RopID: 0x30, LogonID: AuthSession.LogonID}
+	setCriteria.InputHandleIndex = 0x01
+
+	restrict := AndRestriction{RestrictType: 0x00}
+	restrict.RestrictCount = uint16(2)
+
+	restrict2 := AndRestriction{RestrictType: 0x00}
+	restrict2.RestrictCount = uint16(7)
+
+	restrictContent := ContentRestriction{RestrictType: 0x03}
+	restrictContent.FuzzyLevelLow = flSUBSTRING
+	restrictContent.FuzzyLevelHigh = flIGNORECASE
+	restrictContent.PropertyTag = PidTagSubject
+	restrictContent.PropertyValue = TaggedPropertyValue{PropertyTag: restrictContent.PropertyTag, PropertyValue: utils.UniString("test")}
+
+	restrictNot := NotRestriction{RestrictType: 0x02}
+	restrictNot.Restriction = restrictContent
+
+	restrictContent2 := ContentRestriction{RestrictType: 0x03}
+	restrictContent2.FuzzyLevelLow = flPREFIX
+	restrictContent2.FuzzyLevelHigh = flIGNORECASE
+	restrictContent2.PropertyTag = PidTagMessageClass
+	restrictContent2.PropertyValue = TaggedPropertyValue{PropertyTag: restrictContent2.PropertyTag, PropertyValue: utils.UniString("IPM.Note")}
+
+	restrictNot2 := NotRestriction{RestrictType: 0x02}
+	restrictNot2.Restriction = restrictContent2
+
+	restrictContent3 := ContentRestriction{RestrictType: 0x03}
+	restrictContent3.FuzzyLevelLow = flPREFIX
+	restrictContent3.FuzzyLevelHigh = flIGNORECASE
+	restrictContent3.PropertyTag = PidTagMessageClass
+	restrictContent3.PropertyValue = TaggedPropertyValue{PropertyTag: restrictContent2.PropertyTag, PropertyValue: utils.UniString("IPM.DistList")}
+
+	restrictNot3 := NotRestriction{RestrictType: 0x02}
+	restrictNot3.Restriction = restrictContent3
+
+	restrictContent4 := ContentRestriction{RestrictType: 0x03}
+	restrictContent4.FuzzyLevelLow = flPREFIX
+	restrictContent4.FuzzyLevelHigh = flIGNORECASE
+	restrictContent4.PropertyTag = PidTagMessageClass
+	restrictContent4.PropertyValue = TaggedPropertyValue{PropertyTag: restrictContent2.PropertyTag, PropertyValue: utils.UniString("IPM.Activity")}
+
+	restrictNot4 := NotRestriction{RestrictType: 0x02}
+	restrictNot4.Restriction = restrictContent4
+
+	restrictContent5 := ContentRestriction{RestrictType: 0x03}
+	restrictContent5.FuzzyLevelLow = flPREFIX
+	restrictContent5.FuzzyLevelHigh = flIGNORECASE
+	restrictContent5.PropertyTag = PidTagMessageClass
+	restrictContent5.PropertyValue = TaggedPropertyValue{PropertyTag: restrictContent2.PropertyTag, PropertyValue: utils.UniString("IPM.StickyNote")}
+
+	restrictNot5 := NotRestriction{RestrictType: 0x02}
+	restrictNot5.Restriction = restrictContent5
+
+	restrictContent6 := ContentRestriction{RestrictType: 0x03}
+	restrictContent6.FuzzyLevelLow = flFULLSTRING
+	restrictContent6.FuzzyLevelHigh = flIGNORECASE
+	restrictContent6.PropertyTag = PidTagMessageClass
+	restrictContent6.PropertyValue = TaggedPropertyValue{PropertyTag: restrictContent2.PropertyTag, PropertyValue: utils.UniString("IPM.Task")}
+
+	restrictNot6 := NotRestriction{RestrictType: 0x02}
+	restrictNot6.Restriction = restrictContent6
+
+	restrictContent7 := ContentRestriction{RestrictType: 0x03}
+	restrictContent7.FuzzyLevelLow = flPREFIX
+	restrictContent7.FuzzyLevelHigh = flIGNORECASE
+	restrictContent7.PropertyTag = PidTagMessageClass
+	restrictContent7.PropertyValue = TaggedPropertyValue{PropertyTag: restrictContent2.PropertyTag, PropertyValue: utils.UniString("IPM.Task.")}
+
+	restrictNot7 := NotRestriction{RestrictType: 0x02}
+	restrictNot7.Restriction = restrictContent7
+
+	restrict2.Restricts = []Restriction{restrictNot, restrictNot2, restrictNot3, restrictNot4, restrictNot5, restrictNot6, restrictNot7}
+
+	restrict3 := AndRestriction{RestrictType: 0x00}
+	restrict3.RestrictCount = uint16(1)
+
+	restrictRes := PropertyRestriction{RestrictType: 0x04}
+	restrictRes.RelOp = 0x04
+	restrictRes.PropTag = PidTagImportance
+	restrictRes.TaggedValue = TaggedPropertyValue{PropertyTag: PidTagImportance, PropertyValue: []byte{0x02, 0x00, 0x00, 0x00}}
+
+	restrict3.Restricts = []Restriction{restrictRes}
+	restrict.Restricts = []Restriction{restrictContent, restrictContent2}
+
+	setCriteria.RestrictionData = restrict.Marshal()
+
+	setCriteria.RestrictDataSize = uint16(len(setCriteria.RestrictionData))
+	setCriteria.FolderIds = folderids
+	setCriteria.FolderIDCount = uint16(folderidcount)
+	setCriteria.SearchFlags = RESTARTSEARCH | SHALLOWSEARCH | NONCONTENTINDEXEDSEARCH
+
+	fullReq = append(fullReq, setCriteria.Marshal()...)
+
+	execRequest.RopBuffer.ROP.RopsList = fullReq
+	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF}
+
+	//fetch folder
+	execResponse, err := sendMapiRequest(execRequest)
+
+	if err != nil {
+		return nil, &TransportError{err}
+	}
+
+	if execResponse.StatusCode != 255 {
+
+		bufPtr := 10
+		var p int
+		var e error
+
+		openFolderResponse := RopOpenFolderResponse{}
+
+		if p, e = openFolderResponse.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+			return nil, e
+		}
+		bufPtr += p
+
+		setCriteriaResponse := RopSetSearchCriteriaResponse{}
+
+		if _, e := setCriteriaResponse.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+			return nil, e
+		}
+
+		return &setCriteriaResponse, nil
+	}
+
+	return nil, ErrUnknown
+}
+
+//GetSearchCriteria function is used to set the search criteria on a folder or set of folders
+func GetSearchCriteria(folderidcount int, folderids []byte, searchFolder []byte) (*RopGetSearchCriteriaResponse, error) {
+	execRequest := ExecuteRequest{}
+	execRequest.Init()
+
+	getFolder := RopOpenFolderRequest{RopID: 0x02, LogonID: AuthSession.LogonID}
+	getFolder.InputHandle = 0x00
+	getFolder.OutputHandle = 0x01
+	getFolder.FolderID = searchFolder
+	getFolder.OpenModeFlags = 0x00
+
+	fullReq := getFolder.Marshal()
+
+	getCriteria := RopGetSearchCriteriaRequest{RopID: 0x31, LogonID: AuthSession.LogonID}
+	getCriteria.InputHandleIndex = 0x01
+	getCriteria.UseUnicode = 0x01
+	getCriteria.IncludeFolders = 0x00
+	getCriteria.IncludeRestriction = 0x00
+
+	fullReq = append(fullReq, getCriteria.Marshal()...)
+
+	execRequest.RopBuffer.ROP.RopsList = fullReq
+	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF}
+
+	//fetch folder
+	execResponse, err := sendMapiRequest(execRequest)
+
+	if err != nil {
+		return nil, &TransportError{err}
+	}
+
+	if execResponse.StatusCode != 255 {
+
+		bufPtr := 10
+		var p int
+		var e error
+
+		openFolderResponse := RopOpenFolderResponse{}
+
+		if p, e = openFolderResponse.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+			return nil, e
+		}
+		bufPtr += p
+
+		getCriteriaResponse := RopGetSearchCriteriaResponse{}
+		fmt.Println(execResponse.RopBuffer[bufPtr:])
+		if _, e := getCriteriaResponse.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+			return nil, e
+		}
+
+		return &getCriteriaResponse, nil
 	}
 
 	return nil, ErrUnknown
@@ -1803,17 +2001,24 @@ func DeleteFolder(folderid []byte) (*RopDeleteFolderResponse, error) {
 	return nil, ErrUnknown
 }
 
-//GetFoler for backwards compatibility
+//GetFolder for backwards compatibility
 //This function will be replaced in newer versions
 func GetFolder(folderid int, columns []PropertyTag) (*RopOpenFolderResponse, error) {
-	folderResp, _, e := GetFolderProps(folderid, nil)
+	folderID := AuthSession.Folderids[folderid]
+	folderResp, _, e := GetFolderFromID(folderID, nil)
 	return folderResp, e
 }
 
-//GetFolder function get's a folder from the folders id
+//GetFolderProps function get's a folder from the folders id
 //FolderIds can be any of the "specialFolders" as defined in Exchange
 //mapi/datastructs.go folder id/locations constants
 func GetFolderProps(folderid int, columns []PropertyTag) (*RopOpenFolderResponse, *RopGetPropertiesSpecificResponse, error) {
+	folderID := AuthSession.Folderids[folderid]
+	return GetFolderFromID(folderID, columns)
+}
+
+//GetFolderFromID newer methods to actually allow using the folder id
+func GetFolderFromID(folderid []byte, columns []PropertyTag) (*RopOpenFolderResponse, *RopGetPropertiesSpecificResponse, error) {
 
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
@@ -1822,7 +2027,7 @@ func GetFolderProps(folderid int, columns []PropertyTag) (*RopOpenFolderResponse
 	getFolder := RopOpenFolderRequest{RopID: 0x02, LogonID: AuthSession.LogonID}
 	getFolder.InputHandle = 0x00
 	getFolder.OutputHandle = 0x01
-	getFolder.FolderID = AuthSession.Folderids[folderid]
+	getFolder.FolderID = folderid
 	getFolder.OpenModeFlags = 0x00
 
 	var k []byte
@@ -2312,14 +2517,24 @@ func GetSubFolders(folderid []byte) (*RopQueryRowsResponse, error) {
 	return nil, fmt.Errorf("An unexpected error occurred")
 }
 
-//CreateFolder function to create a folder on the exchange server
+//CreateSearchFolder function to create a search folder
+func CreateSearchFolder(folderName string) (*RopCreateFolderResponse, error) {
+	return CreateFolderRequest(folderName, true, 0x02)
+}
+
+//CreateFolder function to create a search folder
 func CreateFolder(folderName string, hidden bool) (*RopCreateFolderResponse, error) {
+	return CreateFolderRequest(folderName, hidden, 0x01)
+}
+
+//CreateFolderRequest function to create a folder on the exchange server
+func CreateFolderRequest(folderName string, hidden bool, ftype uint8) (*RopCreateFolderResponse, error) {
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
 	execRequest.MaxRopOut = 262144
 
 	createFolder := RopCreateFolderRequest{RopID: 0x1C, LogonID: AuthSession.LogonID, InputHandle: 0x00, OutputHandle: 0x01, Reserved: 0x00}
-	createFolder.FolderType = 0x01
+	createFolder.FolderType = ftype
 	createFolder.UseUnicodeStrings = 0x01
 	createFolder.OpenExisting = 0x00
 	createFolder.DisplayName = utils.UniString(folderName)

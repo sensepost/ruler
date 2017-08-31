@@ -181,6 +181,48 @@ type RopGetContentsTableResponse struct {
 	RowCount     uint32
 }
 
+//RopSetSearchCriteriaRequest is used to set the search criteria on a folder
+type RopSetSearchCriteriaRequest struct {
+	RopID            uint8 //0x30
+	LogonID          uint8
+	InputHandleIndex uint8
+	RestrictDataSize uint16
+	RestrictionData  []byte
+	FolderIDCount    uint16
+	FolderIds        []byte
+	SearchFlags      uint32
+}
+
+//RopSetSearchCriteriaResponse is used to set the search criteria on a folder
+type RopSetSearchCriteriaResponse struct {
+	RopID            uint8 //0x30
+	InputHandleIndex uint8
+	ReturnValue      uint32
+}
+
+//RopGetSearchCriteriaRequest is used to set the search criteria on a folder
+type RopGetSearchCriteriaRequest struct {
+	RopID              uint8 //0x30
+	LogonID            uint8
+	InputHandleIndex   uint8
+	UseUnicode         uint8
+	IncludeRestriction uint8
+	IncludeFolders     uint8
+}
+
+//RopGetSearchCriteriaResponse is used to set the search criteria on a folder
+type RopGetSearchCriteriaResponse struct {
+	RopID            uint8 //0x30
+	InputHandleIndex uint8
+	ReturnValue      uint32
+	LoginID          uint8
+	RestrictDataSize uint16
+	RestrictionData  []byte
+	FolderIDCount    uint16
+	FolderIds        []byte
+	SearchFlags      uint32
+}
+
 //RopGetPropertyIdsFromNamesRequest struct to get property ids for LIDs
 type RopGetPropertyIdsFromNamesRequest struct {
 	RopID             uint8 //0x56
@@ -1065,6 +1107,16 @@ func (getContentsTable RopGetContentsTableRequest) Marshal() []byte {
 	return utils.BodyToBytes(getContentsTable)
 }
 
+//Marshal turn RopSetSearchCriteriaRequest into Bytes
+func (setSearchCriteria RopSetSearchCriteriaRequest) Marshal() []byte {
+	return utils.BodyToBytes(setSearchCriteria)
+}
+
+//Marshal turn RopSetSearchCriteriaRequest into Bytes
+func (getSearchCriteria RopGetSearchCriteriaRequest) Marshal() []byte {
+	return utils.BodyToBytes(getSearchCriteria)
+}
+
 //Marshal turn RopGetRulesTableRequest into Bytes
 func (getRules RopGetRulesTableRequest) Marshal() []byte {
 	return utils.BodyToBytes(getRules)
@@ -1369,6 +1421,45 @@ func (deleteFolderResponse *RopDeleteFolderResponse) Unmarshal(resp []byte) (int
 	if deleteFolderResponse.ReturnValue != 0 {
 		return pos, &ErrorCode{deleteFolderResponse.ReturnValue}
 	}
+	return pos, nil
+}
+
+//Unmarshal function to produce RopSetSearchCriteriaResponse struct
+func (setSearchCriteriaResp *RopSetSearchCriteriaResponse) Unmarshal(resp []byte) (int, error) {
+	pos := 0
+
+	setSearchCriteriaResp.RopID, pos = utils.ReadByte(pos, resp)
+	setSearchCriteriaResp.InputHandleIndex, pos = utils.ReadByte(pos, resp)
+	setSearchCriteriaResp.ReturnValue, pos = utils.ReadUint32(pos, resp)
+	if setSearchCriteriaResp.ReturnValue != 0 {
+		return pos, &ErrorCode{setSearchCriteriaResp.ReturnValue}
+	}
+	return pos, nil
+}
+
+//Unmarshal function to produce RopSetSearchCriteriaResponse struct
+func (getSearchCriteriaResp *RopGetSearchCriteriaResponse) Unmarshal(resp []byte) (int, error) {
+	pos := 0
+
+	getSearchCriteriaResp.RopID, pos = utils.ReadByte(pos, resp)
+	getSearchCriteriaResp.InputHandleIndex, pos = utils.ReadByte(pos, resp)
+	getSearchCriteriaResp.ReturnValue, pos = utils.ReadUint32(pos, resp)
+
+	if getSearchCriteriaResp.ReturnValue != 0 {
+		return pos, &ErrorCode{getSearchCriteriaResp.ReturnValue}
+	}
+	getSearchCriteriaResp.RestrictDataSize, pos = utils.ReadUint16(pos, resp)
+	if getSearchCriteriaResp.RestrictDataSize != 0 {
+		getSearchCriteriaResp.RestrictionData, pos = utils.ReadBytes(pos, int(getSearchCriteriaResp.RestrictDataSize), resp)
+	}
+
+	getSearchCriteriaResp.LoginID, pos = utils.ReadByte(pos, resp)
+
+	getSearchCriteriaResp.FolderIDCount, pos = utils.ReadUint16(pos, resp)
+	if getSearchCriteriaResp.FolderIDCount != 0 {
+		getSearchCriteriaResp.FolderIds, pos = utils.ReadBytes(pos, int(getSearchCriteriaResp.FolderIDCount)*8, resp)
+	}
+	getSearchCriteriaResp.SearchFlags, pos = utils.ReadUint32(pos, resp)
 	return pos, nil
 }
 

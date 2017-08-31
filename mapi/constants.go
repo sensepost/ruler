@@ -496,6 +496,9 @@ var PidTagPrimarySendAccount = PropertyTag{PtypString, 0x0E28}
 //PidTagObjectType used in recepient
 var PidTagObjectType = PropertyTag{PtypInteger32, 0x0FFE}
 
+//PidTagImportance used in recepient
+var PidTagImportance = PropertyTag{PtypInteger32, 0x0017}
+
 //PidTagDisplayType  used in recepient
 var PidTagDisplayType = PropertyTag{PtypInteger32, 0x3900}
 
