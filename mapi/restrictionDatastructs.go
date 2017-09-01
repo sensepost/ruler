@@ -6,16 +6,16 @@ import "github.com/sensepost/ruler/utils"
 
 //match types for fuzzy low
 const (
-	flFULLSTRING = 0x0000 //field and the value of the column property tag match one another in their entirety
-	flSUBSTRING  = 0x0001 //field matches some portion of the value of the column tag
-	flPREFIX     = 0x0002 //field matches a starting portion of the value of the column tag
+	FLFULLSTRING = 0x0000 //field and the value of the column property tag match one another in their entirety
+	FLSUBSTRING  = 0x0001 //field matches some portion of the value of the column tag
+	FLPREFIX     = 0x0002 //field matches a starting portion of the value of the column tag
 )
 
 //match types for fuzzy high
 const (
-	flIGNORECASE    = 0x0001 //The comparison does not consider case
-	flIGNOREONSPACE = 0x0002 //The comparison ignores Unicode-defined nonspacing characters such as diacritical marks
-	flLOOSE         = 0x0004 //The comparison results in a match whenever possible, ignoring case and nonspacing characters
+	FLIGNORECASE    = 0x0001 //The comparison does not consider case
+	FLIGNOREONSPACE = 0x0002 //The comparison ignores Unicode-defined nonspacing characters such as diacritical marks
+	FLLOOSE         = 0x0004 //The comparison results in a match whenever possible, ignoring case and nonspacing characters
 )
 
 //search flags

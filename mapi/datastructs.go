@@ -984,6 +984,15 @@ type PropertyRow struct {
 	ValueArray []byte
 }
 
+//OpenRecipientRow holds the data for a recipient returned on a message
+type OpenRecipientRow struct {
+	RecipientType    uint8
+	CodePageID       uint16
+	Reserved         uint16
+	RecipientRowSize uint16
+	RecipientRow     RecipientRow
+}
+
 //RopResponse interface for common methods on RopResponses
 type RopResponse interface {
 	Unmarshal([]byte) error
@@ -1897,15 +1906,51 @@ func (ropOpenMessageResponse *RopOpenMessageResponse) Unmarshal(resp []byte) (in
 	}
 
 	ropOpenMessageResponse.HasNamedProperties, pos = utils.ReadByte(pos, resp)
-	if ropOpenMessageResponse.HasNamedProperties == 1 {
-		ropOpenMessageResponse.SubjectPrefix, pos = utils.ReadTypedString(pos, resp) //utils.ReadUnicodeString(pos, resp)
-		ropOpenMessageResponse.NormalizedSubject, pos = utils.ReadTypedString(pos, resp)
-		ropOpenMessageResponse.RecipientCount, pos = utils.ReadUint16(pos, resp)
-		//utils.Read recipients
-	}
+	//if ropOpenMessageResponse.HasNamedProperties == 1 {
+	ropOpenMessageResponse.SubjectPrefix, pos = utils.ReadTypedString(pos, resp) //utils.ReadUnicodeString(pos, resp)
+	ropOpenMessageResponse.NormalizedSubject, pos = utils.ReadTypedString(pos, resp)
+	ropOpenMessageResponse.RecipientCount, pos = utils.ReadUint16(pos, resp)
+	//}
 	ropOpenMessageResponse.ColumnCount, pos = utils.ReadUint16(pos, resp)
+
+	if ropOpenMessageResponse.ColumnCount > 0 {
+		//read recipient columns
+		//these are propertytags - each tag is 4 bytes
+		ropOpenMessageResponse.RecipientColumns = make([]PropertyTag, ropOpenMessageResponse.ColumnCount)
+		for i := 0; i < int(ropOpenMessageResponse.ColumnCount); i++ {
+			propTag := PropertyTag{}
+			propTag.PropertyType, pos = utils.ReadUint16(pos, resp)
+			propTag.PropertyID, pos = utils.ReadUint16(pos, resp)
+			ropOpenMessageResponse.RecipientColumns[i] = propTag
+		}
+	}
+
 	ropOpenMessageResponse.RowCount, pos = utils.ReadByte(pos, resp)
 
+	if ropOpenMessageResponse.RowCount > 0 {
+		//read rows
+		//these are OpenRecipientRow structures
+		for i := 0; i < int(ropOpenMessageResponse.RowCount); i++ {
+			recipientRow := OpenRecipientRow{}
+			recipientRow.RecipientType, pos = utils.ReadByte(pos, resp)
+			recipientRow.CodePageID, pos = utils.ReadUint16(pos, resp)
+			recipientRow.Reserved, pos = utils.ReadUint16(pos, resp)
+			recipientRow.RecipientRowSize, pos = utils.ReadUint16(pos, resp)
+			var x []byte
+			x, pos = utils.ReadBytes(pos, int(recipientRow.RecipientRowSize), resp)
+			//convert to a recipient
+			recipientRow.RecipientRow = RecipientRow{}
+			recipientRow.RecipientRow.Unmarshal(x)
+
+		}
+	}
+
+	return pos, nil
+}
+
+//Unmarshal func for recipientRow - TODO
+func (recipientRow *RecipientRow) Unmarshal(resp []byte) (int, error) {
+	pos := 0
 	return pos, nil
 }
 

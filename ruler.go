@@ -828,68 +828,121 @@ func deleteHomePage() error {
 	return e
 }
 
-func searchFolders() error {
-	utils.Info.Println("Setting search criteria")
+func searchFolders(c *cli.Context) error {
 
-	//x, err := mapi.CreateSearchFolder("searchxx")
-	//if err != nil {
-	//		return err
-	//	}
-	//	fmt.Println(x)
+	utils.Info.Println("Checking if a search folder exists")
 
-	//	time.Sleep(time.Second * (time.Duration)(5))
-	FolderID := []byte{}
-	rows, er := mapi.GetSubFolders(mapi.AuthSession.Folderids[mapi.INBOX])
-	if er != nil || rows != nil {
-		for k := 0; k < len(rows.RowData); k++ {
-			//convert string from unicode and then check if it is our target folder
-			if utils.FromUnicode(rows.RowData[k][0].ValueArray) == "searchxx" {
-				FolderID = rows.RowData[k][1].ValueArray
-				break
-			}
-		}
-	} else {
-		utils.Error.Println(er)
+	searchFolderName := "searcher"
+
+	searchFolder, err := checkFolder(searchFolderName)
+	if err != nil {
+		return fmt.Errorf("Unable to create a search folder to use. %s", err)
 	}
 
-	folderid := mapi.AuthSession.Folderids[mapi.INBOX]
-	ret, e := mapi.SetSearchCriteria(1, folderid, FolderID)
-	fmt.Println(ret, e)
-	utils.Info.Println("Waiting for folder to populate")
-	for x := 0; x < 10; x++ {
-		time.Sleep(time.Second * (time.Duration)(5))
-		res, _ := mapi.GetSearchCriteria(1, folderid, FolderID)
+	utils.Info.Println("Setting search criteria")
+
+	folderids := mapi.AuthSession.Folderids[mapi.INBOX]
+
+	//create the search criteria restrictions
+
+	restrict := mapi.AndRestriction{RestrictType: 0x00}
+	restrict.RestrictCount = uint16(2)
+
+	//restrict subject
+	restrictContent := mapi.ContentRestriction{RestrictType: 0x03}
+	restrictContent.FuzzyLevelLow = mapi.FLSUBSTRING
+	restrictContent.FuzzyLevelHigh = mapi.FLIGNORECASE
+	restrictContent.PropertyTag = mapi.PidTagBody
+	restrictContent.PropertyValue = mapi.TaggedPropertyValue{PropertyTag: restrictContent.PropertyTag, PropertyValue: utils.UniString(c.String("term"))}
+
+	restrictContent2 := mapi.ContentRestriction{RestrictType: 0x03}
+	restrictContent2.FuzzyLevelLow = mapi.FLPREFIX
+	restrictContent2.FuzzyLevelHigh = mapi.FLIGNORECASE
+	restrictContent2.PropertyTag = mapi.PidTagMessageClass
+	restrictContent2.PropertyValue = mapi.TaggedPropertyValue{PropertyTag: restrictContent2.PropertyTag, PropertyValue: utils.UniString("IPM.Note")}
+
+	restrict.Restricts = []mapi.Restriction{restrictContent, restrictContent2}
+
+	mapi.SetSearchCriteria(folderids, searchFolder, restrict)
+
+	utils.Info.Println("Waiting for search folder to populate")
+	for x := 0; x < 1; x++ {
+		//	time.Sleep(time.Second * (time.Duration)(5))
+		res, _ := mapi.GetSearchCriteria(searchFolder)
 		//do check if search is complete
-		fmt.Printf("Search Flag: %x\n", res.SearchFlags)
+		//fmt.Printf("Search Flag: %x\n", res.SearchFlags)
 		if res.SearchFlags == 0x00001000 {
 			break
 		}
 	}
-	mapi.GetFolderFromID(FolderID, nil)
-	mapi.GetContents(FolderID)
-	/*
-		rows, err := mapi.GetContents(folderid)
-		fmt.Println(rows, err)
-		for k := 0; k < len(rows.RowData); k++ {
-			messageSubject := utils.FromUnicode(rows.RowData[k][0].ValueArray)
-			messageid := rows.RowData[k][1].ValueArray
-			columns := make([]mapi.PropertyTag, 1)
-			columns[0] = mapi.PidTagBody //Column for the Message Body containing our payload
+	mapi.GetFolderFromID(searchFolder, nil)
 
-			buff, err := mapi.GetMessageFast(folderid, messageid, columns)
-			if err != nil {
-				continue
-			}
-			//convert buffer to rows
-			messagerows := mapi.DecodeBufferToRows(buff.TransferBuffer, columns)
+	rows, err := mapi.GetContents(searchFolder)
 
-			payload := utils.FromUnicode(messagerows[0].ValueArray[:len(messagerows[0].ValueArray)-4])
+	for k := 0; k < len(rows.RowData); k++ {
+		messageSubject := utils.FromUnicode(rows.RowData[k][0].ValueArray)
+		messageid := rows.RowData[k][1].ValueArray
+		columns := make([]mapi.PropertyTag, 1)
+		columns[0] = mapi.PidTagBody //Column for the Message Body containing our payload
 
-			fmt.Println(messageSubject, payload)
-
+		buff, err := mapi.GetMessageFast(searchFolder, messageid, columns)
+		if err != nil {
+			continue
 		}
-	*/
-	return er
+		//convert buffer to rows
+
+		messagerows := mapi.DecodeBufferToRows(buff.TransferBuffer, columns)
+		payload := utils.FromUnicode(messagerows[0].ValueArray[:len(messagerows[0].ValueArray)-4])
+		utils.Info.Printf("Subject: %s\nBody: %s\n", messageSubject, payload)
+
+	}
+
+	return nil
+}
+
+func checkFolder(folderName string) ([]byte, error) {
+
+	var folderID []byte
+	propertyTags := make([]mapi.PropertyTag, 2)
+	propertyTags[0] = mapi.PidTagDisplayName
+	propertyTags[1] = mapi.PidTagSubfolders
+
+	rows, er := mapi.GetSubFolders(mapi.AuthSession.Folderids[mapi.INBOX])
+
+	if er == nil {
+		for k := 0; k < len(rows.RowData); k++ {
+			//convert string from unicode and then check if it is our target folder
+			if utils.FromUnicode(rows.RowData[k][0].ValueArray) == folderName {
+				folderID = rows.RowData[k][1].ValueArray
+				break
+			}
+		}
+	}
+
+	if len(folderID) == 0 {
+		utils.Info.Println("No 'ruler' search folder exists. Creating one to use")
+		_, err := mapi.CreateSearchFolder(folderName)
+		if err != nil {
+			return nil, err
+		}
+
+		time.Sleep(time.Second * (time.Duration)(5))
+
+		rows, er = mapi.GetSubFolders(mapi.AuthSession.Folderids[mapi.INBOX])
+		if er != nil || rows != nil {
+			for k := 0; k < len(rows.RowData); k++ {
+				//convert string from unicode and then check if it is our target folder
+				if utils.FromUnicode(rows.RowData[k][0].ValueArray) == folderName {
+					folderID = rows.RowData[k][1].ValueArray
+					break
+				}
+			}
+		} else {
+			return nil, er
+		}
+	}
+
+	return folderID, nil
 }
 
 func main() {
@@ -1504,7 +1557,7 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 					utils.Error.Println(err)
 					cli.OsExiter(1)
 				}
-				err = searchFolders()
+				err = searchFolders(c)
 				exit(err)
 				return nil
 			},

@@ -133,7 +133,7 @@ func sendMapiRequest(mapi ExecuteRequest) (*ExecuteResponse, error) {
 			return nil, err
 		}
 	}
-	utils.Info.Println(string(rawResp))
+	//utils.Info.Println(string(rawResp))
 	executeResponse := ExecuteResponse{}
 	executeResponse.Unmarshal(rawResp)
 	return &executeResponse, nil
@@ -845,7 +845,7 @@ func GetPropertyIds(folderid, messageid []byte, propids []PropertyName) (*RopGet
 }
 
 //SetSearchCriteria function is used to set the search criteria on a folder or set of folders
-func SetSearchCriteria(folderidcount int, folderids []byte, searchFolder []byte) (*RopSetSearchCriteriaResponse, error) {
+func SetSearchCriteria(folderids, searchFolder []byte, restrictions Restriction) (*RopSetSearchCriteriaResponse, error) {
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
 
@@ -860,93 +860,11 @@ func SetSearchCriteria(folderidcount int, folderids []byte, searchFolder []byte)
 	setCriteria := RopSetSearchCriteriaRequest{RopID: 0x30, LogonID: AuthSession.LogonID}
 	setCriteria.InputHandleIndex = 0x01
 
-	restrict := AndRestriction{RestrictType: 0x00}
-	restrict.RestrictCount = uint16(2)
-
-	restrict2 := AndRestriction{RestrictType: 0x00}
-	restrict2.RestrictCount = uint16(7)
-
-	restrictContent := ContentRestriction{RestrictType: 0x03}
-	restrictContent.FuzzyLevelLow = flSUBSTRING
-	restrictContent.FuzzyLevelHigh = flIGNORECASE
-	restrictContent.PropertyTag = PidTagSubject
-	restrictContent.PropertyValue = TaggedPropertyValue{PropertyTag: restrictContent.PropertyTag, PropertyValue: utils.UniString("test")}
-
-	restrictNot := NotRestriction{RestrictType: 0x02}
-	restrictNot.Restriction = restrictContent
-
-	restrictContent2 := ContentRestriction{RestrictType: 0x03}
-	restrictContent2.FuzzyLevelLow = flPREFIX
-	restrictContent2.FuzzyLevelHigh = flIGNORECASE
-	restrictContent2.PropertyTag = PidTagMessageClass
-	restrictContent2.PropertyValue = TaggedPropertyValue{PropertyTag: restrictContent2.PropertyTag, PropertyValue: utils.UniString("IPM.Note")}
-
-	restrictNot2 := NotRestriction{RestrictType: 0x02}
-	restrictNot2.Restriction = restrictContent2
-
-	restrictContent3 := ContentRestriction{RestrictType: 0x03}
-	restrictContent3.FuzzyLevelLow = flPREFIX
-	restrictContent3.FuzzyLevelHigh = flIGNORECASE
-	restrictContent3.PropertyTag = PidTagMessageClass
-	restrictContent3.PropertyValue = TaggedPropertyValue{PropertyTag: restrictContent2.PropertyTag, PropertyValue: utils.UniString("IPM.DistList")}
-
-	restrictNot3 := NotRestriction{RestrictType: 0x02}
-	restrictNot3.Restriction = restrictContent3
-
-	restrictContent4 := ContentRestriction{RestrictType: 0x03}
-	restrictContent4.FuzzyLevelLow = flPREFIX
-	restrictContent4.FuzzyLevelHigh = flIGNORECASE
-	restrictContent4.PropertyTag = PidTagMessageClass
-	restrictContent4.PropertyValue = TaggedPropertyValue{PropertyTag: restrictContent2.PropertyTag, PropertyValue: utils.UniString("IPM.Activity")}
-
-	restrictNot4 := NotRestriction{RestrictType: 0x02}
-	restrictNot4.Restriction = restrictContent4
-
-	restrictContent5 := ContentRestriction{RestrictType: 0x03}
-	restrictContent5.FuzzyLevelLow = flPREFIX
-	restrictContent5.FuzzyLevelHigh = flIGNORECASE
-	restrictContent5.PropertyTag = PidTagMessageClass
-	restrictContent5.PropertyValue = TaggedPropertyValue{PropertyTag: restrictContent2.PropertyTag, PropertyValue: utils.UniString("IPM.StickyNote")}
-
-	restrictNot5 := NotRestriction{RestrictType: 0x02}
-	restrictNot5.Restriction = restrictContent5
-
-	restrictContent6 := ContentRestriction{RestrictType: 0x03}
-	restrictContent6.FuzzyLevelLow = flFULLSTRING
-	restrictContent6.FuzzyLevelHigh = flIGNORECASE
-	restrictContent6.PropertyTag = PidTagMessageClass
-	restrictContent6.PropertyValue = TaggedPropertyValue{PropertyTag: restrictContent2.PropertyTag, PropertyValue: utils.UniString("IPM.Task")}
-
-	restrictNot6 := NotRestriction{RestrictType: 0x02}
-	restrictNot6.Restriction = restrictContent6
-
-	restrictContent7 := ContentRestriction{RestrictType: 0x03}
-	restrictContent7.FuzzyLevelLow = flPREFIX
-	restrictContent7.FuzzyLevelHigh = flIGNORECASE
-	restrictContent7.PropertyTag = PidTagMessageClass
-	restrictContent7.PropertyValue = TaggedPropertyValue{PropertyTag: restrictContent2.PropertyTag, PropertyValue: utils.UniString("IPM.Task.")}
-
-	restrictNot7 := NotRestriction{RestrictType: 0x02}
-	restrictNot7.Restriction = restrictContent7
-
-	restrict2.Restricts = []Restriction{restrictNot, restrictNot2, restrictNot3, restrictNot4, restrictNot5, restrictNot6, restrictNot7}
-
-	restrict3 := AndRestriction{RestrictType: 0x00}
-	restrict3.RestrictCount = uint16(1)
-
-	restrictRes := PropertyRestriction{RestrictType: 0x04}
-	restrictRes.RelOp = 0x04
-	restrictRes.PropTag = PidTagImportance
-	restrictRes.TaggedValue = TaggedPropertyValue{PropertyTag: PidTagImportance, PropertyValue: []byte{0x02, 0x00, 0x00, 0x00}}
-
-	restrict3.Restricts = []Restriction{restrictRes}
-	restrict.Restricts = []Restriction{restrictContent, restrictContent2}
-
-	setCriteria.RestrictionData = restrict.Marshal()
+	setCriteria.RestrictionData = restrictions.Marshal()
 
 	setCriteria.RestrictDataSize = uint16(len(setCriteria.RestrictionData))
 	setCriteria.FolderIds = folderids
-	setCriteria.FolderIDCount = uint16(folderidcount)
+	setCriteria.FolderIDCount = uint16(len(folderids) / 8)
 	setCriteria.SearchFlags = RESTARTSEARCH | SHALLOWSEARCH | NONCONTENTINDEXEDSEARCH
 
 	fullReq = append(fullReq, setCriteria.Marshal()...)
@@ -987,7 +905,7 @@ func SetSearchCriteria(folderidcount int, folderids []byte, searchFolder []byte)
 }
 
 //GetSearchCriteria function is used to set the search criteria on a folder or set of folders
-func GetSearchCriteria(folderidcount int, folderids []byte, searchFolder []byte) (*RopGetSearchCriteriaResponse, error) {
+func GetSearchCriteria(searchFolder []byte) (*RopGetSearchCriteriaResponse, error) {
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
 
@@ -1031,7 +949,7 @@ func GetSearchCriteria(folderidcount int, folderids []byte, searchFolder []byte)
 		bufPtr += p
 
 		getCriteriaResponse := RopGetSearchCriteriaResponse{}
-		fmt.Println(execResponse.RopBuffer[bufPtr:])
+
 		if _, e := getCriteriaResponse.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
 			return nil, e
 		}
@@ -2123,7 +2041,7 @@ func OpenMessage(folderid, messageid []byte) ([]byte, error) {
 		if _, e = openMessage.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
 			return nil, e
 		}
-		fmt.Printf("%x\n", execResponse.RopBuffer)
+		//fmt.Printf("%x\n", execResponse.RopBuffer)
 		return execResponse.RopBuffer[len(execResponse.RopBuffer)-4:], nil
 	}
 	return nil, ErrUnknown
@@ -2182,6 +2100,8 @@ func GetMessage(folderid, messageid []byte, columns []PropertyTag) (*RopGetPrope
 		if execResponse.RopBuffer[bufPtr : bufPtr+1][0] != 0x03 {
 			bufPtr += 4
 		}
+
+		//fmt.Println(execResponse.RopBuffer[bufPtr:])
 
 		openMessage := RopOpenMessageResponse{}
 		if p, e = openMessage.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
@@ -2266,13 +2186,11 @@ func GetMessageFast(folderid, messageid []byte, columns []PropertyTag) (*RopFast
 		}
 
 		bufPtr += p
-		//fmt.Printf("%x\n", execResponse.RopBuffer[bufPtr:])
+
 		pprops := RopFastTransferSourceGetBufferResponse{}
 		if p, e = pprops.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
 			return nil, e
 		}
-
-		//utils.Trace.Printf("Doing Chunked Transfer. Chunks [%d]", pprops.TotalStepCount)
 
 		//Rop release if we are done.. otherwise get rest of stream
 		if pprops.TransferStatus == 0x0001 {
