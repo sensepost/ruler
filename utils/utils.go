@@ -99,6 +99,14 @@ func UTF16BE(str string) []byte {
 	return bt
 }
 
+//DecodeInt64 decode 8 byte value into int64
+func DecodeInt64(num []byte) int64 {
+	var number int64
+	bf := bytes.NewReader(num)
+	binary.Read(bf, binary.BigEndian, &number)
+	return number
+}
+
 //DecodeUint64 decode 4 byte value into uint32
 func DecodeUint64(num []byte) uint64 {
 	var number uint64

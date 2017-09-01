@@ -133,7 +133,7 @@ func sendMapiRequest(mapi ExecuteRequest) (*ExecuteResponse, error) {
 			return nil, err
 		}
 	}
-	//utils.Info.Println(string(rawResp))
+	//utils.Debug.Println(string(rawResp))
 	executeResponse := ExecuteResponse{}
 	executeResponse.Unmarshal(rawResp)
 	return &executeResponse, nil
@@ -498,6 +498,68 @@ func ReleaseObject(inputHandle byte) (*RopReleaseResponse, error) {
 			return nil, e
 		}
 		return &ropReleaseResponse, nil
+	}
+
+	return nil, ErrUnknown
+}
+
+//ReadPerUserInformation issues a RopReleaseRequest to free a server handle to an object
+func ReadPerUserInformation(folerID []byte) (*RopReadPerUserInformationResponse, error) {
+	execRequest := ExecuteRequest{}
+	execRequest.Init()
+
+	readRequest := RopReadPerUserInformationRequest{RopID: 0x63, LogonID: AuthSession.LogonID, InputHandleIndex: 0x01}
+	readRequest.FolderID = folerID
+	readRequest.DataOffset = 0
+	readRequest.MaxDataSize = 0xFF
+
+	fullReq := readRequest.Marshal()
+
+	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF}
+	execRequest.RopBuffer.ROP.RopsList = fullReq
+
+	execResponse, err := sendMapiRequest(execRequest)
+
+	if err != nil {
+		return nil, &TransportError{err}
+	}
+
+	if execResponse.StatusCode != 255 {
+		readResponse := RopReadPerUserInformationResponse{}
+		if _, e := readResponse.Unmarshal(execResponse.RopBuffer[10:]); e != nil {
+			return nil, e
+		}
+		return &readResponse, nil
+	}
+
+	return nil, ErrUnknown
+}
+
+//GetLongTermIDFromID issues a request for the long term ID of an Object
+func GetLongTermIDFromID(objectID []byte) (*RopLongTermIDFromIDResponse, error) {
+	execRequest := ExecuteRequest{}
+	execRequest.Init()
+
+	longTermIDRequest := RopLongTermIDFromIDRequest{RopID: 0x43, LogonID: AuthSession.LogonID, InputHandleIndex: 0x01}
+	longTermIDRequest.ObjectID = objectID
+
+	fullReq := longTermIDRequest.Marshal()
+
+	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF}
+	execRequest.RopBuffer.ROP.RopsList = fullReq
+
+	execResponse, err := sendMapiRequest(execRequest)
+
+	if err != nil {
+		return nil, &TransportError{err}
+	}
+
+	if execResponse.StatusCode != 255 {
+		longTermResponse := RopLongTermIDFromIDResponse{}
+		if _, e := longTermResponse.Unmarshal(execResponse.RopBuffer[10:]); e != nil {
+			return nil, e
+		}
+		return &longTermResponse, nil
 	}
 
 	return nil, ErrUnknown
@@ -1956,7 +2018,7 @@ func GetFolderFromID(folderid []byte, columns []PropertyTag) (*RopOpenFolderResp
 		getProperties.LogonID = AuthSession.LogonID
 		getProperties.InputHandle = 0x01
 		getProperties.PropertySizeLimit = 0x00
-		getProperties.WantUnicode = []byte{0x00, 0x01}
+		getProperties.WantUnicode = 0x01
 		getProperties.PropertyTagCount = uint16(len(columns))
 		getProperties.PropertyTags = columns
 
@@ -2048,7 +2110,7 @@ func OpenMessage(folderid, messageid []byte) ([]byte, error) {
 }
 
 //GetMessage returns the specific fields from a message
-func GetMessage(folderid, messageid []byte, columns []PropertyTag) (*RopGetPropertiesSpecificResponse, error) {
+func GetMessage(folderid, messageid []byte, columns []PropertyTag) (GetProperties, error) {
 
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
@@ -2066,17 +2128,26 @@ func GetMessage(folderid, messageid []byte, columns []PropertyTag) (*RopGetPrope
 
 	fullReq = append(fullReq, getMessage.Marshal()...)
 
-	getProperties := RopGetPropertiesSpecific{}
-	getProperties.RopID = 0x07
-	getProperties.LogonID = AuthSession.LogonID
-	getProperties.InputHandle = 0x01
-	getProperties.PropertySizeLimit = 0x00
-	getProperties.WantUnicode = []byte{0x00, 0x01}
-	getProperties.PropertyTagCount = uint16(len(columns))
-	getProperties.PropertyTags = columns
+	if columns != nil {
+		getProperties := RopGetPropertiesSpecific{}
+		getProperties.RopID = 0x07
+		getProperties.LogonID = AuthSession.LogonID
+		getProperties.InputHandle = 0x01
+		getProperties.PropertySizeLimit = 0x00
+		getProperties.WantUnicode = 0x01
+		getProperties.PropertyTagCount = uint16(len(columns))
+		getProperties.PropertyTags = columns
 
-	fullReq = append(fullReq, getProperties.Marshal()...)
-
+		fullReq = append(fullReq, getProperties.Marshal()...)
+	} else {
+		getPropertiesAll := RopGetPropertiesAllRequest{}
+		getPropertiesAll.RopID = 0x08
+		getPropertiesAll.LogonID = AuthSession.LogonID
+		getPropertiesAll.InputHandle = 0x01
+		getPropertiesAll.PropertySizeLimit = 0xFFFF
+		getPropertiesAll.WantUnicode = 0x01
+		fullReq = append(fullReq, getPropertiesAll.Marshal()...)
+	}
 	//queryRows := RopQueryRowsRequest{RopID: 0x15, LogonID: AuthSession.LogonID, InputHandle: 0x01, QueryRowsFlags: 0x00, ForwardRead: 0x01, RowCount: 0x32}
 	//k = append(k, queryRows.Marshal()...)
 	ropRelease = RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandle: 0x01}
@@ -2109,12 +2180,20 @@ func GetMessage(folderid, messageid []byte, columns []PropertyTag) (*RopGetPrope
 		}
 		bufPtr += p
 
-		props := RopGetPropertiesSpecificResponse{}
+		if columns != nil {
+			props := RopGetPropertiesSpecificResponse{}
+			if _, e = props.Unmarshal(execResponse.RopBuffer[bufPtr:], columns); e != nil {
+				return nil, e
+			}
+			return &props, nil
+		}
+
+		props := RopGetPropertiesAllResponse{}
 		if _, e = props.Unmarshal(execResponse.RopBuffer[bufPtr:], columns); e != nil {
 			return nil, e
 		}
-
 		return &props, nil
+
 	}
 
 	return nil, ErrUnknown
@@ -2511,9 +2590,10 @@ func CreateFolderRequest(folderName string, hidden bool, ftype uint8) (*RopCreat
 //This function returns the subject and message id
 //For custom columns use GetContentsColumns
 func GetContents(folderid []byte) (*RopQueryRowsResponse, error) {
-	columns := make([]PropertyTag, 2)
+	columns := make([]PropertyTag, 3)
 	columns[0] = PidTagSubject
 	columns[1] = PidTagMid
+	columns[2] = PropertyTag{PtypString8, 0x80C7}
 	return GetTableContents(folderid, false, columns)
 }
 

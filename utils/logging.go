@@ -30,7 +30,7 @@ func Init(
 		Debug = log.New(warningHandle, " ", 0)
 		Fail = log.New(infoHandle, "[x] ", 0)
 		Question = log.New(infoHandle, "[?] ", 0)
-		Warning = log.New(warningHandle,
+		Warning = log.New(infoHandle,
 			"[WARNING] ", 0)
 		Error = log.New(errorHandle,
 			"ERROR: ", log.Ltime|log.Lshortfile)
@@ -42,7 +42,7 @@ func Init(
 		Debug = log.New(warningHandle, " ", 0)
 		Fail = log.New(infoHandle, "\033[91m[x] \033[0m", 0)
 		Question = log.New(infoHandle, "\033[91m[?] \033[0m", 0)
-		Warning = log.New(warningHandle,
+		Warning = log.New(infoHandle,
 			"\033[91m[WARNING] \033[0m", 0)
 		Error = log.New(errorHandle,
 			"\033[31mERROR\033[0m: ", log.Ltime|log.Lshortfile)

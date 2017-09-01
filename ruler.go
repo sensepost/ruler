@@ -848,12 +848,14 @@ func searchFolders(c *cli.Context) error {
 	restrict := mapi.AndRestriction{RestrictType: 0x00}
 	restrict.RestrictCount = uint16(2)
 
-	//restrict subject
+	//restrict PidTagBody
 	restrictContent := mapi.ContentRestriction{RestrictType: 0x03}
 	restrictContent.FuzzyLevelLow = mapi.FLSUBSTRING
 	restrictContent.FuzzyLevelHigh = mapi.FLIGNORECASE
 	restrictContent.PropertyTag = mapi.PidTagBody
 	restrictContent.PropertyValue = mapi.TaggedPropertyValue{PropertyTag: restrictContent.PropertyTag, PropertyValue: utils.UniString(c.String("term"))}
+
+	//restrict PidTagHTMLBody
 
 	restrictContent2 := mapi.ContentRestriction{RestrictType: 0x03}
 	restrictContent2.FuzzyLevelLow = mapi.FLPREFIX
@@ -878,6 +880,11 @@ func searchFolders(c *cli.Context) error {
 	mapi.GetFolderFromID(searchFolder, nil)
 
 	rows, err := mapi.GetContents(searchFolder)
+
+	if rows == nil {
+		utils.Info.Println("No results returned")
+		return nil
+	}
 
 	for k := 0; k < len(rows.RowData); k++ {
 		messageSubject := utils.FromUnicode(rows.RowData[k][0].ValueArray)
@@ -943,6 +950,56 @@ func checkFolder(folderName string) ([]byte, error) {
 	}
 
 	return folderID, nil
+}
+
+func checkLastSent() error {
+	//This gets the "Sent Items" folder and grabs the last sent message.
+	//Using the ClientInfo tag, we check who if this message was sent from Outlook or OWA
+
+	//get the PropTag for ClientInfo
+	folderId := mapi.AuthSession.Folderids[mapi.SENT]
+	rows, err := mapi.GetContents(folderId)
+
+	if err != nil {
+		return err
+	}
+
+	if rows == nil {
+		return fmt.Errorf("Sent folder is empty")
+	}
+	//get most recent message
+
+	//messageSubject := utils.FromUnicode(rows.RowData[k][0].ValueArray)
+	messageid := rows.RowData[0][1].ValueArray
+
+	//for some reason getting named property tags isn't working for me. Maybe I'm an idiot
+	//so lets simply grab all tags. And then filter until we find one that starts with Client=
+	buff, err := mapi.GetMessage(folderId, messageid, nil)
+	if err != nil {
+		return err
+	}
+	//convert buffer to rows
+	for _, row := range buff.GetData() {
+		if utils.DecodeUint16(row.PropType) == mapi.PtypString {
+			clstring := utils.FromUnicode(row.ValueArray)
+			if len(row.ValueArray) > 12 && clstring[0:6] == "Client" {
+				if clstring[7:10] == "OWA" {
+					utils.Warning.Printf("Last message sent from OWA! User-Agent: %s\n", clstring[11:])
+				} else {
+					utils.Info.Printf("Last message sent from: %s\n", clstring[7:])
+				}
+			}
+		}
+		if utils.DecodeUint16(row.PropID) == 0x0039 {
+			t := (utils.DecodeUint64(row.ValueArray) - 116444736000000000) * 100
+			x := time.Unix(0, int64(t))
+			utils.Info.Printf("Last Message sent at: %s \n", x.UTC())
+
+		}
+	}
+
+	return nil
+
 }
 
 func main() {
@@ -1165,13 +1222,25 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 			Name:    "check",
 			Aliases: []string{"c"},
 			Usage:   "Check if the credentials work and we can interact with the mailbox",
+			Flags: []cli.Flag{
+				cli.BoolFlag{
+					Name:  "last",
+					Usage: "Returns information about the last client used to send an email",
+				},
+			},
 			Action: func(c *cli.Context) error {
 				err := connect(c)
 				if err != nil {
 					utils.Error.Println(err)
 					cli.OsExiter(1)
 				}
+
 				utils.Info.Println("Looks like we are good to go!")
+
+				if c.Bool("last") == true {
+					err = checkLastSent()
+				}
+				exit(err)
 				return nil
 			},
 		},

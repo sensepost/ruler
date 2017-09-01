@@ -84,6 +84,43 @@ type ConnectResponse struct {
 	AuxilliaryBuffer     []byte
 }
 
+//RopReadPerUserInformationRequest get user information
+type RopReadPerUserInformationRequest struct {
+	RopID            uint8 //0x63
+	LogonID          uint8
+	InputHandleIndex uint8
+	FolderID         []byte
+	Reserved         uint32
+	DataOffset       uint32
+	MaxDataSize      uint16
+}
+
+//RopReadPerUserInformationResponse get user information response
+type RopReadPerUserInformationResponse struct {
+	RopID            uint8 //0x63
+	InputHandleIndex uint8
+	ReturnValue      uint32
+	HasFinished      uint8
+	DataSize         uint16
+	Data             []byte
+}
+
+//RopLongTermIDFromIDRequest get user information
+type RopLongTermIDFromIDRequest struct {
+	RopID            uint8 //0x43
+	LogonID          uint8
+	InputHandleIndex uint8
+	ObjectID         []byte
+}
+
+//RopLongTermIDFromIDResponse get user information response
+type RopLongTermIDFromIDResponse struct {
+	RopID            uint8 //0x43
+	InputHandleIndex uint8
+	ReturnValue      uint32
+	LongTermID       []byte
+}
+
 //RgbAuxIn struct
 type RgbAuxIn struct {
 	RPCHeader RPCHeader
@@ -233,6 +270,11 @@ type RopGetPropertyIdsFromNamesRequest struct {
 	PropertyNames     []PropertyName
 }
 
+type GetProperties interface {
+	Unmarshal([]byte, []PropertyTag) (int, error)
+	GetData() []PropertyRow
+}
+
 //RopGetPropertyIdsFromNamesResponse struct to get property ids for LIDs
 type RopGetPropertyIdsFromNamesResponse struct {
 	RopID           uint8 //0x56
@@ -248,7 +290,7 @@ type RopGetPropertiesSpecific struct {
 	LogonID           uint8
 	InputHandle       uint8
 	PropertySizeLimit uint16
-	WantUnicode       []byte //apparently bool
+	WantUnicode       uint16 //apparently bool
 	PropertyTagCount  uint16
 	PropertyTags      []PropertyTag //[]byte
 }
@@ -279,6 +321,24 @@ type RopGetPropertiesSpecificResponse struct {
 	ReturnValue       uint32
 	PropertySizeLimit uint16
 	RowData           []PropertyRow
+}
+
+//RopGetPropertiesAll struct to get propertiesfor a folder
+type RopGetPropertiesAllRequest struct {
+	RopID             uint8 //0x08
+	LogonID           uint8
+	InputHandle       uint8
+	PropertySizeLimit uint16
+	WantUnicode       uint16
+}
+
+//RopGetPropertiesSpecificResponse struct to get propertiesfor a folder
+type RopGetPropertiesAllResponse struct {
+	RopID              uint8 //0x08
+	InputHandleIndex   uint8
+	ReturnValue        uint32
+	PropertyValueCount uint16
+	PropertyValues     []PropertyRow
 }
 
 //RopFastTransferDestinationConfigureRequest used to configure a destination buffer for fast TransferBuffer
@@ -982,6 +1042,8 @@ type StandardPropertyRow struct {
 type PropertyRow struct {
 	Flag       uint8 //non-zero indicates error
 	ValueArray []byte
+	PropType   []byte
+	PropID     []byte
 }
 
 //OpenRecipientRow holds the data for a recipient returned on a message
@@ -1051,6 +1113,16 @@ func (logonRequest RopLogonRequest) Marshal() []byte {
 	return utils.BodyToBytes(logonRequest)
 }
 
+//Marshal turn RopReadPerUserInformationRequest into Bytes
+func (readRequest RopReadPerUserInformationRequest) Marshal() []byte {
+	return utils.BodyToBytes(readRequest)
+}
+
+//Marshal turn RopLongTermIDFromIDRequest into Bytes
+func (readRequest RopLongTermIDFromIDRequest) Marshal() []byte {
+	return utils.BodyToBytes(readRequest)
+}
+
 //Marshal turn the RopQueryRowsRequest into bytes
 func (queryRows RopQueryRowsRequest) Marshal() []byte {
 	return utils.BodyToBytes(queryRows)
@@ -1108,6 +1180,11 @@ func (getBuff RopFastTransferDestinationPutBufferRequest) Marshal() []byte {
 
 //Marshal turn RopGetPropertiesSpecific into Bytes
 func (getProps RopGetPropertiesSpecific) Marshal() []byte {
+	return utils.BodyToBytes(getProps)
+}
+
+//Marshal turn RopGetPropertiesAllRequest into Bytes
+func (getProps RopGetPropertiesAllRequest) Marshal() []byte {
 	return utils.BodyToBytes(getProps)
 }
 
@@ -1329,6 +1406,40 @@ func (ropRelease *RopReleaseResponse) Unmarshal(resp []byte) (int, error) {
 	if ropRelease.ReturnValue != 0 {
 		return pos, &ErrorCode{ropRelease.ReturnValue}
 	}
+	return pos, nil
+}
+
+//Unmarshal function to produce RopCreateMessageResponse struct
+func (readUserInfoResp *RopReadPerUserInformationResponse) Unmarshal(resp []byte) (int, error) {
+	pos := 0
+
+	readUserInfoResp.RopID, pos = utils.ReadByte(pos, resp)
+	readUserInfoResp.InputHandleIndex, pos = utils.ReadByte(pos, resp)
+	readUserInfoResp.ReturnValue, pos = utils.ReadUint32(pos, resp)
+
+	if readUserInfoResp.ReturnValue != 0 {
+		return pos, &ErrorCode{readUserInfoResp.ReturnValue}
+	}
+
+	readUserInfoResp.DataSize, pos = utils.ReadUint16(pos, resp)
+	readUserInfoResp.Data, pos = utils.ReadBytes(pos, int(readUserInfoResp.DataSize), resp)
+	return pos, nil
+}
+
+//Unmarshal function to produce RopLongTermIDFromIDResponse struct
+func (longTermID *RopLongTermIDFromIDResponse) Unmarshal(resp []byte) (int, error) {
+	pos := 0
+
+	longTermID.RopID, pos = utils.ReadByte(pos, resp)
+	longTermID.InputHandleIndex, pos = utils.ReadByte(pos, resp)
+	longTermID.ReturnValue, pos = utils.ReadUint32(pos, resp)
+
+	if longTermID.ReturnValue != 0 {
+		return pos, &ErrorCode{longTermID.ReturnValue}
+	}
+
+	longTermID.LongTermID, pos = utils.ReadBytes(pos, 24, resp)
+
 	return pos, nil
 }
 
@@ -2014,6 +2125,14 @@ func (actionData *ActionData) Unmarshal(resp []byte) (int, error) {
 	return pos, nil
 }
 
+func (ropGetPropertiesSpecificResponse *RopGetPropertiesSpecificResponse) GetData() []PropertyRow {
+	return ropGetPropertiesSpecificResponse.RowData
+}
+
+func (ropGetPropertiesAllResponse *RopGetPropertiesAllResponse) GetData() []PropertyRow {
+	return ropGetPropertiesAllResponse.PropertyValues
+}
+
 //Unmarshal func
 func (ropGetPropertiesSpecificResponse *RopGetPropertiesSpecificResponse) Unmarshal(resp []byte, columns []PropertyTag) (int, error) {
 	pos := 0
@@ -2042,6 +2161,58 @@ func (ropGetPropertiesSpecificResponse *RopGetPropertiesSpecificResponse) Unmars
 		}
 	}
 	ropGetPropertiesSpecificResponse.RowData = rows
+	return pos, nil
+}
+
+//Unmarshal func
+func (ropGetPropertiesAllResponse *RopGetPropertiesAllResponse) Unmarshal(resp []byte, columns []PropertyTag) (int, error) {
+	pos := 0
+	ropGetPropertiesAllResponse.RopID, pos = utils.ReadByte(pos, resp)
+	ropGetPropertiesAllResponse.InputHandleIndex, pos = utils.ReadByte(pos, resp)
+	ropGetPropertiesAllResponse.ReturnValue, pos = utils.ReadUint32(pos, resp)
+
+	if ropGetPropertiesAllResponse.ReturnValue != 0x000000 {
+		return pos, &ErrorCode{ropGetPropertiesAllResponse.ReturnValue}
+	}
+	ropGetPropertiesAllResponse.PropertyValueCount, pos = utils.ReadUint16(pos, resp)
+	var rows []PropertyRow
+	tpos := pos
+	var proptype, pid uint16
+	for k := 0; k < int(ropGetPropertiesAllResponse.PropertyValueCount); k++ {
+		trow := PropertyRow{}
+		trow.Flag = 0
+		//get propertytag - first type, then id
+		proptype, tpos = utils.ReadUint16(tpos, resp)
+		pid, tpos = utils.ReadUint16(tpos, resp)
+		trow.PropID = utils.EncodeNum(pid)
+		trow.PropType = utils.EncodeNum(proptype)
+
+		if proptype == PtypInteger32 {
+			trow.ValueArray, tpos = utils.ReadBytes(tpos, 4, resp)
+			rows = append(rows, trow)
+		} else if proptype == PtypBoolean {
+			trow.ValueArray, tpos = utils.ReadBytes(tpos, 1, resp)
+			rows = append(rows, trow)
+		} else if proptype == PtypString || proptype == PtypString8 {
+			trow.ValueArray, tpos = utils.ReadUnicodeString(tpos, resp)
+			tpos++
+			if len(trow.ValueArray) == 0 {
+				tpos++
+			}
+			rows = append(rows, trow)
+		} else if proptype == PtypBinary {
+			cnt, p := utils.ReadUint16(tpos, resp)
+			tpos = p
+			trow.ValueArray, tpos = utils.ReadBytes(tpos, int(cnt), resp)
+			rows = append(rows, trow)
+		} else if proptype == PtypTime {
+			trow.ValueArray, tpos = utils.ReadBytes(tpos, 8, resp)
+			rows = append(rows, trow)
+		}
+
+	}
+	pos = tpos
+	ropGetPropertiesAllResponse.PropertyValues = rows
 	return pos, nil
 }
 
