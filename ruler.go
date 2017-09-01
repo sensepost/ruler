@@ -978,6 +978,7 @@ func checkLastSent() error {
 	if err != nil {
 		return err
 	}
+	var ips []string
 	//convert buffer to rows
 	for _, row := range buff.GetData() {
 		if utils.DecodeUint16(row.PropType) == mapi.PtypString {
@@ -988,14 +989,22 @@ func checkLastSent() error {
 				} else {
 					utils.Info.Printf("Last message sent from: %s\n", clstring[7:])
 				}
+			} else {
+				//lets see if it looks like an IP address
+				if strings.Count(clstring, ".") == 3 || strings.Count(clstring, ":") == 5 {
+					ips = append(ips, clstring)
+				}
 			}
 		}
 		if utils.DecodeUint16(row.PropID) == 0x0039 {
 			t := (utils.DecodeUint64(row.ValueArray) - 116444736000000000) * 100
 			x := time.Unix(0, int64(t))
 			utils.Info.Printf("Last Message sent at: %s \n", x.UTC())
-
 		}
+	}
+
+	for _, ip := range ips {
+		utils.Info.Printf("Found what looks like an IP address. Could be client or exchange server: %s\n", ip)
 	}
 
 	return nil
