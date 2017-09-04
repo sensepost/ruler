@@ -303,6 +303,22 @@ type RopGetNamesFromPropertyIdsResponse struct {
 	PropertyNames     []PropertyName
 }
 
+//RopGetPropertiesListRequest get a list or properties on an object
+type RopGetPropertiesListRequest struct {
+	RopID            uint8 //0x09
+	LogonID          uint8 //
+	InputHandleIndex uint8
+}
+
+//RopGetPropertiesListResponse get a list of properties on an object
+type RopGetPropertiesListResponse struct {
+	RopID            uint8 //0x09
+	InputHandleIndex uint8
+	ReturnValue      uint32
+	PropertyTagCount uint16
+	PropertyTags     []PropertyTag
+}
+
 //RopGetPropertiesSpecific struct to get propertiesfor a folder
 type RopGetPropertiesSpecific struct {
 	RopID             uint8 //0x07
@@ -1204,6 +1220,11 @@ func (getProps RopGetPropertiesSpecific) Marshal() []byte {
 
 //Marshal turn RopGetPropertiesAllRequest into Bytes
 func (getProps RopGetPropertiesAllRequest) Marshal() []byte {
+	return utils.BodyToBytes(getProps)
+}
+
+//Marshal turn RopGetPropertiesListRequest into Bytes
+func (getProps RopGetPropertiesListRequest) Marshal() []byte {
 	return utils.BodyToBytes(getProps)
 }
 
@@ -2204,21 +2225,52 @@ func (ropGetPropertiesSpecificResponse *RopGetPropertiesSpecificResponse) Unmars
 	var rows []PropertyRow
 	for _, property := range columns {
 		trow := PropertyRow{}
+		trow.PropID = utils.EncodeNum(property.PropertyID)
 		trow.Flag, pos = utils.ReadByte(pos, resp)
 		if property.PropertyType == PtypInteger32 {
-			trow.ValueArray, pos = utils.ReadBytes(pos, 2, resp)
-			rows = append(rows, trow)
-		} else if property.PropertyType == PtypString {
+			trow.ValueArray, pos = utils.ReadBytes(pos, 4, resp)
+		} else if property.PropertyType == PtypBoolean {
+			trow.ValueArray, pos = utils.ReadBytes(pos, 1, resp)
+		} else if property.PropertyType == PtypString || property.PropertyType == PtypString8 {
 			trow.ValueArray, pos = utils.ReadUnicodeString(pos, resp)
-			rows = append(rows, trow)
+			//pos++
+			if len(trow.ValueArray) == 0 {
+				pos++
+			}
 		} else if property.PropertyType == PtypBinary {
 			cnt, p := utils.ReadByte(pos, resp)
 			pos = p
 			trow.ValueArray, pos = utils.ReadBytes(pos, int(cnt), resp)
-			rows = append(rows, trow)
+		} else if property.PropertyType == PtypTime {
+			trow.ValueArray, pos = utils.ReadBytes(pos, 8, resp)
+
 		}
+		rows = append(rows, trow)
 	}
 	ropGetPropertiesSpecificResponse.RowData = rows
+	return pos, nil
+}
+
+//Unmarshal func
+func (getPropertiesListResp *RopGetPropertiesListResponse) Unmarshal(resp []byte) (int, error) {
+	pos := 0
+	getPropertiesListResp.RopID, pos = utils.ReadByte(pos, resp)
+	getPropertiesListResp.InputHandleIndex, pos = utils.ReadByte(pos, resp)
+	getPropertiesListResp.ReturnValue, pos = utils.ReadUint32(pos, resp)
+
+	if getPropertiesListResp.ReturnValue != 0x000000 {
+		return pos, &ErrorCode{getPropertiesListResp.ReturnValue}
+	}
+	getPropertiesListResp.PropertyTagCount, pos = utils.ReadUint16(pos, resp)
+	getPropertiesListResp.PropertyTags = make([]PropertyTag, int(getPropertiesListResp.PropertyTagCount))
+	tpos := pos
+	///read propertyNames here
+	for i := 0; i < int(getPropertiesListResp.PropertyTagCount); i++ {
+		getPropertiesListResp.PropertyTags[i] = PropertyTag{}
+		getPropertiesListResp.PropertyTags[i].PropertyType, tpos = utils.ReadUint16(tpos, resp)
+		getPropertiesListResp.PropertyTags[i].PropertyID, tpos = utils.ReadUint16(tpos, resp)
+	}
+	pos = tpos
 	return pos, nil
 }
 

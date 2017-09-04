@@ -104,7 +104,7 @@ func CreateFormMessage(suffix, assocRule string) ([]byte, error) {
 	propertyTagx[6] = mapi.TaggedPropertyValue{PropertyTag: mapi.PidTagSendOutlookRecallReport, PropertyValue: []byte{0xFF}} //set to true for form to be hidden :)
 	propertyTagx[7] = mapi.TaggedPropertyValue{PropertyTag: mapi.PidTag6830, PropertyValue: append([]byte("&Open"), []byte{0x00}...)}
 	propertyTagx[8] = mapi.TaggedPropertyValue{PropertyTag: mapi.PidTagComment, PropertyValue: utils.UniString(assocRule)} //set this to indicate that a rule is present for this form
-	propertyTagx[9] = mapi.TaggedPropertyValue{mapi.PidTagHidden, []byte{0x01}}
+	propertyTagx[9] = mapi.TaggedPropertyValue{PropertyTag: mapi.PidTagHidden, PropertyValue: []byte{0x01}}
 
 	//create the message in the "associated" contents table for the inbox
 	msg, err := mapi.CreateAssocMessage(folderid, propertyTagx)

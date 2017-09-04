@@ -974,19 +974,12 @@ func checkLastSent() error {
 
 	//for some reason getting named property tags isn't working for me. Maybe I'm an idiot
 	//so lets simply grab all tags. And then filter until we find one that starts with Client=
-	buff, err := mapi.GetMessage(folderId, messageid, nil)
-	if err != nil {
-		return err
-	}
+	buff, err := mapi.GetPropertyIdsList(folderId, messageid)
 
 	var props []byte
 	idcount := 0
-
-	propRows := buff.GetData()
-
-	//Get property names for rows
-	for _, row := range propRows {
-		props = append(props, row.PropID...)
+	for _, prop := range buff.PropertyTags {
+		props = append(props, utils.EncodeNum(prop.PropertyID)...)
 		idcount++
 	}
 
@@ -996,32 +989,58 @@ func checkLastSent() error {
 		return e
 	}
 
+	var getProps []mapi.PropertyTag
+	var clientPropID uint16
+	var clientIPPropID uint16
+	var serverIPPropID uint16
+
 	for i, p := range propNames.PropertyNames {
 		if p.Kind == 0x01 {
 			pName := utils.FromUnicode(p.Name)
 			if pName == "ClientInfo" {
-				clstring := utils.FromUnicode(propRows[i].ValueArray)
-				if clstring[7:10] == "OWA" {
-					utils.Warning.Printf("Last message sent from OWA! User-Agent: %s\n", clstring[11:])
-				} else {
-					utils.Info.Printf("Last message sent from: %s\n", clstring[7:])
-				}
+				getProps = append(getProps, buff.PropertyTags[i])
+				clientPropID = buff.PropertyTags[i].PropertyID
 			} else if pName == "x-ms-exchange-organization-originalclientipaddress" {
-				utils.Info.Printf("Client IP Address: %s\n", utils.FromUnicode(propRows[i].ValueArray))
+				getProps = append(getProps, buff.PropertyTags[i])
+				clientIPPropID = buff.PropertyTags[i].PropertyID
 			} else if pName == "x-ms-exchange-organization-originalserveripaddress" {
-				utils.Info.Printf("Exchange Server IP: %s\n", utils.FromUnicode(propRows[i].ValueArray))
+				getProps = append(getProps, buff.PropertyTags[i])
+				serverIPPropID = buff.PropertyTags[i].PropertyID
 			}
+		} else {
+			if buff.PropertyTags[i].PropertyID == 0x0039 {
+				getProps = append(getProps, buff.PropertyTags[i])
+			}
+		}
 
-		}
-		if utils.DecodeUint16(propRows[i].PropID) == 0x0039 {
-			t := (utils.DecodeUint64(propRows[i].ValueArray) - 116444736000000000) * 100
-			x := time.Unix(0, int64(t))
-			utils.Info.Printf("Last Message sent at: %s \n", x.UTC())
-		}
+	}
+	messageProps, err := mapi.GetMessage(folderId, messageid, getProps)
+	if err != nil {
+		return err
 	}
 
-	return nil
+	for _, row := range messageProps.GetData() {
 
+		id := utils.DecodeUint16(row.PropID)
+		switch id {
+		case 0x0039:
+			t := (utils.DecodeUint64(row.ValueArray) - 116444736000000000) * 100
+			x := time.Unix(0, int64(t))
+			utils.Info.Printf("Last Message sent at: %s \n", x.UTC())
+		case clientPropID:
+			clstring := utils.FromUnicode(row.ValueArray)
+			if clstring[6:9] == "OWA" {
+				utils.Warning.Printf("Last message sent from OWA! User-Agent: %s\n", clstring[10:])
+			} else {
+				utils.Info.Printf("Last message sent from: %s\n", clstring[6:])
+			}
+		case clientIPPropID:
+			utils.Info.Printf("Client IP Address: %s\n", utils.FromUnicode(row.ValueArray))
+		case serverIPPropID:
+			utils.Info.Printf("Exchange Server IP: %s\n", utils.FromUnicode(row.ValueArray))
+		}
+	}
+	return nil
 }
 
 func main() {
