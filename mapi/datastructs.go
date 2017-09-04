@@ -270,6 +270,7 @@ type RopGetPropertyIdsFromNamesRequest struct {
 	PropertyNames     []PropertyName
 }
 
+//GetProperties interface allowing both RopgetPropertyIdsFromName and RopGetProperties to be used
 type GetProperties interface {
 	Unmarshal([]byte, []PropertyTag) (int, error)
 	GetData() []PropertyRow
@@ -282,6 +283,24 @@ type RopGetPropertyIdsFromNamesResponse struct {
 	ReturnValue     uint32
 	PropertyIdCount uint16
 	PropertyIds     []byte //16 byte guids
+}
+
+//RopGetNamesFromPropertyIdsRequest request to get the named property values from a list of property ids
+type RopGetNamesFromPropertyIdsRequest struct {
+	RopID            uint8 //0x55
+	LogonID          uint8
+	InputHandleIndex uint8
+	PropertyIDCount  uint16
+	PropertyIDs      []byte
+}
+
+//RopGetNamesFromPropertyIdsResponse response containing property names based on their ids
+type RopGetNamesFromPropertyIdsResponse struct {
+	RopID             uint8 //0x55
+	InputHandleIndex  uint8
+	ReturnValue       uint32
+	PropertyNameCount uint16
+	PropertyNames     []PropertyName
 }
 
 //RopGetPropertiesSpecific struct to get propertiesfor a folder
@@ -1328,6 +1347,11 @@ func (getIds RopGetPropertyIdsFromNamesRequest) Marshal() []byte {
 	return utils.BodyToBytes(getIds)
 }
 
+//Marshal turn RopGetNamesFromPropertyIdsRequest into Bytes
+func (getNames RopGetNamesFromPropertyIdsRequest) Marshal() []byte {
+	return utils.BodyToBytes(getNames)
+}
+
 //Unmarshal function to convert response into ConnectResponse struct
 func (connResponse *ConnectResponse) Unmarshal(resp []byte) error {
 	pos := 0
@@ -1672,6 +1696,40 @@ func (getPropertiesResponse *RopGetPropertyIdsFromNamesResponse) Unmarshal(resp 
 
 	getPropertiesResponse.PropertyIdCount, pos = utils.ReadUint16(pos, resp)
 	getPropertiesResponse.PropertyIds, pos = utils.ReadBytes(pos, int(getPropertiesResponse.PropertyIdCount)*16, resp)
+	return pos, nil
+}
+
+//Unmarshal function to produce RopGetNamesFromPropertyIdsResponse struct
+func (getNamesResponse *RopGetNamesFromPropertyIdsResponse) Unmarshal(resp []byte) (int, error) {
+	pos := 0
+
+	getNamesResponse.RopID, pos = utils.ReadByte(pos, resp)
+	getNamesResponse.InputHandleIndex, pos = utils.ReadByte(pos, resp)
+	getNamesResponse.ReturnValue, pos = utils.ReadUint32(pos, resp)
+
+	if getNamesResponse.ReturnValue != 0 {
+		return pos, &ErrorCode{getNamesResponse.ReturnValue}
+	}
+
+	getNamesResponse.PropertyNameCount, pos = utils.ReadUint16(pos, resp)
+	getNamesResponse.PropertyNames = make([]PropertyName, int(getNamesResponse.PropertyNameCount))
+	tpos := pos
+	///read propertyNames here
+	for i := 0; i < int(getNamesResponse.PropertyNameCount); i++ {
+		getNamesResponse.PropertyNames[i] = PropertyName{}
+		getNamesResponse.PropertyNames[i].Kind, tpos = utils.ReadByte(tpos, resp)
+		getNamesResponse.PropertyNames[i].GUID, tpos = utils.ReadBytes(tpos, 16, resp)
+		switch getNamesResponse.PropertyNames[i].Kind {
+		case 0x00:
+			getNamesResponse.PropertyNames[i].LID, tpos = utils.ReadBytes(tpos, 4, resp)
+		case 0x01:
+			getNamesResponse.PropertyNames[i].NameSize, tpos = utils.ReadBytes(tpos, 1, resp)
+			getNamesResponse.PropertyNames[i].Name, tpos = utils.ReadBytes(tpos, int(utils.DecodeUint8(getNamesResponse.PropertyNames[i].NameSize)), resp)
+			//case 0xFF:
+		}
+	}
+	pos = tpos
+
 	return pos, nil
 }
 

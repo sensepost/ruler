@@ -133,6 +133,7 @@ func sendMapiRequest(mapi ExecuteRequest) (*ExecuteResponse, error) {
 			return nil, err
 		}
 	}
+	//debug flag
 	//utils.Debug.Println(string(rawResp))
 	executeResponse := ExecuteResponse{}
 	executeResponse.Unmarshal(rawResp)
@@ -901,6 +902,64 @@ func GetPropertyIds(folderid, messageid []byte, propids []PropertyName) (*RopGet
 		getPropertyIdsResp := RopGetPropertyIdsFromNamesResponse{}
 		_, e = getPropertyIdsResp.Unmarshal(execResponse.RopBuffer[bufPtr:])
 		return &getPropertyIdsResp, e
+	}
+
+	return nil, ErrUnknown
+}
+
+//GetPropertyNamesFromID returns the property names for a set of ids
+func GetPropertyNamesFromID(folderid, messageid, propids []byte, idcount int) (*RopGetNamesFromPropertyIdsResponse, error) {
+
+	execRequest := ExecuteRequest{}
+	execRequest.Init()
+
+	getMessage := RopOpenMessageRequest{RopID: 0x03, LogonID: AuthSession.LogonID}
+	getMessage.InputHandle = 0x00
+	getMessage.OutputHandle = 0x01
+	getMessage.FolderID = folderid
+	getMessage.MessageID = messageid
+	getMessage.CodePageID = 0xFFF
+	getMessage.OpenModeFlags = 0x03
+
+	fullReq := getMessage.Marshal()
+
+	getPropNames := RopGetNamesFromPropertyIdsRequest{RopID: 0x55, LogonID: AuthSession.LogonID, InputHandleIndex: 0x01}
+	getPropNames.PropertyIDCount = uint16(idcount)
+	getPropNames.PropertyIDs = propids
+
+	fullReq = append(fullReq, getPropNames.Marshal()...)
+
+	execRequest.RopBuffer.ROP.RopsList = fullReq
+	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF}
+
+	//fetch folder
+	execResponse, err := sendMapiRequest(execRequest)
+
+	if err != nil {
+		return nil, &TransportError{err}
+	}
+
+	if execResponse.StatusCode != 255 {
+
+		bufPtr := 10
+
+		if execResponse.RopBuffer[bufPtr : bufPtr+1][0] != 0x03 {
+			bufPtr += 4
+		}
+		var p int
+		var e error
+
+		getMessageResponse := RopOpenMessageResponse{}
+
+		if p, e = getMessageResponse.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+			return nil, e
+		}
+
+		bufPtr += p
+
+		getPropNamesResp := RopGetNamesFromPropertyIdsResponse{}
+		_, e = getPropNamesResp.Unmarshal(execResponse.RopBuffer[bufPtr:])
+		return &getPropNamesResp, e
 	}
 
 	return nil, ErrUnknown

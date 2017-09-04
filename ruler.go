@@ -978,33 +978,46 @@ func checkLastSent() error {
 	if err != nil {
 		return err
 	}
-	var ips []string
-	//convert buffer to rows
-	for _, row := range buff.GetData() {
-		if utils.DecodeUint16(row.PropType) == mapi.PtypString {
-			clstring := utils.FromUnicode(row.ValueArray)
-			if len(row.ValueArray) > 12 && clstring[0:6] == "Client" {
+
+	var props []byte
+	idcount := 0
+
+	propRows := buff.GetData()
+
+	//Get property names for rows
+	for _, row := range propRows {
+		props = append(props, row.PropID...)
+		idcount++
+	}
+
+	propNames, e := mapi.GetPropertyNamesFromID(folderId, messageid, props, idcount)
+
+	if e != nil {
+		return e
+	}
+
+	for i, p := range propNames.PropertyNames {
+		if p.Kind == 0x01 {
+			pName := utils.FromUnicode(p.Name)
+			if pName == "ClientInfo" {
+				clstring := utils.FromUnicode(propRows[i].ValueArray)
 				if clstring[7:10] == "OWA" {
 					utils.Warning.Printf("Last message sent from OWA! User-Agent: %s\n", clstring[11:])
 				} else {
 					utils.Info.Printf("Last message sent from: %s\n", clstring[7:])
 				}
-			} else {
-				//lets see if it looks like an IP address
-				if strings.Count(clstring, ".") == 3 || strings.Count(clstring, ":") == 5 {
-					ips = append(ips, clstring)
-				}
+			} else if pName == "x-ms-exchange-organization-originalclientipaddress" {
+				utils.Info.Printf("Client IP Address: %s\n", utils.FromUnicode(propRows[i].ValueArray))
+			} else if pName == "x-ms-exchange-organization-originalserveripaddress" {
+				utils.Info.Printf("Exchange Server IP: %s\n", utils.FromUnicode(propRows[i].ValueArray))
 			}
+
 		}
-		if utils.DecodeUint16(row.PropID) == 0x0039 {
-			t := (utils.DecodeUint64(row.ValueArray) - 116444736000000000) * 100
+		if utils.DecodeUint16(propRows[i].PropID) == 0x0039 {
+			t := (utils.DecodeUint64(propRows[i].ValueArray) - 116444736000000000) * 100
 			x := time.Unix(0, int64(t))
 			utils.Info.Printf("Last Message sent at: %s \n", x.UTC())
 		}
-	}
-
-	for _, ip := range ips {
-		utils.Info.Printf("Found what looks like an IP address. Could be client or exchange server: %s\n", ip)
 	}
 
 	return nil
@@ -1017,7 +1030,7 @@ func main() {
 
 	app.Name = "ruler"
 	app.Usage = "A tool to abuse Exchange Services"
-	app.Version = "2.1.6"
+	app.Version = "2.1.9"
 	app.Author = "Etienne Stalmans <etienne@sensepost.com>, @_staaldraad"
 	app.Description = `         _
  _ __ _   _| | ___ _ __
