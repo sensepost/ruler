@@ -34,6 +34,10 @@ var (
 	ErrUnknown = errors.New("mapi: an unhandled exception occurred")
 	//ErrNotAdmin when attempting to get admin access to a mailbox
 	ErrNotAdmin = errors.New("mapi: Invalid logon. Admin privileges requested but user is not admin")
+	//ErrEmptyBuffer when we have returned a buffer that is too big for our RPC packet.. sometimes this happens..
+	ErrEmptyBuffer = errors.New("An empty response buffer has been encountered. Likely that our response was too big for the current implementation of RPC/HTTP")
+	//ErrNonZeroStatus when the execute response status is not zero - this is not the same as the individual ROP messages erroring out
+	ErrNonZeroStatus = errors.New("The execute request returned a non-zero status code. Use --debug to see full response.")
 )
 
 const (

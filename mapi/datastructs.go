@@ -919,6 +919,13 @@ type RopModifyRulesRequest struct {
 	RuleData         RuleData
 }
 
+//RopModifyRulesResponse struct
+type RopModifyRulesResponse struct {
+	RopID            uint8 //0x41
+	InputHandleIndex uint8 //0x41
+	ReturnValue      uint32
+}
+
 //RopGetRulesTableResponse strcut
 type RopGetRulesTableResponse struct {
 	RopID        uint8
@@ -2069,6 +2076,21 @@ func (commitStreamResponse *RopCommitStreamResponse) Unmarshal(resp []byte) (int
 
 	if commitStreamResponse.ReturnValue != 0 {
 		return pos, &ErrorCode{commitStreamResponse.ReturnValue}
+	}
+
+	return pos, nil
+}
+
+//Unmarshal function to produce RopCommitStreamResponse struct
+func (modRulesResp *RopModifyRulesResponse) Unmarshal(resp []byte) (int, error) {
+	pos := 0
+
+	modRulesResp.RopID, pos = utils.ReadByte(pos, resp)
+	modRulesResp.InputHandleIndex, pos = utils.ReadByte(pos, resp)
+	modRulesResp.ReturnValue, pos = utils.ReadUint32(pos, resp)
+
+	if modRulesResp.ReturnValue != 0 {
+		return pos, &ErrorCode{modRulesResp.ReturnValue}
 	}
 
 	return pos, nil
