@@ -134,6 +134,7 @@ func sendMapiRequest(mapi ExecuteRequest) (*ExecuteResponse, error) {
 		}
 	}
 	//debug flag
+	//utils.Debug.Printf("%s\n", hex.Dump(rawResp))
 	//utils.Debug.Println(string(rawResp))
 	executeResponse := ExecuteResponse{}
 	executeResponse.Unmarshal(rawResp)

@@ -957,8 +957,8 @@ func checkLastSent() error {
 	//Using the ClientInfo tag, we check who if this message was sent from Outlook or OWA
 
 	//get the PropTag for ClientInfo
-	folderId := mapi.AuthSession.Folderids[mapi.SENT]
-	rows, err := mapi.GetContents(folderId)
+	folderid := mapi.AuthSession.Folderids[mapi.SENT]
+	rows, err := mapi.GetContents(folderid)
 
 	if err != nil {
 		return err
@@ -968,13 +968,11 @@ func checkLastSent() error {
 		return fmt.Errorf("Sent folder is empty")
 	}
 	//get most recent message
-
-	//messageSubject := utils.FromUnicode(rows.RowData[k][0].ValueArray)
 	messageid := rows.RowData[0][1].ValueArray
 
 	//for some reason getting named property tags isn't working for me. Maybe I'm an idiot
 	//so lets simply grab all tags. And then filter until we find one that starts with Client=
-	buff, err := mapi.GetPropertyIdsList(folderId, messageid)
+	buff, err := mapi.GetPropertyIdsList(folderid, messageid)
 
 	var props []byte
 	idcount := 0
@@ -983,7 +981,7 @@ func checkLastSent() error {
 		idcount++
 	}
 
-	propNames, e := mapi.GetPropertyNamesFromID(folderId, messageid, props, idcount)
+	propNames, e := mapi.GetPropertyNamesFromID(folderid, messageid, props, idcount)
 
 	if e != nil {
 		return e
@@ -1014,7 +1012,7 @@ func checkLastSent() error {
 		}
 
 	}
-	messageProps, err := mapi.GetMessage(folderId, messageid, getProps)
+	messageProps, err := mapi.GetMessage(folderid, messageid, getProps)
 	if err != nil {
 		return err
 	}

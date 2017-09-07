@@ -1,6 +1,8 @@
 package mapi
 
 import (
+	"fmt"
+
 	"github.com/sensepost/ruler/utils"
 )
 
@@ -1433,9 +1435,12 @@ func (execResponse *ExecuteResponse) Unmarshal(resp []byte) error {
 		execResponse.Flags, pos = utils.ReadUint32(pos, resp)
 		execResponse.RopBufferSize, pos = utils.ReadUint32(pos, resp)
 		if len(resp) < pos+int(execResponse.RopBufferSize) {
-			return nil
+			//buf, pos = utils.ReadBytes(pos, (len(resp)-pos)+8, resp)
+			//execResponse.RopBuffer = buf
+			//execResponse.AuxilliaryBufSize = uint32(0)
+			return fmt.Errorf("Packet size mismatch. RopBuffer Size %d, got packet of %d", execResponse.RopBufferSize, len(resp))
 		}
-		buf, pos = utils.ReadBytes(pos, int(execResponse.RopBufferSize), resp)
+		buf, pos = utils.ReadBytes(pos, int(execResponse.RopBufferSize)+1, resp)
 		execResponse.RopBuffer = buf
 		execResponse.AuxilliaryBufSize, _ = utils.ReadUint32(pos, resp)
 		//execResponse.AuxilliaryBuf, _ = utils.ReadBytes(pos, int(execResponse.AuxilliaryBufSize), resp)
@@ -2342,6 +2347,10 @@ func (wvpObjectStream *WebViewPersistenceObjectStream) Unmarshal(resp []byte) (i
 	wvpObjectStream.Type, pos = utils.ReadUint32(pos, resp)
 	wvpObjectStream.Flags, pos = utils.ReadUint32(pos, resp)
 	wvpObjectStream.Reserved, pos = utils.ReadBytes(pos, 28, resp)
+
+	if pos >= len(resp) {
+		return pos, nil
+	}
 	wvpObjectStream.Size, pos = utils.ReadUint32(pos, resp)
 
 	if wvpObjectStream.Size > 0 {
