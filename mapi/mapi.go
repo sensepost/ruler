@@ -2053,7 +2053,7 @@ func GetFolderFromID(folderid []byte, columns []PropertyTag) (*RopOpenFolderResp
 	var k []byte
 
 	if columns != nil {
-		getProperties := RopGetPropertiesSpecific{}
+		getProperties := RopGetPropertiesSpecificRequest{}
 		getProperties.RopID = 0x07
 		getProperties.LogonID = AuthSession.LogonID
 		getProperties.InputHandleIndex = 0x01
@@ -2162,7 +2162,7 @@ func GetMessage(folderid, messageid []byte, columns []PropertyTag) (GetPropertie
 	fullReq = append(fullReq, getMessage.Marshal()...)
 
 	if columns != nil {
-		getProperties := RopGetPropertiesSpecific{}
+		getProperties := RopGetPropertiesSpecificRequest{}
 		getProperties.RopID = 0x07
 		getProperties.LogonID = AuthSession.LogonID
 		getProperties.InputHandleIndex = 0x01

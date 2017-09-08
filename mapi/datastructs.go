@@ -161,16 +161,9 @@ type RopLogonRequest struct {
 	Essdn             []byte
 }
 
-//RopDisconnectRequest struct
-type RopDisconnectRequest struct {
-	RopID            uint8 //0x01
-	LogonID          uint8 //logonID to use
-	InputHandleIndex uint8
-}
-
 //RopLogonResponse struct
 type RopLogonResponse struct {
-	RopID             uint8
+	RopID             uint8 //0xfe
 	OutputHandleIndex uint8
 	ReturnValue       uint32
 	LogonFlags        byte
@@ -184,6 +177,13 @@ type RopLogonResponse struct {
 	StoreState        []byte
 }
 
+//RopDisconnectRequest struct
+type RopDisconnectRequest struct {
+	RopID            uint8 //0x01
+	LogonID          uint8 //logonID to use
+	InputHandleIndex uint8
+}
+
 //RopGetRulesTableRequest struct
 type RopGetRulesTableRequest struct {
 	RopID             uint8 //0x3f
@@ -191,16 +191,6 @@ type RopGetRulesTableRequest struct {
 	InputHandleIndex  uint8
 	OutputHandleIndex uint8
 	TableFlags        byte
-}
-
-//RopModifyRulesRequestBuffer struct
-type RopModifyRulesRequestBuffer struct {
-	RopID            uint8 //0x02
-	LogonID          uint8
-	InputHandleIndex uint8
-	ModifyRulesFlag  byte
-	RulesCount       uint16
-	RulesData        []byte
 }
 
 //RopGetContentsTableRequest struct
@@ -321,8 +311,8 @@ type RopGetPropertiesListResponse struct {
 	PropertyTags     []PropertyTag
 }
 
-//RopGetPropertiesSpecific struct to get propertiesfor a folder
-type RopGetPropertiesSpecific struct {
+//RopGetPropertiesSpecificRequeststruct to get propertiesfor a folder
+type RopGetPropertiesSpecificRequest struct {
 	RopID             uint8 //0x07
 	LogonID           uint8
 	InputHandleIndex  uint8
@@ -330,6 +320,15 @@ type RopGetPropertiesSpecific struct {
 	WantUnicode       uint16 //apparently bool
 	PropertyTagCount  uint16
 	PropertyTags      []PropertyTag //[]byte
+}
+
+//RopGetPropertiesSpecificResponse struct to get propertiesfor a folder
+type RopGetPropertiesSpecificResponse struct {
+	RopID             uint8 //0x07
+	InputHandleIndex  uint8
+	ReturnValue       uint32
+	PropertySizeLimit uint16
+	RowData           []PropertyRow
 }
 
 //RopSetPropertiesRequest struct to set properties on an object
@@ -351,16 +350,7 @@ type RopSetPropertiesResponse struct {
 	PropertyProblems     []byte
 }
 
-//RopGetPropertiesSpecificResponse struct to get propertiesfor a folder
-type RopGetPropertiesSpecificResponse struct {
-	RopID             uint8 //0x07
-	InputHandleIndex  uint8
-	ReturnValue       uint32
-	PropertySizeLimit uint16
-	RowData           []PropertyRow
-}
-
-//RopGetPropertiesAll struct to get propertiesfor a folder
+//RopGetPropertiesAllRequest struct to get all propertiesfor a folder
 type RopGetPropertiesAllRequest struct {
 	RopID             uint8 //0x08
 	LogonID           uint8
@@ -369,7 +359,7 @@ type RopGetPropertiesAllRequest struct {
 	WantUnicode       uint16
 }
 
-//RopGetPropertiesSpecificResponse struct to get propertiesfor a folder
+//RopGetPropertiesAllResponse struct to get all properties for a folder
 type RopGetPropertiesAllResponse struct {
 	RopID              uint8 //0x08
 	InputHandleIndex   uint8
@@ -514,6 +504,15 @@ type RopCreateMessageRequest struct {
 	CodePageID        uint16
 	FolderID          []byte
 	AssociatedFlag    byte //bool
+}
+
+//RopCreateMessageResponse struct used to open handle to new email message
+type RopCreateMessageResponse struct {
+	RopID             uint8
+	OutputHandleIndex uint8
+	ReturnValue       uint32
+	HasMessageID      byte   //bool
+	MessageID         []byte //bool
 }
 
 //RopSubmitMessageRequest struct used to open handle to new email message
@@ -718,6 +717,13 @@ type RopFastTransferSourceCopyPropertiesRequest struct {
 	PropertyTags      []PropertyTag
 }
 
+//RopFastTransferSourceCopyPropertiesResponse struct used to open handle to  message
+type RopFastTransferSourceCopyPropertiesResponse struct {
+	RopID            uint8 //0x4E
+	InputHandleIndex uint8
+	ReturnValue      uint32
+}
+
 //RopFastTransferSourceGetBufferRequest struct used to open handle to  message
 type RopFastTransferSourceGetBufferRequest struct {
 	RopID             uint8 //0x4E
@@ -725,13 +731,6 @@ type RopFastTransferSourceGetBufferRequest struct {
 	InputHandleIndex  uint8
 	BufferSize        uint16
 	MaximumBufferSize uint16 //0xBABE
-}
-
-//RopFastTransferSourceCopyPropertiesResponse struct used to open handle to  message
-type RopFastTransferSourceCopyPropertiesResponse struct {
-	RopID            uint8 //0x4E
-	InputHandleIndex uint8
-	ReturnValue      uint32
 }
 
 //RopFastTransferSourceGetBufferResponse struct used to open handle to  message
@@ -831,6 +830,13 @@ type RopRestrictRequest struct {
 	RestrictionData  []byte
 }
 
+//RopRestrictResponse strcut
+type RopRestrictResponse struct {
+	RopID            uint8 //0x14
+	InputHandleIndex uint8
+	ReturnValue      uint32
+}
+
 //RopSetColumnsRequest struct used to select the columns to use
 type RopSetColumnsRequest struct {
 	RopID            uint8 //0x12
@@ -898,15 +904,6 @@ type RopReleaseRequest struct {
 type RopReleaseResponse struct {
 	RopID       uint8 //0x01
 	ReturnValue uint32
-}
-
-//RopCreateMessageResponse struct used to open handle to new email message
-type RopCreateMessageResponse struct {
-	RopID             uint8
-	OutputHandleIndex uint8
-	ReturnValue       uint32
-	HasMessageID      byte   //bool
-	MessageID         []byte //bool
 }
 
 //RopModifyRulesRequest struct
@@ -1031,6 +1028,9 @@ type ActionData struct {
 	Footer   []byte
 }
 
+/*CRuleAction holds a rule element as saved in outlook
+This is a reverse engineered struct, not all values are correct/complete
+*/
 type CRuleAction struct {
 	Head  byte
 	Tag   []byte
@@ -1039,6 +1039,7 @@ type CRuleAction struct {
 	Value []byte
 }
 
+//PropertyName stuct defines a Named property
 type PropertyName struct {
 	Kind     uint8  //0x00,0x01,0xff
 	GUID     []byte //16 byte guid
@@ -1047,7 +1048,7 @@ type PropertyName struct {
 	Name     []byte //OPTIONAL: if Kind == 0x01
 }
 
-/*
+/*WebViewPersistenceObjectStream struct containing the data for setting a homepage
 dwVersion = 0x00000002 = WEBVIEW_PERSISTENCE_VERSION
 dwType = 0x00000001 = WEBVIEWURL
 dwFlags = 0x00000001 = WEBVIEW_FLAGS_SHOWBYDEFAULT
@@ -1222,8 +1223,8 @@ func (getBuff RopFastTransferDestinationPutBufferRequest) Marshal() []byte {
 	return utils.BodyToBytes(getBuff)
 }
 
-//Marshal turn RopGetPropertiesSpecific into Bytes
-func (getProps RopGetPropertiesSpecific) Marshal() []byte {
+//Marshal turn RopGetPropertiesSpecificRequestinto Bytes
+func (getProps RopGetPropertiesSpecificRequest) Marshal() []byte {
 	return utils.BodyToBytes(getProps)
 }
 
