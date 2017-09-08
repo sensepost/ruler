@@ -1816,24 +1816,19 @@ func GetFolderFromID(folderid []byte, columns []PropertyTag) (*RopOpenFolderResp
 		return nil, nil, &TransportError{err}
 	}
 
-	bufPtr := 0
-	openFolder := RopOpenFolderResponse{}
-	p, e := openFolder.Unmarshal(execResponse.RopBuffer.Body[bufPtr:])
-	if e != nil {
-		return nil, nil, e
+	openFolderResponse := RopOpenFolderResponse{}
+	rops := []RopResponse{&openFolderResponse}
+	bufPtr, e := UnmarshalRops(execResponse.RopBuffer.Body, rops)
+
+	if columns == nil || e != nil {
+		return &openFolderResponse, nil, e
 	}
 
-	if columns == nil {
-		return &openFolder, nil, nil
-	}
-
-	bufPtr += p
 	getPropertiesResponse := RopGetPropertiesSpecificResponse{}
-	//TODO
-	//Need to add an UnmarshalWithArgs to the RopResponse interface if we want to support this
-	_, e = getPropertiesResponse.Unmarshal(execResponse.RopBuffer.Body[bufPtr:], columns)
+	propRops := []GetProperties{&getPropertiesResponse}
+	_, e = UnmarshalPropertyRops(execResponse.RopBuffer.Body[bufPtr:], propRops, columns)
 
-	return &openFolder, &getPropertiesResponse, e
+	return &openFolderResponse, &getPropertiesResponse, e
 
 }
 
@@ -1928,33 +1923,23 @@ func GetMessage(folderid, messageid []byte, columns []PropertyTag) (GetPropertie
 		return nil, &TransportError{err}
 	}
 
-	bufPtr := 0
-	var p int
-	var e error
-
-	//fmt.Println(execResponse.RopBuffer.Body[bufPtr:])
-
-	openMessage := RopOpenMessageResponse{}
-	if p, e = openMessage.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
+	openMessageResponse := RopOpenMessageResponse{}
+	rops := []RopResponse{&openMessageResponse}
+	bufPtr, e := UnmarshalRops(execResponse.RopBuffer.Body, rops)
+	if e != nil {
 		return nil, e
 	}
-	bufPtr += p
-	//TODO
-	//Need to add an UnmarshalWithArgs to the RopResponse interface if we want to support this
 	if columns != nil {
 		props := RopGetPropertiesSpecificResponse{}
-		if _, e = props.Unmarshal(execResponse.RopBuffer.Body[bufPtr:], columns); e != nil {
-			return nil, e
-		}
-		return &props, nil
+		propRops := []GetProperties{&props}
+		_, e = UnmarshalPropertyRops(execResponse.RopBuffer.Body[bufPtr:], propRops, columns)
+		return &props, e
 	}
-	//TODO
-	//Need to add an UnmarshalWithArgs to the RopResponse interface if we want to support this
+
 	props := RopGetPropertiesAllResponse{}
-	if _, e = props.Unmarshal(execResponse.RopBuffer.Body[bufPtr:], columns); e != nil {
-		return nil, e
-	}
-	return &props, nil
+	propRops := []GetProperties{&props}
+	_, e = UnmarshalPropertyRops(execResponse.RopBuffer.Body[bufPtr:], propRops, columns)
+	return &props, e
 
 }
 
@@ -2189,21 +2174,19 @@ func GetSubFolders(folderid []byte) (*RopQueryRowsResponse, error) {
 		return nil, &TransportError{err}
 	}
 
-	bufPtr := 0
-	var p int
-	var e error
 	setColumnsResp := RopSetColumnsResponse{}
-	if p, e = setColumnsResp.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
+	rops := []RopResponse{&setColumnsResp}
+	bufPtr, e := UnmarshalRops(execResponse.RopBuffer.Body, rops)
+	if e != nil {
 		return nil, e
 	}
-	bufPtr += p
-
 	rows := RopQueryRowsResponse{}
-	//TODO
+	//propRops := []GetProperties{&rows}
+	//_, e = UnmarshalPropertyRops(execResponse.RopBuffer.Body[bufPtr:], propRops, setColumns.PropertyTags)
 	if _, e = rows.Unmarshal(execResponse.RopBuffer.Body[bufPtr:], setColumns.PropertyTags); e != nil {
 		return nil, e
 	}
-	return &rows, nil
+	return &rows, e
 
 }
 
@@ -2335,23 +2318,19 @@ func GetTableContents(folderid []byte, assoc bool, columns []PropertyTag) (*RopQ
 		return nil, &TransportError{err}
 	}
 
-	bufPtr := 0
-	var p int
-	var e error
-
 	setColumnsResp := RopSetColumnsResponse{}
-	if p, e = setColumnsResp.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
+	rops := []RopResponse{&setColumnsResp}
+	bufPtr, e := UnmarshalRops(execResponse.RopBuffer.Body, rops)
+	if e != nil {
 		return nil, e
 	}
-	bufPtr += p
-
 	rows := RopQueryRowsResponse{}
 	//TODO
 	if _, e = rows.Unmarshal(execResponse.RopBuffer.Body[bufPtr:], setColumns.PropertyTags); e != nil {
 		return nil, e
 	}
 
-	return &rows, nil
+	return &rows, e
 
 }
 
@@ -2405,30 +2384,21 @@ func FetchRules(columns []PropertyTag) (*RopQueryRowsResponse, error) {
 		return nil, &TransportError{err}
 	}
 
-	bufPtr := 0
 	rulesTableResponse := RopGetRulesTableResponse{}
-	p, err := rulesTableResponse.Unmarshal(execResponse.RopBuffer.Body[bufPtr:])
-	bufPtr += p
-
-	if err != nil {
-		return nil, err
+	colsResponse := RopSetColumnsResponse{}
+	rops := []RopResponse{&rulesTableResponse, &colsResponse}
+	bufPtr, e := UnmarshalRops(execResponse.RopBuffer.Body, rops)
+	if e != nil {
+		return nil, e
 	}
-	cols := RopSetColumnsResponse{}
-	p, err = cols.Unmarshal(execResponse.RopBuffer.Body[bufPtr:])
-	bufPtr += p
-
-	if err != nil {
-		return nil, err
-	}
-
 	rows := RopQueryRowsResponse{}
 	//TODO
-	_, err = rows.Unmarshal(execResponse.RopBuffer.Body[bufPtr:], columns)
-	if err != nil {
-		return nil, err
+	_, e = rows.Unmarshal(execResponse.RopBuffer.Body[bufPtr:], columns)
+	if e != nil {
+		return nil, e
 	}
 
-	return &rows, nil
+	return &rows, e
 
 }
 
@@ -2583,30 +2553,6 @@ func Ping() {
 			time.Sleep(time.Second * 5)
 		}
 	}
-}
-
-//DecodeGetTableResponse function Unmarshals the various parts of a getproperties response (this includes the initial openfolder request)
-//and returns the RopGetPropertiesSpecificResponse object to us, we can then cycle through the rows to view the values
-//needs the list of columns that were supplied in the initial request.
-func DecodeGetTableResponse(resp []byte, columns []PropertyTag) (*RopGetPropertiesSpecificResponse, error) {
-	pos := 10
-
-	var err error
-
-	openFolderResp := RopOpenFolderResponse{}
-	pos, err = openFolderResp.Unmarshal(resp[pos:])
-	if err != nil {
-		return nil, err
-	}
-	//TODO
-	properties := RopGetPropertiesSpecificResponse{}
-	_, err = properties.Unmarshal(resp[pos:], columns)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return &properties, nil
 }
 
 //DecodeBufferToRows returns the property rows contained in the buffer, takes a list
