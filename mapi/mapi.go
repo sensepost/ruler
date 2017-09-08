@@ -446,7 +446,7 @@ func AuthenticateFetchMailbox(essdn []byte) (*RopLogonResponse, error) {
 	execResponse, err := sendMapiRequest(execRequest)
 	//need to verify admin here...
 	if err != nil {
-		if execResponse.StatusCode != 255 && AuthSession.Admin {
+		if AuthSession.Admin {
 			return nil, ErrNotAdmin
 		}
 		return nil, &TransportError{err}
@@ -456,10 +456,10 @@ func AuthenticateFetchMailbox(essdn []byte) (*RopLogonResponse, error) {
 
 	logonResponse := RopLogonResponse{}
 	logonResponse.Unmarshal(execResponse.RopBuffer)
-	utils.Info.Println(logonResponse)
+
 	if len(logonResponse.FolderIds) == 0 {
 		if AuthSession.Admin {
-			return nil, ErrNotAdmin //fmt.Errorf("Unable to retrieve mailbox as admin")
+			return nil, fmt.Errorf("Unable to retrieve mailbox as admin")
 		}
 		return nil, fmt.Errorf("Unable to retrieve mailbox as user")
 	}
@@ -491,7 +491,7 @@ func Disconnect() (int, error) {
 func ReleaseObject(inputHandle byte) (*RopReleaseResponse, error) {
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
-	ropRelease := RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandle: inputHandle}
+	ropRelease := RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandleIndex: inputHandle}
 	fullReq := ropRelease.Marshal()
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF}
 	execRequest.RopBuffer.ROP.RopsList = fullReq
@@ -573,8 +573,8 @@ func SendExistingMessage(folderID, messageID []byte, recipient string) (*RopSubm
 	execRequest.Init()
 
 	getMessage := RopOpenMessageRequest{RopID: 0x03, LogonID: AuthSession.LogonID}
-	getMessage.InputHandle = 0x00
-	getMessage.OutputHandle = 0x01
+	getMessage.InputHandleIndex = 0x00
+	getMessage.OutputHandleIndex = 0x01
 	getMessage.FolderID = folderID
 	getMessage.MessageID = messageID
 	getMessage.CodePageID = 0xFFF
@@ -582,7 +582,7 @@ func SendExistingMessage(folderID, messageID []byte, recipient string) (*RopSubm
 
 	fullReq := getMessage.Marshal()
 
-	modRecipients := RopModifyRecipientsRequest{RopID: 0x0E, LogonID: AuthSession.LogonID, InputHandle: 0x01}
+	modRecipients := RopModifyRecipientsRequest{RopID: 0x0E, LogonID: AuthSession.LogonID, InputHandleIndex: 0x01}
 	modRecipients.ColumnCount = 8
 	modRecipients.RecipientColumns = make([]PropertyTag, modRecipients.ColumnCount)
 
@@ -622,7 +622,7 @@ func SendExistingMessage(folderID, messageID []byte, recipient string) (*RopSubm
 	modRecipients.RecipientRows[0].RecipientRowSize = uint16(len(utils.BodyToBytes(modRecipients.RecipientRows[0].RecipientRow)))
 	fullReq = append(fullReq, modRecipients.Marshal()...)
 
-	submitMessage := RopSubmitMessageRequest{RopID: 0x32, LogonID: AuthSession.LogonID, InputHandle: 0x01, SubmitFlags: 0x00}
+	submitMessage := RopSubmitMessageRequest{RopID: 0x32, LogonID: AuthSession.LogonID, InputHandleIndex: 0x01, SubmitFlags: 0x00}
 	fullReq = append(fullReq, submitMessage.Marshal()...)
 
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
@@ -667,8 +667,8 @@ func SendMessage(triggerWord, body string) (*RopSubmitMessageResponse, error) {
 	execRequest.Init()
 
 	createMessage := RopCreateMessageRequest{RopID: 0x06, LogonID: AuthSession.LogonID}
-	createMessage.InputHandle = 0x00
-	createMessage.OutputHandle = 0x01
+	createMessage.InputHandleIndex = 0x00
+	createMessage.OutputHandleIndex = 0x01
 	createMessage.FolderID = AuthSession.Folderids[OUTBOX]
 	createMessage.CodePageID = 0xFFF
 	createMessage.AssociatedFlag = 0
@@ -676,7 +676,7 @@ func SendMessage(triggerWord, body string) (*RopSubmitMessageResponse, error) {
 	fullReq := createMessage.Marshal()
 
 	setProperties := RopSetPropertiesRequest{RopID: 0x0A, LogonID: AuthSession.LogonID}
-	setProperties.InputHandle = 0x01
+	setProperties.InputHandleIndex = 0x01
 	setProperties.PropertValueCount = 9
 
 	propertyTags := make([]TaggedPropertyValue, setProperties.PropertValueCount)
@@ -701,7 +701,7 @@ func SendMessage(triggerWord, body string) (*RopSubmitMessageResponse, error) {
 
 	fullReq = append(fullReq, setProperties.Marshal()...)
 
-	modRecipients := RopModifyRecipientsRequest{RopID: 0x0E, LogonID: AuthSession.LogonID, InputHandle: 0x01}
+	modRecipients := RopModifyRecipientsRequest{RopID: 0x0E, LogonID: AuthSession.LogonID, InputHandleIndex: 0x01}
 	modRecipients.ColumnCount = 8
 	modRecipients.RecipientColumns = make([]PropertyTag, modRecipients.ColumnCount)
 
@@ -741,7 +741,7 @@ func SendMessage(triggerWord, body string) (*RopSubmitMessageResponse, error) {
 	modRecipients.RecipientRows[0].RecipientRowSize = uint16(len(utils.BodyToBytes(modRecipients.RecipientRows[0].RecipientRow)))
 	fullReq = append(fullReq, modRecipients.Marshal()...)
 
-	submitMessage := RopSubmitMessageRequest{RopID: 0x32, LogonID: AuthSession.LogonID, InputHandle: 0x01, SubmitFlags: 0x00}
+	submitMessage := RopSubmitMessageRequest{RopID: 0x32, LogonID: AuthSession.LogonID, InputHandleIndex: 0x01, SubmitFlags: 0x00}
 	fullReq = append(fullReq, submitMessage.Marshal()...)
 
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
@@ -789,22 +789,22 @@ func SetMessageStatus(folderid, messageid []byte) (*RopSetMessageStatusResponse,
 	execRequest.Init()
 
 	getFolder := RopOpenFolderRequest{RopID: 0x02, LogonID: AuthSession.LogonID}
-	getFolder.InputHandle = 0x00
-	getFolder.OutputHandle = 0x01
+	getFolder.InputHandleIndex = 0x00
+	getFolder.OutputHandleIndex = 0x01
 	getFolder.FolderID = folderid
 	getFolder.OpenModeFlags = 0x00
 
 	fullReq := getFolder.Marshal()
 
 	setMessageStatus := RopSetMessageStatusRequest{RopID: 0x20, LogonID: AuthSession.LogonID}
-	setMessageStatus.InputHandle = 0x01
+	setMessageStatus.InputHandleIndex = 0x01
 	setMessageStatus.MessageID = messageid
 	setMessageStatus.MessageStatusFlags = PidTagMessageFlags
 	setMessageStatus.MessageStatusMask = MSRemoteDelete
 
 	fullReq = append(fullReq, setMessageStatus.Marshal()...)
 
-	ropRelease := RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandle: 0x01}
+	ropRelease := RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandleIndex: 0x01}
 	fullReq = append(fullReq, ropRelease.Marshal()...)
 
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
@@ -834,8 +834,8 @@ func GetPropertyIds(folderid, messageid []byte, propids []PropertyName) (*RopGet
 	execRequest.Init()
 
 	getMessage := RopOpenMessageRequest{RopID: 0x03, LogonID: AuthSession.LogonID}
-	getMessage.InputHandle = 0x00
-	getMessage.OutputHandle = 0x01
+	getMessage.InputHandleIndex = 0x00
+	getMessage.OutputHandleIndex = 0x01
 	getMessage.FolderID = folderid
 	getMessage.MessageID = messageid
 	getMessage.CodePageID = 0xFFF
@@ -846,7 +846,7 @@ func GetPropertyIds(folderid, messageid []byte, propids []PropertyName) (*RopGet
 	getPropertyIds := RopGetPropertyIdsFromNamesRequest{}
 	getPropertyIds.RopID = 0x56
 	getPropertyIds.LogonID = AuthSession.LogonID
-	getPropertyIds.InputHandle = 0x01
+	getPropertyIds.InputHandleIndex = 0x01
 	getPropertyIds.Flags = 0x02
 	getPropertyIds.PropertyNameCount = uint16(len(propids))
 	getPropertyIds.PropertyNames = propids
@@ -854,7 +854,7 @@ func GetPropertyIds(folderid, messageid []byte, propids []PropertyName) (*RopGet
 	fullReq = append(fullReq, getPropertyIds.Marshal()...)
 	//fullReq := getPropertyIds.Marshal()
 
-	//ropRelease = RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandle: 0x01}
+	//ropRelease = RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandleIndex: 0x01}
 	//fullReq = append(fullReq, ropRelease.Marshal()...)
 
 	execRequest.RopBuffer.ROP.RopsList = fullReq
@@ -897,8 +897,8 @@ func GetPropertyIdsList(folderid, messageid []byte) (*RopGetPropertiesListRespon
 	execRequest.Init()
 
 	getMessage := RopOpenMessageRequest{RopID: 0x03, LogonID: AuthSession.LogonID}
-	getMessage.InputHandle = 0x00
-	getMessage.OutputHandle = 0x01
+	getMessage.InputHandleIndex = 0x00
+	getMessage.OutputHandleIndex = 0x01
 	getMessage.FolderID = folderid
 	getMessage.MessageID = messageid
 	getMessage.CodePageID = 0xFFF
@@ -950,8 +950,8 @@ func GetPropertyNamesFromID(folderid, messageid, propids []byte, idcount int) (*
 	execRequest.Init()
 
 	getMessage := RopOpenMessageRequest{RopID: 0x03, LogonID: AuthSession.LogonID}
-	getMessage.InputHandle = 0x00
-	getMessage.OutputHandle = 0x01
+	getMessage.InputHandleIndex = 0x00
+	getMessage.OutputHandleIndex = 0x01
 	getMessage.FolderID = folderid
 	getMessage.MessageID = messageid
 	getMessage.CodePageID = 0xFFF
@@ -1004,8 +1004,8 @@ func SetSearchCriteria(folderids, searchFolder []byte, restrictions Restriction)
 	execRequest.Init()
 
 	getFolder := RopOpenFolderRequest{RopID: 0x02, LogonID: AuthSession.LogonID}
-	getFolder.InputHandle = 0x00
-	getFolder.OutputHandle = 0x01
+	getFolder.InputHandleIndex = 0x00
+	getFolder.OutputHandleIndex = 0x01
 	getFolder.FolderID = searchFolder
 	getFolder.OpenModeFlags = 0x00
 
@@ -1060,8 +1060,8 @@ func GetSearchCriteria(searchFolder []byte) (*RopGetSearchCriteriaResponse, erro
 	execRequest.Init()
 
 	getFolder := RopOpenFolderRequest{RopID: 0x02, LogonID: AuthSession.LogonID}
-	getFolder.InputHandle = 0x00
-	getFolder.OutputHandle = 0x01
+	getFolder.InputHandleIndex = 0x00
+	getFolder.OutputHandleIndex = 0x01
 	getFolder.FolderID = searchFolder
 	getFolder.OpenModeFlags = 0x00
 
@@ -1112,15 +1112,15 @@ func SetFolderProperties(folderid []byte, propertyTags []TaggedPropertyValue) (*
 	execRequest.Init()
 
 	getFolder := RopOpenFolderRequest{RopID: 0x02, LogonID: AuthSession.LogonID}
-	getFolder.InputHandle = 0x00
-	getFolder.OutputHandle = 0x01
+	getFolder.InputHandleIndex = 0x00
+	getFolder.OutputHandleIndex = 0x01
 	getFolder.FolderID = folderid
 	getFolder.OpenModeFlags = 0x00
 
 	fullReq := getFolder.Marshal()
 
 	setProperties := RopSetPropertiesRequest{RopID: 0x0A, LogonID: AuthSession.LogonID}
-	setProperties.InputHandle = 0x01
+	setProperties.InputHandleIndex = 0x01
 	setProperties.PropertValueCount = 1
 
 	setProperties.PropertyValues = propertyTags
@@ -1178,8 +1178,8 @@ func CreateMessageRequest(folderID []byte, properties []TaggedPropertyValue, ass
 	execRequest.Init()
 
 	createMessage := RopCreateMessageRequest{RopID: 0x06, LogonID: AuthSession.LogonID}
-	createMessage.InputHandle = 0x00
-	createMessage.OutputHandle = 0x01
+	createMessage.InputHandleIndex = 0x00
+	createMessage.OutputHandleIndex = 0x01
 	createMessage.FolderID = folderID
 	createMessage.CodePageID = 0xFFF
 	createMessage.AssociatedFlag = associated
@@ -1187,7 +1187,7 @@ func CreateMessageRequest(folderID []byte, properties []TaggedPropertyValue, ass
 	fullReq := createMessage.Marshal()
 
 	setProperties := RopSetPropertiesRequest{RopID: 0x0A, LogonID: AuthSession.LogonID}
-	setProperties.InputHandle = 0x01
+	setProperties.InputHandleIndex = 0x01
 	setProperties.PropertValueCount = uint16(len(properties))
 
 	propertyTags := properties
@@ -1203,12 +1203,12 @@ func CreateMessageRequest(folderID []byte, properties []TaggedPropertyValue, ass
 
 	saveMessage := RopSaveChangesMessageRequest{RopID: 0x0C, LogonID: AuthSession.LogonID}
 	saveMessage.ResponseHandleIndex = 0x02
-	saveMessage.InputHandle = 0x01
+	saveMessage.InputHandleIndex = 0x01
 	saveMessage.SaveFlags = 0x02
 
 	fullReq = append(fullReq, saveMessage.Marshal()...)
 
-	ropRelease := RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandle: 0x01}
+	ropRelease := RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandleIndex: 0x01}
 	fullReq = append(fullReq, ropRelease.Marshal()...)
 
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
@@ -1252,12 +1252,12 @@ func CreateMessageAttachment(folderid, messageid []byte, properties []TaggedProp
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
 
-	ropRelease := RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandle: 0x01}
+	ropRelease := RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandleIndex: 0x01}
 	fullReq := ropRelease.Marshal()
 
 	getMessage := RopOpenMessageRequest{RopID: 0x03, LogonID: AuthSession.LogonID}
-	getMessage.InputHandle = 0x00
-	getMessage.OutputHandle = 0x01
+	getMessage.InputHandleIndex = 0x00
+	getMessage.OutputHandleIndex = 0x01
 	getMessage.FolderID = folderid
 	getMessage.MessageID = messageid
 	getMessage.CodePageID = 0xFFF
@@ -1271,7 +1271,7 @@ func CreateMessageAttachment(folderid, messageid []byte, properties []TaggedProp
 	fullReq = append(fullReq, createAttachment.Marshal()...)
 
 	setProperties := RopSetPropertiesRequest{RopID: 0x0A, LogonID: AuthSession.LogonID}
-	setProperties.InputHandle = 0x02
+	setProperties.InputHandleIndex = 0x02
 	setProperties.PropertValueCount = uint16(len(properties))
 	propertyTags := properties
 	setProperties.PropertyValues = propertyTags
@@ -1288,16 +1288,16 @@ func CreateMessageAttachment(folderid, messageid []byte, properties []TaggedProp
 
 	saveMessage := RopSaveChangesMessageRequest{RopID: 0x0C, LogonID: AuthSession.LogonID}
 	saveMessage.ResponseHandleIndex = 0x02
-	saveMessage.InputHandle = 0x01
+	saveMessage.InputHandleIndex = 0x01
 	saveMessage.SaveFlags = 0x02
 
 	fullReq = append(fullReq, saveMessage.Marshal()...)
 
-	ropRelease = RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandle: 0x00}
+	ropRelease = RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandleIndex: 0x00}
 	//fullReq = append(fullReq, ropRelease.Marshal()...)
-	ropRelease = RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandle: 0x01}
+	ropRelease = RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandleIndex: 0x01}
 	fullReq = append(fullReq, ropRelease.Marshal()...)
-	ropRelease = RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandle: 0x02}
+	ropRelease = RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandleIndex: 0x02}
 	fullReq = append(fullReq, ropRelease.Marshal()...)
 
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
@@ -1357,12 +1357,12 @@ func WriteAttachmentProperty(folderid, messageid []byte, attachmentid uint32, pr
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
 
-	ropRelease := RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandle: 0x01}
+	ropRelease := RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandleIndex: 0x01}
 	fullReq := ropRelease.Marshal()
 
 	getMessage := RopOpenMessageRequest{RopID: 0x03, LogonID: AuthSession.LogonID}
-	getMessage.InputHandle = 0x00
-	getMessage.OutputHandle = 0x01
+	getMessage.InputHandleIndex = 0x00
+	getMessage.OutputHandleIndex = 0x01
 	getMessage.FolderID = folderid
 	getMessage.MessageID = messageid
 	getMessage.CodePageID = 0xFFF
@@ -1498,18 +1498,18 @@ func WriteAttachmentProperty(folderid, messageid []byte, attachmentid uint32, pr
 
 	saveMessage := RopSaveChangesMessageRequest{RopID: 0x0C, LogonID: AuthSession.LogonID}
 	saveMessage.ResponseHandleIndex = 0x02
-	saveMessage.InputHandle = 0x01
+	saveMessage.InputHandleIndex = 0x01
 	saveMessage.SaveFlags = 0x02
 
 	fullReq = append(fullReq, saveMessage.Marshal()...)
 
-	ropRelease = RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandle: 0x01}
+	ropRelease = RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandleIndex: 0x01}
 	fullReq = append(fullReq, ropRelease.Marshal()...)
 
-	ropRelease = RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandle: 0x02}
+	ropRelease = RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandleIndex: 0x02}
 	fullReq = append(fullReq, ropRelease.Marshal()...)
 
-	ropRelease = RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandle: 0x03}
+	ropRelease = RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandleIndex: 0x03}
 	fullReq = append(fullReq, ropRelease.Marshal()...)
 
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = append([]byte{0x00, 0x00, 0x00, AuthSession.LogonID}, serverHandles...) //[]byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
@@ -1553,8 +1553,8 @@ func SetMessageProperties(folderid, messageid []byte, propertyTags []TaggedPrope
 	execRequest.Init()
 
 	getMessage := RopOpenMessageRequest{RopID: 0x03, LogonID: AuthSession.LogonID}
-	getMessage.InputHandle = 0x00
-	getMessage.OutputHandle = 0x01
+	getMessage.InputHandleIndex = 0x00
+	getMessage.OutputHandleIndex = 0x01
 	getMessage.FolderID = folderid
 	getMessage.MessageID = messageid
 	getMessage.CodePageID = 0xFFF
@@ -1563,7 +1563,7 @@ func SetMessageProperties(folderid, messageid []byte, propertyTags []TaggedPrope
 	fullReq := getMessage.Marshal()
 
 	setProperties := RopSetPropertiesRequest{RopID: 0x0A, LogonID: AuthSession.LogonID}
-	setProperties.InputHandle = 0x01
+	setProperties.InputHandleIndex = 0x01
 	setProperties.PropertValueCount = uint16(len(propertyTags))
 	setProperties.PropertyValues = propertyTags
 	propertySize := 0
@@ -1577,7 +1577,7 @@ func SetMessageProperties(folderid, messageid []byte, propertyTags []TaggedPrope
 
 	saveMessage := RopSaveChangesMessageRequest{RopID: 0x0C, LogonID: AuthSession.LogonID}
 	saveMessage.ResponseHandleIndex = 0x02
-	saveMessage.InputHandle = 0x01
+	saveMessage.InputHandleIndex = 0x01
 	saveMessage.SaveFlags = 0x02
 
 	fullReq = append(fullReq, saveMessage.Marshal()...)
@@ -1620,12 +1620,12 @@ func SetPropertyFast(folderid []byte, messageid []byte, property TaggedPropertyV
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
 
-	ropRelease := RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandle: 0x01}
+	ropRelease := RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandleIndex: 0x01}
 	fullReq := ropRelease.Marshal()
 
 	getMessage := RopOpenMessageRequest{RopID: 0x03, LogonID: AuthSession.LogonID}
-	getMessage.InputHandle = 0x00
-	getMessage.OutputHandle = 0x01
+	getMessage.InputHandleIndex = 0x00
+	getMessage.OutputHandleIndex = 0x01
 	getMessage.FolderID = folderid
 	getMessage.MessageID = messageid
 	getMessage.CodePageID = 0xFFF
@@ -1633,7 +1633,7 @@ func SetPropertyFast(folderid []byte, messageid []byte, property TaggedPropertyV
 
 	fullReq = append(fullReq, getMessage.Marshal()...)
 
-	fastTransfer := RopFastTransferDestinationConfigureRequest{RopID: 0x53, LogonID: AuthSession.LogonID, InputHandle: 0x01, OutputHandle: 0x02, SourceOperation: 0x01, CopyFlags: 0x01}
+	fastTransfer := RopFastTransferDestinationConfigureRequest{RopID: 0x53, LogonID: AuthSession.LogonID, InputHandleIndex: 0x01, OutputHandleIndex: 0x02, SourceOperation: 0x01, CopyFlags: 0x01}
 	fullReq = append(fullReq, fastTransfer.Marshal()...)
 
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
@@ -1664,7 +1664,7 @@ func SetPropertyFast(folderid []byte, messageid []byte, property TaggedPropertyV
 		//fmt.Printf("%x\n", body)
 		execRequest := ExecuteRequest{}
 		execRequest.Init()
-		setFast := RopFastTransferDestinationPutBufferRequest{RopID: 0x54, LogonID: AuthSession.LogonID, InputHandle: 0x02, TransferDataSize: uint16(len(body)), TransferData: body}
+		setFast := RopFastTransferDestinationPutBufferRequest{RopID: 0x54, LogonID: AuthSession.LogonID, InputHandleIndex: 0x02, TransferDataSize: uint16(len(body)), TransferData: body}
 		fullReq := setFast.Marshal()
 
 		execRequest.RopBuffer.ROP.ServerObjectHandleTable = append([]byte{0x00, 0x00, 0x00, AuthSession.LogonID}, serverHandles...) //[]byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF} //
@@ -1683,7 +1683,7 @@ func SetPropertyFast(folderid []byte, messageid []byte, property TaggedPropertyV
 		body := props[index:]
 		execRequest := ExecuteRequest{}
 		execRequest.Init()
-		setFast := RopFastTransferDestinationPutBufferRequest{RopID: 0x54, LogonID: AuthSession.LogonID, InputHandle: 0x02, TransferDataSize: uint16(len(body)), TransferData: body}
+		setFast := RopFastTransferDestinationPutBufferRequest{RopID: 0x54, LogonID: AuthSession.LogonID, InputHandleIndex: 0x02, TransferDataSize: uint16(len(body)), TransferData: body}
 		fullReq := setFast.Marshal()
 
 		execRequest.RopBuffer.ROP.ServerObjectHandleTable = append([]byte{0x00, 0x00, 0x00, AuthSession.LogonID}, serverHandles...) //[]byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
@@ -1708,12 +1708,12 @@ func SaveMessageFast(inputHandle, responseHandle byte, serverHandles []byte) (*R
 
 	saveMessage := RopSaveChangesMessageRequest{RopID: 0x0C, LogonID: AuthSession.LogonID}
 	saveMessage.ResponseHandleIndex = responseHandle
-	saveMessage.InputHandle = inputHandle
+	saveMessage.InputHandleIndex = inputHandle
 	saveMessage.SaveFlags = 0x02
 
 	fullReq := saveMessage.Marshal()
 
-	ropRelease := RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandle: inputHandle}
+	ropRelease := RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandleIndex: inputHandle}
 	fullReq = append(fullReq, ropRelease.Marshal()...)
 
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = append([]byte{0x00, 0x00, 0x00, AuthSession.LogonID}, serverHandles...) //[]byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
@@ -1742,15 +1742,15 @@ func DeleteMessages(folderid []byte, messageIDCount int, messageIDs []byte) (*Ro
 	execRequest.Init()
 
 	getFolder := RopOpenFolderRequest{RopID: 0x02, LogonID: AuthSession.LogonID}
-	getFolder.InputHandle = 0x00
-	getFolder.OutputHandle = 0x01
+	getFolder.InputHandleIndex = 0x00
+	getFolder.OutputHandleIndex = 0x01
 	getFolder.FolderID = folderid
 	getFolder.OpenModeFlags = 0x00
 
 	fullReq := getFolder.Marshal()
 	//Normal delete 0x1E, hard-delete 0x91
 	deleteMessages := RopDeleteMessagesRequest{RopID: 0x91, LogonID: AuthSession.LogonID}
-	deleteMessages.InputHandle = 0x01
+	deleteMessages.InputHandleIndex = 0x01
 	deleteMessages.WantSynchronous = 255
 	deleteMessages.NotifyNonRead = 0
 	deleteMessages.MessageIDCount = uint16(messageIDCount)
@@ -1758,7 +1758,7 @@ func DeleteMessages(folderid []byte, messageIDCount int, messageIDs []byte) (*Ro
 
 	fullReq = append(fullReq, deleteMessages.Marshal()...)
 
-	ropRelease := RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandle: 0x01}
+	ropRelease := RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandleIndex: 0x01}
 	fullReq = append(fullReq, ropRelease.Marshal()...)
 
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
@@ -1791,12 +1791,12 @@ func OpenAttachment(folderid, messageid []byte, attachId uint32, columns []Prope
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
 
-	ropRelease := RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandle: 0x01}
+	ropRelease := RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandleIndex: 0x01}
 	fullReq := ropRelease.Marshal()
 
 	getMessage := RopOpenMessageRequest{RopID: 0x03, LogonID: AuthSession.LogonID}
-	getMessage.InputHandle = 0x00
-	getMessage.OutputHandle = 0x01
+	getMessage.InputHandleIndex = 0x00
+	getMessage.OutputHandleIndex = 0x01
 	getMessage.FolderID = folderid
 	getMessage.MessageID = messageid
 	getMessage.CodePageID = 0xFFF
@@ -1810,7 +1810,7 @@ func OpenAttachment(folderid, messageid []byte, attachId uint32, columns []Prope
 	fullReq = append(fullReq, getAttachmentTbl.Marshal()...)
 	fullReq = append(fullReq, getAttachment.Marshal()...)
 
-	fastTransfer := RopFastTransferSourceCopyPropertiesRequest{RopID: 0x69, LogonID: AuthSession.LogonID, InputHandle: 0x02, OutputHandle: 0x03}
+	fastTransfer := RopFastTransferSourceCopyPropertiesRequest{RopID: 0x69, LogonID: AuthSession.LogonID, InputHandleIndex: 0x02, OutputHandleIndex: 0x03}
 	fastTransfer.Level = 0
 	fastTransfer.CopyFlags = 2
 	fastTransfer.SendOptions = 1
@@ -1819,7 +1819,7 @@ func OpenAttachment(folderid, messageid []byte, attachId uint32, columns []Prope
 
 	fullReq = append(fullReq, fastTransfer.Marshal()...)
 
-	fastTransferBuffer := RopFastTransferSourceGetBufferRequest{RopID: 0x4E, LogonID: AuthSession.LogonID, InputHandle: 0x03}
+	fastTransferBuffer := RopFastTransferSourceGetBufferRequest{RopID: 0x4E, LogonID: AuthSession.LogonID, InputHandleIndex: 0x03}
 	fastTransferBuffer.BufferSize = 0xBABE
 	fastTransferBuffer.MaximumBufferSize = 0xBABE
 
@@ -1890,12 +1890,12 @@ func GetAttachments(folderid, messageid []byte) (*RopGetValidAttachmentsResponse
 		execRequest := ExecuteRequest{}
 		execRequest.Init()
 
-		ropRelease := RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandle: 0x01}
+		ropRelease := RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandleIndex: 0x01}
 		fullReq := ropRelease.Marshal()
 
 		getMessage := RopOpenMessageRequest{RopID: 0x03, LogonID: AuthSession.LogonID}
-		getMessage.InputHandle = 0x00
-		getMessage.OutputHandle = 0x01
+		getMessage.InputHandleIndex = 0x00
+		getMessage.OutputHandleIndex = 0x01
 		getMessage.FolderID = folderid
 		getMessage.MessageID = messageid
 		getMessage.CodePageID = 0xFFF
@@ -1948,21 +1948,21 @@ func EmptyFolder(folderid []byte) (*RopEmptyFolderResponse, error) {
 	execRequest.Init()
 
 	getFolder := RopOpenFolderRequest{RopID: 0x02, LogonID: AuthSession.LogonID}
-	getFolder.InputHandle = 0x00
-	getFolder.OutputHandle = 0x01
+	getFolder.InputHandleIndex = 0x00
+	getFolder.OutputHandleIndex = 0x01
 	getFolder.FolderID = folderid
 	getFolder.OpenModeFlags = 0x00
 
 	fullReq := getFolder.Marshal()
 
 	emptyFolder := RopEmptyFolderRequest{RopID: 0x58, LogonID: AuthSession.LogonID}
-	emptyFolder.InputHandle = 0x01
+	emptyFolder.InputHandleIndex = 0x01
 	emptyFolder.WantAsynchronous = 255
 	emptyFolder.WantDeleteAssociated = 255
 
 	fullReq = append(fullReq, emptyFolder.Marshal()...)
 
-	ropRelease := RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandle: 0x01}
+	ropRelease := RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandleIndex: 0x01}
 	fullReq = append(fullReq, ropRelease.Marshal()...)
 
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = []byte{0x00, 0x00, 0x00, AuthSession.LogonID, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
@@ -1996,7 +1996,7 @@ func DeleteFolder(folderid []byte) (*RopDeleteFolderResponse, error) {
 	execRequest.Init()
 
 	deleteFolder := RopDeleteFolderRequest{RopID: 0x1D, LogonID: AuthSession.LogonID}
-	deleteFolder.InputHandle = 0x00
+	deleteFolder.InputHandleIndex = 0x00
 	deleteFolder.FolderID = folderid
 	deleteFolder.DeleteFolderFlags = 0x10 | 0x04 | 0x01
 
@@ -2045,8 +2045,8 @@ func GetFolderFromID(folderid []byte, columns []PropertyTag) (*RopOpenFolderResp
 	//execRequest.MaxRopOut = 262144
 
 	getFolder := RopOpenFolderRequest{RopID: 0x02, LogonID: AuthSession.LogonID}
-	getFolder.InputHandle = 0x00
-	getFolder.OutputHandle = 0x01
+	getFolder.InputHandleIndex = 0x00
+	getFolder.OutputHandleIndex = 0x01
 	getFolder.FolderID = folderid
 	getFolder.OpenModeFlags = 0x00
 
@@ -2056,7 +2056,7 @@ func GetFolderFromID(folderid []byte, columns []PropertyTag) (*RopOpenFolderResp
 		getProperties := RopGetPropertiesSpecific{}
 		getProperties.RopID = 0x07
 		getProperties.LogonID = AuthSession.LogonID
-		getProperties.InputHandle = 0x01
+		getProperties.InputHandleIndex = 0x01
 		getProperties.PropertySizeLimit = 0x00
 		getProperties.WantUnicode = 0x01
 		getProperties.PropertyTagCount = uint16(len(columns))
@@ -2104,12 +2104,12 @@ func OpenMessage(folderid, messageid []byte) ([]byte, error) {
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
 
-	ropRelease := RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandle: 0x01}
+	ropRelease := RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandleIndex: 0x01}
 	fullReq := ropRelease.Marshal()
 
 	getMessage := RopOpenMessageRequest{RopID: 0x03, LogonID: AuthSession.LogonID}
-	getMessage.InputHandle = 0x00
-	getMessage.OutputHandle = 0x01
+	getMessage.InputHandleIndex = 0x00
+	getMessage.OutputHandleIndex = 0x01
 	getMessage.FolderID = folderid
 	getMessage.MessageID = messageid
 	getMessage.CodePageID = 0xFFF
@@ -2148,12 +2148,12 @@ func GetMessage(folderid, messageid []byte, columns []PropertyTag) (GetPropertie
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
 
-	ropRelease := RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandle: 0x01}
+	ropRelease := RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandleIndex: 0x01}
 	fullReq := ropRelease.Marshal()
 
 	getMessage := RopOpenMessageRequest{RopID: 0x03, LogonID: AuthSession.LogonID}
-	getMessage.InputHandle = 0x00
-	getMessage.OutputHandle = 0x01
+	getMessage.InputHandleIndex = 0x00
+	getMessage.OutputHandleIndex = 0x01
 	getMessage.FolderID = folderid
 	getMessage.MessageID = messageid
 	getMessage.CodePageID = 0xFFF
@@ -2165,7 +2165,7 @@ func GetMessage(folderid, messageid []byte, columns []PropertyTag) (GetPropertie
 		getProperties := RopGetPropertiesSpecific{}
 		getProperties.RopID = 0x07
 		getProperties.LogonID = AuthSession.LogonID
-		getProperties.InputHandle = 0x01
+		getProperties.InputHandleIndex = 0x01
 		getProperties.PropertySizeLimit = 0x00
 		getProperties.WantUnicode = 0x01
 		getProperties.PropertyTagCount = uint16(len(columns))
@@ -2176,14 +2176,14 @@ func GetMessage(folderid, messageid []byte, columns []PropertyTag) (GetPropertie
 		getPropertiesAll := RopGetPropertiesAllRequest{}
 		getPropertiesAll.RopID = 0x08
 		getPropertiesAll.LogonID = AuthSession.LogonID
-		getPropertiesAll.InputHandle = 0x01
+		getPropertiesAll.InputHandleIndex = 0x01
 		getPropertiesAll.PropertySizeLimit = 0x00
 		getPropertiesAll.WantUnicode = 0x01
 		fullReq = append(fullReq, getPropertiesAll.Marshal()...)
 	}
-	//queryRows := RopQueryRowsRequest{RopID: 0x15, LogonID: AuthSession.LogonID, InputHandle: 0x01, QueryRowsFlags: 0x00, ForwardRead: 0x01, RowCount: 0x32}
+	//queryRows := RopQueryRowsRequest{RopID: 0x15, LogonID: AuthSession.LogonID, InputHandleIndex: 0x01, QueryRowsFlags: 0x00, ForwardRead: 0x01, RowCount: 0x32}
 	//k = append(k, queryRows.Marshal()...)
-	ropRelease = RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandle: 0x01}
+	ropRelease = RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandleIndex: 0x01}
 	fullReq = append(fullReq, ropRelease.Marshal()...)
 
 	execRequest.RopBuffer.ROP.RopsList = fullReq
@@ -2230,12 +2230,12 @@ func GetMessageFast(folderid, messageid []byte, columns []PropertyTag) (*RopFast
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
 
-	ropRelease := RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandle: 0x01}
+	ropRelease := RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandleIndex: 0x01}
 	fullReq := ropRelease.Marshal()
 
 	getMessage := RopOpenMessageRequest{RopID: 0x03, LogonID: AuthSession.LogonID}
-	getMessage.InputHandle = 0x00
-	getMessage.OutputHandle = 0x01
+	getMessage.InputHandleIndex = 0x00
+	getMessage.OutputHandleIndex = 0x01
 	getMessage.FolderID = folderid
 	getMessage.MessageID = messageid
 	getMessage.CodePageID = 0xFFF
@@ -2243,7 +2243,7 @@ func GetMessageFast(folderid, messageid []byte, columns []PropertyTag) (*RopFast
 
 	fullReq = append(fullReq, getMessage.Marshal()...)
 
-	fastTransfer := RopFastTransferSourceCopyPropertiesRequest{RopID: 0x69, LogonID: AuthSession.LogonID, InputHandle: 0x01, OutputHandle: 0x02}
+	fastTransfer := RopFastTransferSourceCopyPropertiesRequest{RopID: 0x69, LogonID: AuthSession.LogonID, InputHandleIndex: 0x01, OutputHandleIndex: 0x02}
 	fastTransfer.Level = 0
 	fastTransfer.CopyFlags = 2
 	fastTransfer.SendOptions = 1
@@ -2252,7 +2252,7 @@ func GetMessageFast(folderid, messageid []byte, columns []PropertyTag) (*RopFast
 
 	fullReq = append(fullReq, fastTransfer.Marshal()...)
 
-	fastTransferBuffer := RopFastTransferSourceGetBufferRequest{RopID: 0x4E, LogonID: AuthSession.LogonID, InputHandle: 0x02}
+	fastTransferBuffer := RopFastTransferSourceGetBufferRequest{RopID: 0x4E, LogonID: AuthSession.LogonID, InputHandleIndex: 0x02}
 	fastTransferBuffer.BufferSize = 0xBABE
 	fastTransferBuffer.MaximumBufferSize = 0xBABE
 
@@ -2314,7 +2314,7 @@ func FastTransferFetchStep(handles []byte) ([]byte, error) {
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
 
-	fastTransferBuffer := RopFastTransferSourceGetBufferRequest{RopID: 0x4E, LogonID: AuthSession.LogonID, InputHandle: 0x02}
+	fastTransferBuffer := RopFastTransferSourceGetBufferRequest{RopID: 0x4E, LogonID: AuthSession.LogonID, InputHandleIndex: 0x02}
 	fastTransferBuffer.BufferSize = 0xBABE
 	fastTransferBuffer.MaximumBufferSize = 0xBABE
 
@@ -2376,12 +2376,12 @@ func GetAssocatedContentsTable(folderid []byte) (*RopGetContentsTableResponse, [
 func GetContentsTableRequest(folderid []byte, tableFlags byte) (*RopGetContentsTableResponse, []byte, error) {
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
-	ropRelease := RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandle: 0x01}
+	ropRelease := RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandleIndex: 0x01}
 	fullReq := ropRelease.Marshal()
 
 	getFolder := RopOpenFolderRequest{RopID: 0x02, LogonID: AuthSession.LogonID}
-	getFolder.InputHandle = 0x00
-	getFolder.OutputHandle = 0x01
+	getFolder.InputHandleIndex = 0x00
+	getFolder.OutputHandleIndex = 0x01
 	getFolder.FolderID = folderid
 	getFolder.OpenModeFlags = 0x00
 	//fullReq := getFolder.Marshal()
@@ -2432,14 +2432,14 @@ func GetFolderHierarchy(folderid []byte) (*RopGetHierarchyTableResponse, []byte,
 	execRequest.MaxRopOut = 262144
 
 	getFolder := RopOpenFolderRequest{RopID: 0x02, LogonID: AuthSession.LogonID}
-	getFolder.InputHandle = 0x00
-	getFolder.OutputHandle = 0x01
+	getFolder.InputHandleIndex = 0x00
+	getFolder.OutputHandleIndex = 0x01
 	getFolder.FolderID = folderid
 	getFolder.OpenModeFlags = 0x00
 	fullReq := getFolder.Marshal()
 
 	//set table flag as 0x04 | 0x40 (Depth and use unicode)
-	getFolderHierarchy := RopGetHierarchyTableRequest{RopID: 0x04, LogonID: AuthSession.LogonID, InputHandle: 0x01, OutputHandle: 0x02, TableFlags: 0x40}
+	getFolderHierarchy := RopGetHierarchyTableRequest{RopID: 0x04, LogonID: AuthSession.LogonID, InputHandleIndex: 0x01, OutputHandleIndex: 0x02, TableFlags: 0x40}
 	fullReq = append(fullReq, getFolderHierarchy.Marshal()...)
 
 	execRequest.RopBuffer.ROP.RopsList = fullReq
@@ -2484,7 +2484,7 @@ func GetSubFolders(folderid []byte) (*RopQueryRowsResponse, error) {
 	execRequest.Init()
 
 	setColumns := RopSetColumnsRequest{RopID: 0x12, LogonID: AuthSession.LogonID}
-	setColumns.InputHandle = 0x01
+	setColumns.InputHandleIndex = 0x01
 	setColumns.PropertyTagCount = 2
 	setColumns.PropertyTags = make([]PropertyTag, 2)
 	setColumns.PropertyTags[0] = PidTagDisplayName
@@ -2492,7 +2492,7 @@ func GetSubFolders(folderid []byte) (*RopQueryRowsResponse, error) {
 
 	fullReq := setColumns.Marshal()
 
-	queryRows := RopQueryRowsRequest{RopID: 0x15, LogonID: AuthSession.LogonID, InputHandle: 0x01, QueryRowsFlags: 0x00, ForwardRead: 0x01, RowCount: uint16(folderHeirarchy.RowCount)}
+	queryRows := RopQueryRowsRequest{RopID: 0x15, LogonID: AuthSession.LogonID, InputHandleIndex: 0x01, QueryRowsFlags: 0x00, ForwardRead: 0x01, RowCount: uint16(folderHeirarchy.RowCount)}
 	fullReq = append(fullReq, queryRows.Marshal()...)
 	execRequest.RopBuffer.ROP.RopsList = fullReq
 	execRequest.RopBuffer.ROP.ServerObjectHandleTable = append([]byte{0x01, 0x00, 0x00, AuthSession.LogonID}, svrhndl...)
@@ -2537,7 +2537,7 @@ func CreateFolderRequest(folderName string, hidden bool, ftype uint8) (*RopCreat
 	execRequest.Init()
 	execRequest.MaxRopOut = 262144
 
-	createFolder := RopCreateFolderRequest{RopID: 0x1C, LogonID: AuthSession.LogonID, InputHandle: 0x00, OutputHandle: 0x01, Reserved: 0x00}
+	createFolder := RopCreateFolderRequest{RopID: 0x1C, LogonID: AuthSession.LogonID, InputHandleIndex: 0x00, OutputHandleIndex: 0x01, Reserved: 0x00}
 	createFolder.FolderType = ftype
 	createFolder.UseUnicodeStrings = 0x01
 	createFolder.OpenExisting = 0x00
@@ -2548,7 +2548,7 @@ func CreateFolderRequest(folderName string, hidden bool, ftype uint8) (*RopCreat
 	//if we want to create a hidden folder (so it doesn't show up in Outlook)
 	if hidden == true {
 		setProperties := RopSetPropertiesRequest{RopID: 0x0A, LogonID: AuthSession.LogonID}
-		setProperties.InputHandle = 0x01
+		setProperties.InputHandleIndex = 0x01
 		setProperties.PropertValueCount = 1
 
 		propertyTags := make([]TaggedPropertyValue, setProperties.PropertValueCount)
@@ -2630,7 +2630,7 @@ func GetTableContents(folderid []byte, assoc bool, columns []PropertyTag) (*RopQ
 	execRequest.Init()
 
 	setColumns := RopSetColumnsRequest{RopID: 0x12, LogonID: AuthSession.LogonID, SetColumnFlags: 0x00}
-	setColumns.InputHandle = inputHndl
+	setColumns.InputHandleIndex = inputHndl
 	setColumns.PropertyTagCount = uint16(len(columns))
 	setColumns.PropertyTags = make([]PropertyTag, setColumns.PropertyTagCount)
 	for k, v := range columns {
@@ -2639,10 +2639,10 @@ func GetTableContents(folderid []byte, assoc bool, columns []PropertyTag) (*RopQ
 
 	fullReq := setColumns.Marshal()
 
-	queryRows := RopQueryRowsRequest{RopID: 0x15, LogonID: AuthSession.LogonID, InputHandle: inputHndl, QueryRowsFlags: 0x00, ForwardRead: 0x01, RowCount: uint16(contentsTable.RowCount)}
+	queryRows := RopQueryRowsRequest{RopID: 0x15, LogonID: AuthSession.LogonID, InputHandleIndex: inputHndl, QueryRowsFlags: 0x00, ForwardRead: 0x01, RowCount: uint16(contentsTable.RowCount)}
 	fullReq = append(fullReq, queryRows.Marshal()...)
 
-	ropRelease := RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandle: inputHndl}
+	ropRelease := RopReleaseRequest{RopID: 0x01, LogonID: AuthSession.LogonID, InputHandleIndex: inputHndl}
 	fullReq = append(fullReq, ropRelease.Marshal()...)
 
 	execRequest.RopBuffer.ROP.RopsList = fullReq
@@ -2705,12 +2705,12 @@ func FetchRules(columns []PropertyTag) (*RopQueryRowsResponse, error) {
 	getRulesFolder := RopGetRulesTableRequest{RopID: 0x3f, LogonID: AuthSession.LogonID, InputHandleIndex: 0x00, OutputHandleIndex: 0x01, TableFlags: 0x40}
 	//RopSetColumns
 	setColumns := RopSetColumnsRequest{RopID: 0x12, LogonID: AuthSession.LogonID}
-	setColumns.InputHandle = 0x01
+	setColumns.InputHandleIndex = 0x01
 	setColumns.PropertyTagCount = uint16(len(columns))
 	setColumns.PropertyTags = columns
 
 	//RopQueryRows
-	queryRows := RopQueryRowsRequest{RopID: 0x15, LogonID: AuthSession.LogonID, InputHandle: 0x01, QueryRowsFlags: 0x00, ForwardRead: 0x01, RowCount: 0x32}
+	queryRows := RopQueryRowsRequest{RopID: 0x15, LogonID: AuthSession.LogonID, InputHandleIndex: 0x01, QueryRowsFlags: 0x00, ForwardRead: 0x01, RowCount: 0x32}
 
 	getRules := append(getRulesFolder.Marshal(), setColumns.Marshal()...)
 	getRules = append(getRules, queryRows.Marshal()...)
