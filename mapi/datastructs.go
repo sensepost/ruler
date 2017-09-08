@@ -1108,7 +1108,7 @@ type OpenRecipientRow struct {
 
 //RopResponse interface for common methods on RopResponses
 type RopResponse interface {
-	Unmarshal([]byte) error
+	Unmarshal([]byte) (int, error)
 }
 
 //RopRequest interface for common methods on RopRequests
@@ -1410,13 +1410,13 @@ func (connResponse *ConnectResponse) Unmarshal(resp []byte) error {
 }
 
 //Unmarshal function to produce RopLogonResponse struct
-func (logonResponse *RopLogonResponse) Unmarshal(resp []byte) error {
+func (logonResponse *RopLogonResponse) Unmarshal(resp []byte) (int, error) {
 	pos := 0
 	logonResponse.RopID, pos = utils.ReadByte(pos, resp)
 	logonResponse.OutputHandleIndex, pos = utils.ReadByte(pos, resp)
 	logonResponse.ReturnValue, pos = utils.ReadUint32(pos, resp)
 	if logonResponse.ReturnValue != 0 {
-		return &ErrorCode{logonResponse.ReturnValue}
+		return 0, &ErrorCode{logonResponse.ReturnValue}
 	}
 	logonResponse.LogonFlags, pos = utils.ReadByte(pos, resp)
 	logonResponse.FolderIds, pos = utils.ReadBytes(pos, 104, resp)
@@ -1427,7 +1427,7 @@ func (logonResponse *RopLogonResponse) Unmarshal(resp []byte) error {
 	logonResponse.LogonTime, pos = utils.ReadBytes(pos, 8, resp)
 	logonResponse.GwartTime, pos = utils.ReadBytes(pos, 8, resp)
 	logonResponse.StoreState, _ = utils.ReadBytes(pos, 4, resp)
-	return nil
+	return pos, nil
 }
 
 //Unmarshal for ExecuteResponse
@@ -1798,7 +1798,7 @@ func (buffResponse *RopFastTransferSourceGetBufferResponse) Unmarshal(resp []byt
 }
 
 //Unmarshal function to produce RopSaveChangesMessageResponse struct
-func (saveMessageResponse *RopSaveChangesMessageResponse) Unmarshal(resp []byte) error {
+func (saveMessageResponse *RopSaveChangesMessageResponse) Unmarshal(resp []byte) (int, error) {
 	pos := 0
 
 	saveMessageResponse.RopID, pos = utils.ReadByte(pos, resp)
@@ -1808,8 +1808,10 @@ func (saveMessageResponse *RopSaveChangesMessageResponse) Unmarshal(resp []byte)
 	if saveMessageResponse.ReturnValue == 0 {
 		saveMessageResponse.InputHandleIndex, pos = utils.ReadByte(pos, resp)
 		saveMessageResponse.MessageID, _ = utils.ReadBytes(pos, 8, resp)
+	} else {
+		return pos, &ErrorCode{saveMessageResponse.ReturnValue}
 	}
-	return nil
+	return pos, nil
 }
 
 //CalcSizes func to calculate the different size fields in the ROP buffer
