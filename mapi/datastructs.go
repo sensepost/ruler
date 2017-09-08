@@ -1456,7 +1456,7 @@ func (execResponse *ExecuteResponse) Unmarshal(resp []byte) error {
 		//parse out ROPBuffer header and body
 		rpbuff := RopBufferResp{}
 		rpbuff.Header, pos = utils.ReadBytes(pos, 10, resp)
-		rpbuff.Body, pos = utils.ReadBytes(pos, int(execResponse.RopBufferSize)-9, resp)
+		rpbuff.Body, pos = utils.ReadBytes(pos, int(execResponse.RopBufferSize)-10, resp)
 		execResponse.RopBuffer = rpbuff
 		execResponse.AuxilliaryBufSize, _ = utils.ReadUint32(pos, resp)
 		//execResponse.AuxilliaryBuf, _ = utils.ReadBytes(pos, int(execResponse.AuxilliaryBufSize), resp)

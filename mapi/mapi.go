@@ -1427,8 +1427,8 @@ func WriteAttachmentProperty(folderid, messageid []byte, attachmentid uint32, pr
 	if _, e = setStreamSizeResp.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 		return nil, e
 	}
-	utils.Debug.Printf("%s\n", hex.Dump(execResponse.RopBuffer.Body))
-	serverHandles := execResponse.RopBuffer.Body[len(execResponse.RopBuffer.Body)-4:]
+
+	serverHandles := execResponse.RopBuffer.Body[len(execResponse.RopBuffer.Body)-12:]
 	//messageHandles := execResponse.RopBuffer[len(execResponse.RopBuffer)-12:]
 	utils.Debug.Printf("Starting Upload")
 	//lets split it..
@@ -1522,7 +1522,7 @@ func WriteAttachmentProperty(folderid, messageid []byte, attachmentid uint32, pr
 		return nil, &TransportError{err}
 	}
 
-	bufPtr = 10
+	bufPtr = 0
 
 	commitStreamResp := RopCommitStreamResponse{}
 	if p, e = commitStreamResp.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
