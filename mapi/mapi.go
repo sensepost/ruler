@@ -140,7 +140,7 @@ func sendMapiRequest(mapi ExecuteRequest) (*ExecuteResponse, error) {
 	executeResponse := ExecuteResponse{}
 	executeResponse.Unmarshal(rawResp)
 
-	if len(executeResponse.RopBuffer) == 0 {
+	if len(executeResponse.RopBuffer.Body) == 0 {
 		return nil, ErrEmptyBuffer
 	}
 
@@ -455,7 +455,7 @@ func AuthenticateFetchMailbox(essdn []byte) (*RopLogonResponse, error) {
 	AuthSession.Authenticated = true
 
 	logonResponse := RopLogonResponse{}
-	logonResponse.Unmarshal(execResponse.RopBuffer)
+	logonResponse.Unmarshal(execResponse.RopBuffer.Body)
 
 	if len(logonResponse.FolderIds) == 0 {
 		if AuthSession.Admin {
@@ -503,7 +503,7 @@ func ReleaseObject(inputHandle byte) (*RopReleaseResponse, error) {
 	}
 
 	ropReleaseResponse := RopReleaseResponse{}
-	if _, e := ropReleaseResponse.Unmarshal(execResponse.RopBuffer[10:]); e != nil {
+	if _, e := ropReleaseResponse.Unmarshal(execResponse.RopBuffer.Body); e != nil {
 		return nil, e
 	}
 	return &ropReleaseResponse, nil
@@ -532,7 +532,7 @@ func ReadPerUserInformation(folerID []byte) (*RopReadPerUserInformationResponse,
 	}
 
 	readResponse := RopReadPerUserInformationResponse{}
-	if _, e := readResponse.Unmarshal(execResponse.RopBuffer[10:]); e != nil {
+	if _, e := readResponse.Unmarshal(execResponse.RopBuffer.Body); e != nil {
 		return nil, e
 	}
 	return &readResponse, nil
@@ -559,7 +559,7 @@ func GetLongTermIDFromID(objectID []byte) (*RopLongTermIDFromIDResponse, error) 
 	}
 
 	longTermResponse := RopLongTermIDFromIDResponse{}
-	if _, e := longTermResponse.Unmarshal(execResponse.RopBuffer[10:]); e != nil {
+	if _, e := longTermResponse.Unmarshal(execResponse.RopBuffer.Body); e != nil {
 		return nil, e
 	}
 	return &longTermResponse, nil
@@ -634,24 +634,24 @@ func SendExistingMessage(folderID, messageID []byte, recipient string) (*RopSubm
 		return nil, &TransportError{err}
 	}
 
-	bufPtr := 10
+	bufPtr := 0
 	var p int
 	var e error
 
 	getMessageResponse := RopOpenMessageResponse{}
 
-	if p, e = getMessageResponse.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+	if p, e = getMessageResponse.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 		return nil, e
 	}
 
 	bufPtr += p
 	modRecipientsResponse := RopModifyRecipientsResponse{}
-	if p, e = modRecipientsResponse.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+	if p, e = modRecipientsResponse.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 		return nil, e
 	}
 	bufPtr += p
 	submitMessageResp := RopSubmitMessageResponse{}
-	if _, e = submitMessageResp.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+	if _, e = submitMessageResp.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 		return nil, e
 	}
 
@@ -753,30 +753,30 @@ func SendMessage(triggerWord, body string) (*RopSubmitMessageResponse, error) {
 		return nil, &TransportError{err}
 	}
 
-	bufPtr := 10
+	bufPtr := 0
 	var p int
 	var e error
 
 	createMessageResponse := RopCreateMessageResponse{}
 
-	if p, e = createMessageResponse.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+	if p, e = createMessageResponse.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 		return nil, e
 	}
 	bufPtr += p
 
 	propertiesResponse := RopSetPropertiesResponse{}
-	if p, e = propertiesResponse.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+	if p, e = propertiesResponse.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 		return nil, e
 	}
 
 	bufPtr += p
 	modRecipientsResponse := RopModifyRecipientsResponse{}
-	if p, e = modRecipientsResponse.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+	if p, e = modRecipientsResponse.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 		return nil, e
 	}
 	bufPtr += p
 	submitMessageResp := RopSubmitMessageResponse{}
-	if _, e = submitMessageResp.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+	if _, e = submitMessageResp.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 		return nil, e
 	}
 
@@ -816,11 +816,11 @@ func SetMessageStatus(folderid, messageid []byte) (*RopSetMessageStatusResponse,
 		return nil, &TransportError{err}
 	}
 
-	bufPtr := 10
+	bufPtr := 0
 
 	setStatusResp := RopSetMessageStatusResponse{}
 
-	if _, e := setStatusResp.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+	if _, e := setStatusResp.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 		return nil, e
 	}
 	return &setStatusResp, nil
@@ -867,9 +867,9 @@ func GetPropertyIds(folderid, messageid []byte, propids []PropertyName) (*RopGet
 		return nil, &TransportError{err}
 	}
 
-	bufPtr := 10
+	bufPtr := 0
 
-	if execResponse.RopBuffer[bufPtr : bufPtr+1][0] != 0x03 {
+	if execResponse.RopBuffer.Body[bufPtr : bufPtr+1][0] != 0x03 {
 		bufPtr += 4
 	}
 
@@ -878,14 +878,14 @@ func GetPropertyIds(folderid, messageid []byte, propids []PropertyName) (*RopGet
 
 	getMessageResponse := RopOpenMessageResponse{}
 
-	if p, e = getMessageResponse.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+	if p, e = getMessageResponse.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 		return nil, e
 	}
 
 	bufPtr += p
 
 	getPropertyIdsResp := RopGetPropertyIdsFromNamesResponse{}
-	_, e = getPropertyIdsResp.Unmarshal(execResponse.RopBuffer[bufPtr:])
+	_, e = getPropertyIdsResp.Unmarshal(execResponse.RopBuffer.Body[bufPtr:])
 	return &getPropertyIdsResp, e
 
 }
@@ -920,9 +920,9 @@ func GetPropertyIdsList(folderid, messageid []byte) (*RopGetPropertiesListRespon
 		return nil, &TransportError{err}
 	}
 
-	bufPtr := 10
+	bufPtr := 0
 
-	if execResponse.RopBuffer[bufPtr : bufPtr+1][0] != 0x03 {
+	if execResponse.RopBuffer.Body[bufPtr : bufPtr+1][0] != 0x03 {
 		bufPtr += 4
 	}
 
@@ -931,14 +931,14 @@ func GetPropertyIdsList(folderid, messageid []byte) (*RopGetPropertiesListRespon
 
 	getMessageResponse := RopOpenMessageResponse{}
 
-	if p, e = getMessageResponse.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+	if p, e = getMessageResponse.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 		return nil, e
 	}
 
 	bufPtr += p
 
 	getPropertyIdsResp := RopGetPropertiesListResponse{}
-	_, e = getPropertyIdsResp.Unmarshal(execResponse.RopBuffer[bufPtr:])
+	_, e = getPropertyIdsResp.Unmarshal(execResponse.RopBuffer.Body[bufPtr:])
 	return &getPropertyIdsResp, e
 
 }
@@ -975,9 +975,9 @@ func GetPropertyNamesFromID(folderid, messageid, propids []byte, idcount int) (*
 		return nil, &TransportError{err}
 	}
 
-	bufPtr := 10
+	bufPtr := 0
 
-	if execResponse.RopBuffer[bufPtr : bufPtr+1][0] != 0x03 {
+	if execResponse.RopBuffer.Body[bufPtr : bufPtr+1][0] != 0x03 {
 		bufPtr += 4
 	}
 
@@ -986,14 +986,14 @@ func GetPropertyNamesFromID(folderid, messageid, propids []byte, idcount int) (*
 
 	getMessageResponse := RopOpenMessageResponse{}
 
-	if p, e = getMessageResponse.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+	if p, e = getMessageResponse.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 		return nil, e
 	}
 
 	bufPtr += p
 
 	getPropNamesResp := RopGetNamesFromPropertyIdsResponse{}
-	_, e = getPropNamesResp.Unmarshal(execResponse.RopBuffer[bufPtr:])
+	_, e = getPropNamesResp.Unmarshal(execResponse.RopBuffer.Body[bufPtr:])
 	return &getPropNamesResp, e
 
 }
@@ -1033,20 +1033,20 @@ func SetSearchCriteria(folderids, searchFolder []byte, restrictions Restriction)
 		return nil, &TransportError{err}
 	}
 
-	bufPtr := 10
+	bufPtr := 0
 	var p int
 	var e error
 
 	openFolderResponse := RopOpenFolderResponse{}
 
-	if p, e = openFolderResponse.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+	if p, e = openFolderResponse.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 		return nil, e
 	}
 	bufPtr += p
 
 	setCriteriaResponse := RopSetSearchCriteriaResponse{}
 
-	if _, e := setCriteriaResponse.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+	if _, e := setCriteriaResponse.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 		return nil, e
 	}
 
@@ -1085,20 +1085,20 @@ func GetSearchCriteria(searchFolder []byte) (*RopGetSearchCriteriaResponse, erro
 		return nil, &TransportError{err}
 	}
 
-	bufPtr := 10
+	bufPtr := 0
 	var p int
 	var e error
 
 	openFolderResponse := RopOpenFolderResponse{}
 
-	if p, e = openFolderResponse.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+	if p, e = openFolderResponse.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 		return nil, e
 	}
 	bufPtr += p
 
 	getCriteriaResponse := RopGetSearchCriteriaResponse{}
 
-	if _, e := getCriteriaResponse.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+	if _, e := getCriteriaResponse.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 		return nil, e
 	}
 
@@ -1142,19 +1142,19 @@ func SetFolderProperties(folderid []byte, propertyTags []TaggedPropertyValue) (*
 		return nil, &TransportError{err}
 	}
 
-	bufPtr := 10
+	bufPtr := 0
 	var p int
 	var e error
 
 	openFolderResponse := RopOpenFolderResponse{}
 
-	if p, e = openFolderResponse.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+	if p, e = openFolderResponse.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 		return nil, e
 	}
 	bufPtr += p
 
 	propertiesResponse := RopSetPropertiesResponse{}
-	if p, e = propertiesResponse.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+	if p, e = propertiesResponse.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 		return nil, e
 	}
 
@@ -1220,26 +1220,26 @@ func CreateMessageRequest(folderID []byte, properties []TaggedPropertyValue, ass
 		return nil, &TransportError{err}
 	}
 
-	bufPtr := 10
+	bufPtr := 0
 	var p int
 	var e error
 
 	createMessageResponse := RopCreateMessageResponse{}
 
-	if p, e = createMessageResponse.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+	if p, e = createMessageResponse.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 		return nil, e
 	}
 	bufPtr += p
 
 	propertiesResponse := RopSetPropertiesResponse{}
-	if p, e = propertiesResponse.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+	if p, e = propertiesResponse.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 		return nil, e
 	}
 
 	bufPtr += p
 
 	saveMessageResponse := RopSaveChangesMessageResponse{}
-	e = saveMessageResponse.Unmarshal(execResponse.RopBuffer[bufPtr:])
+	e = saveMessageResponse.Unmarshal(execResponse.RopBuffer.Body[bufPtr:])
 
 	return &saveMessageResponse, e
 
@@ -1309,44 +1309,44 @@ func CreateMessageAttachment(folderid, messageid []byte, properties []TaggedProp
 		return nil, &TransportError{err}
 	}
 
-	bufPtr := 10
+	bufPtr := 0
 	var p int
 	var e error
 
 	getMessageResp := RopOpenMessageResponse{}
-	if p, e = getMessageResp.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+	if p, e = getMessageResp.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 		return nil, e
 	}
 	bufPtr += p
 
 	getAttachmentTblResp := RopGetAttachmentTableResponse{}
-	if p, e = getAttachmentTblResp.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+	if p, e = getAttachmentTblResp.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 		return nil, e
 	}
 	bufPtr += p
 
 	createAttachmentResp := RopCreateAttachmentResponse{}
-	if p, e = createAttachmentResp.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+	if p, e = createAttachmentResp.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 		return nil, e
 	}
 	bufPtr += p
 
 	propertiesResponse := RopSetPropertiesResponse{}
-	if p, e = propertiesResponse.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+	if p, e = propertiesResponse.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 		return nil, e
 	}
 
 	bufPtr += p
 
 	saveAttachmentResp := RopSaveChangesAttachmentResponse{}
-	if p, e = saveAttachmentResp.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+	if p, e = saveAttachmentResp.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 		return nil, e
 	}
 
 	bufPtr += p
 
 	saveMessageResponse := RopSaveChangesMessageResponse{}
-	e = saveMessageResponse.Unmarshal(execResponse.RopBuffer[bufPtr:])
+	e = saveMessageResponse.Unmarshal(execResponse.RopBuffer.Body[bufPtr:])
 
 	return &createAttachmentResp, e
 
@@ -1393,42 +1393,42 @@ func WriteAttachmentProperty(folderid, messageid []byte, attachmentid uint32, pr
 		return nil, &TransportError{err}
 	}
 
-	bufPtr := 10
+	bufPtr := 0
 	var p int
 	var e error
 
 	getMessageResp := RopOpenMessageResponse{}
-	if p, e = getMessageResp.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+	if p, e = getMessageResp.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 		return nil, e
 	}
 	bufPtr += p
 
 	getAttachmentTblResp := RopGetAttachmentTableResponse{}
-	if p, e = getAttachmentTblResp.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+	if p, e = getAttachmentTblResp.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 		return nil, e
 	}
 	bufPtr += p
 
 	getAttachmentResp := RopOpenAttachmentResponse{}
-	if p, e = getAttachmentResp.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+	if p, e = getAttachmentResp.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 		return nil, e
 	}
 
 	bufPtr += p
 
 	openStreamResp := RopOpenStreamResponse{}
-	if p, e = openStreamResp.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+	if p, e = openStreamResp.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 		return nil, e
 	}
 
 	bufPtr += p
 
 	setStreamSizeResp := RopSetStreamSizeResponse{}
-	if _, e = setStreamSizeResp.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+	if _, e = setStreamSizeResp.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 		return nil, e
 	}
-
-	serverHandles := execResponse.RopBuffer[len(execResponse.RopBuffer)-12:]
+	utils.Debug.Printf("%s\n", hex.Dump(execResponse.RopBuffer.Body))
+	serverHandles := execResponse.RopBuffer.Body[len(execResponse.RopBuffer.Body)-4:]
 	//messageHandles := execResponse.RopBuffer[len(execResponse.RopBuffer)-12:]
 	utils.Debug.Printf("Starting Upload")
 	//lets split it..
@@ -1525,21 +1525,21 @@ func WriteAttachmentProperty(folderid, messageid []byte, attachmentid uint32, pr
 	bufPtr = 10
 
 	commitStreamResp := RopCommitStreamResponse{}
-	if p, e = commitStreamResp.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+	if p, e = commitStreamResp.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 		return nil, e
 	}
 	bufPtr += p
 	//utils.Debug.Println("Commit Stream: ", commitStreamResp)
 
 	saveAttachmentResp := RopSaveChangesAttachmentResponse{}
-	if p, e = saveAttachmentResp.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+	if p, e = saveAttachmentResp.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 		return nil, e
 	}
 	bufPtr += p
 	//utils.Debug.Println("Save: ", saveAttachmentResp)
 
 	saveMessageResponse := RopSaveChangesMessageResponse{}
-	e = saveMessageResponse.Unmarshal(execResponse.RopBuffer[bufPtr:])
+	e = saveMessageResponse.Unmarshal(execResponse.RopBuffer.Body[bufPtr:])
 	//utils.Debug.Println("Save: ", saveMessageResponse)
 
 	return &saveAttachmentResp, e
@@ -1591,25 +1591,25 @@ func SetMessageProperties(folderid, messageid []byte, propertyTags []TaggedPrope
 		return nil, &TransportError{err}
 	}
 
-	bufPtr := 10
+	bufPtr := 0
 	var p int
 	var e error
 
 	getMessageResp := RopOpenMessageResponse{}
-	if p, e = getMessageResp.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+	if p, e = getMessageResp.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 		return nil, e
 	}
 
 	bufPtr += p
 	propertiesResponse := RopSetPropertiesResponse{}
-	if p, e = propertiesResponse.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+	if p, e = propertiesResponse.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 		return nil, e
 	}
 
 	bufPtr += p
 
 	saveMessageResponse := RopSaveChangesMessageResponse{}
-	e = saveMessageResponse.Unmarshal(execResponse.RopBuffer[bufPtr:])
+	e = saveMessageResponse.Unmarshal(execResponse.RopBuffer.Body[bufPtr:])
 
 	return &saveMessageResponse, e
 
@@ -1646,7 +1646,7 @@ func SetPropertyFast(folderid []byte, messageid []byte, property TaggedPropertyV
 	}
 
 	//we probably need to get the handles here to pass them down into the ServerObjectHandleTable
-	serverHandles := execResponse.RopBuffer[len(execResponse.RopBuffer)-8:]
+	serverHandles := execResponse.RopBuffer.Body[len(execResponse.RopBuffer.Body)-8:]
 	messageHandles := serverHandles
 	//fmt.Printf("Handles: %x\n", serverHandles)
 	props := utils.BodyToBytes(property) //setProperties.Marshal()
@@ -1677,7 +1677,7 @@ func SetPropertyFast(folderid []byte, messageid []byte, property TaggedPropertyV
 			return nil, &TransportError{err}
 		}
 
-		serverHandles = execResponse.RopBuffer[len(execResponse.RopBuffer)-8:]
+		serverHandles = execResponse.RopBuffer.Body[len(execResponse.RopBuffer.Body)-8:]
 	}
 	if len(props) > split*piecescnt {
 		body := props[index:]
@@ -1726,10 +1726,10 @@ func SaveMessageFast(inputHandle, responseHandle byte, serverHandles []byte) (*R
 		return nil, &TransportError{err}
 	}
 
-	bufPtr := 10
+	bufPtr := 0
 
 	saveMessageResponse := RopSaveChangesMessageResponse{}
-	if e := saveMessageResponse.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+	if e := saveMessageResponse.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 		return nil, e
 	}
 	return &saveMessageResponse, nil
@@ -1770,16 +1770,16 @@ func DeleteMessages(folderid []byte, messageIDCount int, messageIDs []byte) (*Ro
 		return nil, &TransportError{err}
 	}
 
-	bufPtr := 10
+	bufPtr := 0
 	openFolder := RopOpenFolderResponse{}
-	p, err := openFolder.Unmarshal(execResponse.RopBuffer[bufPtr:])
+	p, err := openFolder.Unmarshal(execResponse.RopBuffer.Body[bufPtr:])
 	if err != nil {
 		return nil, err
 	}
 	bufPtr += p
 	deleteMessageResponse := RopDeleteMessagesResponse{}
 
-	if _, e := deleteMessageResponse.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+	if _, e := deleteMessageResponse.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 		return nil, e
 	}
 
@@ -1834,44 +1834,44 @@ func OpenAttachment(folderid, messageid []byte, attachId uint32, columns []Prope
 		return nil, &TransportError{err}
 	}
 
-	bufPtr := 10
+	bufPtr := 0
 	var p int
 	var e error
 
 	getMessageResp := RopOpenMessageResponse{}
-	if p, e = getMessageResp.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+	if p, e = getMessageResp.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 		return nil, e
 	}
 	bufPtr += p
 
 	getAttachmentTblResp := RopGetAttachmentTableResponse{}
-	if p, e = getAttachmentTblResp.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+	if p, e = getAttachmentTblResp.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 		return nil, e
 	}
 	bufPtr += p
 
 	getAttachmentResp := RopOpenAttachmentResponse{}
-	if p, e = getAttachmentResp.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+	if p, e = getAttachmentResp.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 		return nil, e
 	}
 
 	bufPtr += p
 
 	props := RopFastTransferSourceCopyPropertiesResponse{}
-	if p, e = props.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+	if p, e = props.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 		return nil, e
 	}
 
 	bufPtr += p
 
 	pprops := RopFastTransferSourceGetBufferResponse{}
-	if p, e = pprops.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+	if p, e = pprops.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 		return nil, e
 	}
 
 	//Rop release if we are done.. otherwise get rest of stream
 	if pprops.TransferStatus == 0x0001 {
-		buff, _ := FastTransferFetchStep(execResponse.RopBuffer[bufPtr+p:])
+		buff, _ := FastTransferFetchStep(execResponse.RopBuffer.Body[bufPtr+p:])
 
 		if buff != nil {
 			pprops.TransferBuffer = append(pprops.TransferBuffer, buff...)
@@ -1918,24 +1918,24 @@ func GetAttachments(folderid, messageid []byte) (*RopGetValidAttachmentsResponse
 			return nil, &TransportError{err}
 		}
 
-			bufPtr := 10
+			bufPtr := 0
 			var p int
 			var e error
 
 			getMessageResp := RopOpenMessageResponse{}
-			if p, e = getMessageResp.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+			if p, e = getMessageResp.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 				return nil, e
 			}
 			bufPtr += p
 
 			getAttachmentTblResp := RopGetAttachmentTableResponse{}
-			if p, e = getAttachmentTblResp.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+			if p, e = getAttachmentTblResp.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 				return nil, e
 			}
 			bufPtr += p
 
 			getAttachmentsResp := RopGetValidAttachmentsResponse{}
-			if p, e = getAttachmentsResp.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+			if p, e = getAttachmentsResp.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 				return nil, e
 			}
 			return &getAttachmentsResp, nil
@@ -1973,16 +1973,16 @@ func EmptyFolder(folderid []byte) (*RopEmptyFolderResponse, error) {
 		return nil, &TransportError{err}
 	}
 
-	bufPtr := 10
+	bufPtr := 0
 	openFolder := RopOpenFolderResponse{}
-	p, err := openFolder.Unmarshal(execResponse.RopBuffer[bufPtr:])
+	p, err := openFolder.Unmarshal(execResponse.RopBuffer.Body[bufPtr:])
 	if err != nil {
 		return nil, err
 	}
 	bufPtr += p
 	emptyFolderResponse := RopEmptyFolderResponse{}
 
-	if _, e := emptyFolderResponse.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+	if _, e := emptyFolderResponse.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 		return nil, e
 	}
 
@@ -2011,9 +2011,9 @@ func DeleteFolder(folderid []byte) (*RopDeleteFolderResponse, error) {
 		return nil, &TransportError{err}
 	}
 
-	bufPtr := 10
+	bufPtr := 0
 	deleteFolderResponse := RopDeleteFolderResponse{}
-	if _, e := deleteFolderResponse.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+	if _, e := deleteFolderResponse.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 		return nil, e
 	}
 
@@ -2078,9 +2078,9 @@ func GetFolderFromID(folderid []byte, columns []PropertyTag) (*RopOpenFolderResp
 		return nil, nil, &TransportError{err}
 	}
 
-	bufPtr := 10
+	bufPtr := 0
 	openFolder := RopOpenFolderResponse{}
-	p, e := openFolder.Unmarshal(execResponse.RopBuffer[bufPtr:])
+	p, e := openFolder.Unmarshal(execResponse.RopBuffer.Body[bufPtr:])
 	if e != nil {
 		return nil, nil, e
 	}
@@ -2092,7 +2092,7 @@ func GetFolderFromID(folderid []byte, columns []PropertyTag) (*RopOpenFolderResp
 
 	bufPtr += p
 	getPropertiesResponse := RopGetPropertiesSpecificResponse{}
-	_, e = getPropertiesResponse.Unmarshal(execResponse.RopBuffer[bufPtr:], columns)
+	_, e = getPropertiesResponse.Unmarshal(execResponse.RopBuffer.Body[bufPtr:], columns)
 
 	return &openFolder, &getPropertiesResponse, e
 
@@ -2126,19 +2126,19 @@ func OpenMessage(folderid, messageid []byte) ([]byte, error) {
 		return nil, &TransportError{err}
 	}
 
-	bufPtr := 10
+	bufPtr := 0
 
 	var e error
-	if execResponse.RopBuffer[bufPtr : bufPtr+1][0] != 0x03 {
+	if execResponse.RopBuffer.Body[bufPtr : bufPtr+1][0] != 0x03 {
 		bufPtr += 4
 	}
 
 	openMessage := RopOpenMessageResponse{}
-	if _, e = openMessage.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+	if _, e = openMessage.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 		return nil, e
 	}
 	//fmt.Printf("%x\n", execResponse.RopBuffer)
-	return execResponse.RopBuffer[len(execResponse.RopBuffer)-4:], nil
+	return execResponse.RopBuffer.Body[len(execResponse.RopBuffer.Body)-4:], nil
 
 }
 
@@ -2196,28 +2196,28 @@ func GetMessage(folderid, messageid []byte, columns []PropertyTag) (GetPropertie
 		return nil, &TransportError{err}
 	}
 
-	bufPtr := 10
+	bufPtr := 0
 	var p int
 	var e error
 
-	//fmt.Println(execResponse.RopBuffer[bufPtr:])
+	//fmt.Println(execResponse.RopBuffer.Body[bufPtr:])
 
 	openMessage := RopOpenMessageResponse{}
-	if p, e = openMessage.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+	if p, e = openMessage.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 		return nil, e
 	}
 	bufPtr += p
 
 	if columns != nil {
 		props := RopGetPropertiesSpecificResponse{}
-		if _, e = props.Unmarshal(execResponse.RopBuffer[bufPtr:], columns); e != nil {
+		if _, e = props.Unmarshal(execResponse.RopBuffer.Body[bufPtr:], columns); e != nil {
 			return nil, e
 		}
 		return &props, nil
 	}
 
 	props := RopGetPropertiesAllResponse{}
-	if _, e = props.Unmarshal(execResponse.RopBuffer[bufPtr:], columns); e != nil {
+	if _, e = props.Unmarshal(execResponse.RopBuffer.Body[bufPtr:], columns); e != nil {
 		return nil, e
 	}
 	return &props, nil
@@ -2268,35 +2268,35 @@ func GetMessageFast(folderid, messageid []byte, columns []PropertyTag) (*RopFast
 		return nil, &TransportError{err}
 	}
 
-	bufPtr := 10
+	bufPtr := 0
 	var p int
 	var e error
 
-	if execResponse.RopBuffer[bufPtr : bufPtr+1][0] != 0x03 {
+	if execResponse.RopBuffer.Body[bufPtr : bufPtr+1][0] != 0x03 {
 		bufPtr += 4
 	}
 
 	openMessage := RopOpenMessageResponse{}
-	if p, e = openMessage.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+	if p, e = openMessage.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 		return nil, e
 	}
 	bufPtr += p
 
 	props := RopFastTransferSourceCopyPropertiesResponse{}
-	if p, e = props.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+	if p, e = props.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 		return nil, e
 	}
 
 	bufPtr += p
 
 	pprops := RopFastTransferSourceGetBufferResponse{}
-	if p, e = pprops.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+	if p, e = pprops.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 		return nil, e
 	}
 
 	//Rop release if we are done.. otherwise get rest of stream
 	if pprops.TransferStatus == 0x0001 {
-		buff, _ := FastTransferFetchStep(execResponse.RopBuffer[bufPtr+p:])
+		buff, _ := FastTransferFetchStep(execResponse.RopBuffer.Body[bufPtr+p:])
 
 		if buff != nil {
 			pprops.TransferBuffer = append(pprops.TransferBuffer, buff...)
@@ -2330,11 +2330,11 @@ func FastTransferFetchStep(handles []byte) ([]byte, error) {
 		return nil, &TransportError{err}
 	}
 
-	bufPtr := 10
+	bufPtr := 0
 
 	//fmt.Printf("%x\n", execResponse.RopBuffer[:])
 	pprops := RopFastTransferSourceGetBufferResponse{}
-	p, err := pprops.Unmarshal(execResponse.RopBuffer[bufPtr:])
+	p, err := pprops.Unmarshal(execResponse.RopBuffer.Body[bufPtr:])
 	if err != nil {
 		return nil, err
 	}
@@ -2345,7 +2345,7 @@ func FastTransferFetchStep(handles []byte) ([]byte, error) {
 	//fmt.Printf("%x\n", pprops.TransferBuffer)
 
 	if pprops.TransferStatus == 0x0001 {
-		buff, _ := FastTransferFetchStep(execResponse.RopBuffer[bufPtr+p:])
+		buff, _ := FastTransferFetchStep(execResponse.RopBuffer.Body[bufPtr+p:])
 		//fmt.Println(string(buff), err)
 		if buff != nil {
 			pprops.TransferBuffer = append(pprops.TransferBuffer, buff...)
@@ -2401,25 +2401,25 @@ func GetContentsTableRequest(folderid []byte, tableFlags byte) (*RopGetContentsT
 		return nil, nil, &TransportError{err}
 	}
 
-	bufPtr := 10
+	bufPtr := 0
 	var p int
 	var e error
-	if bufPtr > len(execResponse.RopBuffer) {
+	if bufPtr > len(execResponse.RopBuffer.Body) {
 		return nil, nil, fmt.Errorf("Empty table")
 	}
 	openFolder := RopOpenFolderResponse{}
-	if p, e = openFolder.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+	if p, e = openFolder.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 		return nil, nil, e
 	}
 	bufPtr += p
 
 	ropContents := RopGetContentsTableResponse{}
-	if p, e = ropContents.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+	if p, e = ropContents.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 		return nil, nil, e
 	}
 	bufPtr += p
 
-	return &ropContents, execResponse.RopBuffer[bufPtr:], nil
+	return &ropContents, execResponse.RopBuffer.Body[bufPtr:], nil
 
 }
 
@@ -2452,24 +2452,24 @@ func GetFolderHierarchy(folderid []byte) (*RopGetHierarchyTableResponse, []byte,
 		return nil, nil, &TransportError{err}
 	}
 
-	bufPtr := 10
+	bufPtr := 0
 	var p int
 	var e error
 
 	openFolder := RopOpenFolderResponse{}
-	if p, e = openFolder.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+	if p, e = openFolder.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 		return nil, nil, e
 	}
 	bufPtr += p
 
 	hierarchyTableResponse := RopGetHierarchyTableResponse{}
-	if p, e = hierarchyTableResponse.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+	if p, e = hierarchyTableResponse.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 		return nil, nil, e
 	}
 
 	bufPtr += p + 8 //the serverhandle is the 3rd set of 4 bytes - we need this handle to access the hierarchy table
 
-	return &hierarchyTableResponse, execResponse.RopBuffer[bufPtr:], nil
+	return &hierarchyTableResponse, execResponse.RopBuffer.Body[bufPtr:], nil
 
 }
 
@@ -2503,18 +2503,18 @@ func GetSubFolders(folderid []byte) (*RopQueryRowsResponse, error) {
 		return nil, &TransportError{err}
 	}
 
-	bufPtr := 10
+	bufPtr := 0
 	var p int
 	var e error
 	setColumnsResp := RopSetColumnsResponse{}
-	if p, e = setColumnsResp.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+	if p, e = setColumnsResp.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 		return nil, e
 	}
 	bufPtr += p
 
 	rows := RopQueryRowsResponse{}
 
-	if _, e = rows.Unmarshal(execResponse.RopBuffer[bufPtr:], setColumns.PropertyTags); e != nil {
+	if _, e = rows.Unmarshal(execResponse.RopBuffer.Body[bufPtr:], setColumns.PropertyTags); e != nil {
 		return nil, e
 	}
 	return &rows, nil
@@ -2574,14 +2574,14 @@ func CreateFolderRequest(folderName string, hidden bool, ftype uint8) (*RopCreat
 		return nil, ErrTransport //&TransportError{err}
 	}
 
-	bufPtr := 10
+	bufPtr := 0
 	createFolderResponse := RopCreateFolderResponse{}
-	if _, e := createFolderResponse.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+	if _, e := createFolderResponse.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 		return nil, e
 	}
 	if hidden == true {
 		propResp := RopSetPropertiesResponse{}
-		if _, e := propResp.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+		if _, e := propResp.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 			return nil, e
 		}
 	}
@@ -2654,19 +2654,19 @@ func GetTableContents(folderid []byte, assoc bool, columns []PropertyTag) (*RopQ
 		return nil, &TransportError{err}
 	}
 
-	bufPtr := 10
+	bufPtr := 0
 	var p int
 	var e error
 
 	setColumnsResp := RopSetColumnsResponse{}
-	if p, e = setColumnsResp.Unmarshal(execResponse.RopBuffer[bufPtr:]); e != nil {
+	if p, e = setColumnsResp.Unmarshal(execResponse.RopBuffer.Body[bufPtr:]); e != nil {
 		return nil, e
 	}
 	bufPtr += p
 
 	rows := RopQueryRowsResponse{}
 
-	if _, e = rows.Unmarshal(execResponse.RopBuffer[bufPtr:], setColumns.PropertyTags); e != nil {
+	if _, e = rows.Unmarshal(execResponse.RopBuffer.Body[bufPtr:], setColumns.PropertyTags); e != nil {
 		return nil, e
 	}
 
@@ -2725,16 +2725,16 @@ func FetchRules(columns []PropertyTag) (*RopQueryRowsResponse, error) {
 		return nil, &TransportError{err}
 	}
 
-	bufPtr := 10
+	bufPtr := 0
 	rulesTableResponse := RopGetRulesTableResponse{}
-	p, err := rulesTableResponse.Unmarshal(execResponse.RopBuffer[bufPtr:])
+	p, err := rulesTableResponse.Unmarshal(execResponse.RopBuffer.Body[bufPtr:])
 	bufPtr += p
 
 	if err != nil {
 		return nil, err
 	}
 	cols := RopSetColumnsResponse{}
-	p, err = cols.Unmarshal(execResponse.RopBuffer[bufPtr:])
+	p, err = cols.Unmarshal(execResponse.RopBuffer.Body[bufPtr:])
 	bufPtr += p
 
 	if err != nil {
@@ -2743,7 +2743,7 @@ func FetchRules(columns []PropertyTag) (*RopQueryRowsResponse, error) {
 
 	rows := RopQueryRowsResponse{}
 
-	_, err = rows.Unmarshal(execResponse.RopBuffer[bufPtr:], columns)
+	_, err = rows.Unmarshal(execResponse.RopBuffer.Body[bufPtr:], columns)
 	if err != nil {
 		return nil, err
 	}
@@ -2887,9 +2887,9 @@ func ExecuteMailRuleDelete(ruleid []byte) error {
 	}
 
 	//process the exec response
-	bufPtr := 10
+	bufPtr := 0
 	delRuleResponse := RopModifyRulesResponse{}
-	_, err = delRuleResponse.Unmarshal(execResponse.RopBuffer[bufPtr:])
+	_, err = delRuleResponse.Unmarshal(execResponse.RopBuffer.Body[bufPtr:])
 	return err
 }
 

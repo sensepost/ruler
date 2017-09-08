@@ -68,7 +68,7 @@ type ExecuteResponse struct {
 	ErrorCode         uint32
 	Flags             uint32 //0x00000000 always
 	RopBufferSize     uint32
-	RopBuffer         []byte //struct{}
+	RopBuffer         RopBufferResp //[]byte //struct{}
 	AuxilliaryBufSize uint32
 	AuxilliaryBuf     []byte
 }
@@ -140,6 +140,12 @@ type RPCHeader struct {
 type ROPBuffer struct {
 	Header RPCHeader
 	ROP    ROP
+}
+
+//RopBufferResp struct
+type RopBufferResp struct {
+	Header []byte
+	Body   []byte
 }
 
 //ROP request
@@ -1405,7 +1411,7 @@ func (connResponse *ConnectResponse) Unmarshal(resp []byte) error {
 
 //Unmarshal function to produce RopLogonResponse struct
 func (logonResponse *RopLogonResponse) Unmarshal(resp []byte) error {
-	pos := 10
+	pos := 0
 	logonResponse.RopID, pos = utils.ReadByte(pos, resp)
 	logonResponse.OutputHandleIndex, pos = utils.ReadByte(pos, resp)
 	logonResponse.ReturnValue, pos = utils.ReadUint32(pos, resp)
@@ -1430,7 +1436,6 @@ func (logonResponse *RopLogonResponse) Unmarshal(resp []byte) error {
 //RPC StatusCode,RopBufferSize,Flags,RopBufferSize
 func (execResponse *ExecuteResponse) Unmarshal(resp []byte) error {
 	pos := 0
-	var buf []byte
 
 	execResponse.StatusCode, pos = utils.ReadUint32(pos, resp)
 
@@ -1448,8 +1453,11 @@ func (execResponse *ExecuteResponse) Unmarshal(resp []byte) error {
 			//execResponse.AuxilliaryBufSize = uint32(0)
 			return fmt.Errorf("Packet size mismatch. RopBuffer Size %d, got packet of %d", execResponse.RopBufferSize, len(resp))
 		}
-		buf, pos = utils.ReadBytes(pos, int(execResponse.RopBufferSize)+1, resp)
-		execResponse.RopBuffer = buf
+		//parse out ROPBuffer header and body
+		rpbuff := RopBufferResp{}
+		rpbuff.Header, pos = utils.ReadBytes(pos, 10, resp)
+		rpbuff.Body, pos = utils.ReadBytes(pos, int(execResponse.RopBufferSize)-9, resp)
+		execResponse.RopBuffer = rpbuff
 		execResponse.AuxilliaryBufSize, _ = utils.ReadUint32(pos, resp)
 		//execResponse.AuxilliaryBuf, _ = utils.ReadBytes(pos, int(execResponse.AuxilliaryBufSize), resp)
 	}
