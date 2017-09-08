@@ -42,6 +42,7 @@ const (
 	TWIRTOTALLY       = 0x08000000
 )
 
+//Restriction interface to generalise restrictions
 type Restriction interface {
 	Marshal() []byte
 }

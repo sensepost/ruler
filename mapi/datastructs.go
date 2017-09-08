@@ -317,7 +317,7 @@ type RopGetPropertiesListResponse struct {
 	PropertyTags     []PropertyTag
 }
 
-//RopGetPropertiesSpecificRequeststruct to get propertiesfor a folder
+//RopGetPropertiesSpecificRequest struct to get propertiesfor a folder
 type RopGetPropertiesSpecificRequest struct {
 	RopID             uint8 //0x07
 	LogonID           uint8
