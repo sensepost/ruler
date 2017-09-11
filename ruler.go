@@ -45,7 +45,7 @@ func discover(c *cli.Context) error {
 	}
 
 	if c.Bool("dump") == true && (c.GlobalString("username") == "" && c.GlobalString("email") == "") {
-		return fmt.Errorf("--dump requires credentials to be set!")
+		return fmt.Errorf("--dump requires credentials to be set")
 	}
 
 	if c.Bool("dump") == true && c.String("out") == "" {
@@ -107,7 +107,7 @@ func discover(c *cli.Context) error {
 		fout, _ := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0666)
 		_, err := fout.WriteString(domain)
 		if err != nil {
-			return fmt.Errorf("Couldn't write to file for some reason..", err)
+			return fmt.Errorf("Couldn't write to file for some reason... %s", err)
 		}
 	} else {
 		utils.Info.Printf("Looks like the autodiscover service is at: %s \n", domain)
@@ -787,7 +787,7 @@ func createHomePage(c *cli.Context) error {
 	prop := wvpObjectStream.Marshal()
 	folderid := mapi.AuthSession.Folderids[mapi.INBOX]
 	propertyTags := make([]mapi.TaggedPropertyValue, 1)
-	propertyTags[0] = mapi.TaggedPropertyValue{mapi.PidTagFolderWebViewInfo, append(utils.COUNT(len(prop)), prop...)}
+	propertyTags[0] = mapi.TaggedPropertyValue{PropertyTag: mapi.PidTagFolderWebViewInfo, PropertyValue: append(utils.COUNT(len(prop)), prop...)}
 
 	if _, e := mapi.SetFolderProperties(folderid, propertyTags); e != nil {
 		return e
@@ -814,9 +814,9 @@ func displayHomePage() error {
 		if utils.FromUnicode(wvp.Value) == "" {
 			utils.Info.Println("No endpoint set")
 			return nil
-		} else {
-			utils.Info.Printf("Found endpoint: %s\n", utils.FromUnicode(wvp.Value))
 		}
+
+		utils.Info.Printf("Found endpoint: %s\n", utils.FromUnicode(wvp.Value))
 
 		if wvp.Flags == 0 {
 			utils.Info.Println("Webview is set as DISABLED")
@@ -836,7 +836,7 @@ func deleteHomePage() error {
 	prop := wvpObjectStream.Marshal()
 	folderid := mapi.AuthSession.Folderids[mapi.INBOX]
 	propertyTags := make([]mapi.TaggedPropertyValue, 1)
-	propertyTags[0] = mapi.TaggedPropertyValue{mapi.PidTagFolderWebViewInfo, append(utils.COUNT(len(prop)), prop...)}
+	propertyTags[0] = mapi.TaggedPropertyValue{PropertyTag: mapi.PidTagFolderWebViewInfo, PropertyValue: append(utils.COUNT(len(prop)), prop...)}
 
 	if _, e := mapi.SetFolderProperties(folderid, propertyTags); e != nil {
 		return e
