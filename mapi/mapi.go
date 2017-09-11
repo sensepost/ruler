@@ -125,28 +125,27 @@ func sendMapiRequest(mapi ExecuteRequest) (*ExecuteResponse, error) {
 	var err error
 	if AuthSession.Transport == HTTP { //this is always going to be an "Execute" request
 		if rawResp, err = mapiRequestHTTP(AuthSession.URL.String(), "Execute", mapi.Marshal()); err != nil {
-			utils.Debug.Println(rawResp)
+			utils.Debug.Printf("%s\n", hex.Dump(rawResp))
 			return nil, err
 		}
 	} else {
 		if rawResp, err = mapiRequestRPC(mapi); err != nil {
-			utils.Debug.Println(rawResp)
+			utils.Debug.Printf("%s\n", hex.Dump(rawResp))
 			return nil, err
 		}
 	}
 	//debug flag
 	//utils.Debug.Printf("%s\n", hex.Dump(rawResp))
-	//utils.Debug.Println(string(rawResp))
 	executeResponse := ExecuteResponse{}
-	executeResponse.Unmarshal(rawResp)
+	err = executeResponse.Unmarshal(rawResp)
+
+	if executeResponse.ErrorCode == 255 || err != nil {
+		utils.Debug.Printf("%s\n", hex.Dump(rawResp))
+		return nil, ErrNonZeroStatus
+	}
 
 	if len(executeResponse.RopBuffer.Body) == 0 {
 		return nil, ErrEmptyBuffer
-	}
-
-	if executeResponse.ErrorCode == 255 {
-		utils.Debug.Printf("%s\n", hex.Dump(rawResp))
-		return nil, ErrNonZeroStatus
 	}
 
 	return &executeResponse, nil
@@ -177,7 +176,6 @@ func mapiRequestHTTP(URL, mapiType string, body []byte) ([]byte, error) {
 	resp, err := client.Do(req)
 
 	if err != nil {
-		utils.Trace.Println("v")
 		//check if this error was because of ntml auth when basic auth was expected.
 		if m, _ := regexp.Match("illegal base64", []byte(err.Error())); m == true {
 			resp, err = client.Do(req)
@@ -787,7 +785,7 @@ func SetMessageStatus(folderid, messageid []byte) (*RopSetMessageStatusResponse,
 
 }
 
-//GetMessage returns the specific fields from a message
+//GetPropertyIds returns the specific fields from a message
 func GetPropertyIds(folderid, messageid []byte, propids []PropertyName) (*RopGetPropertyIdsFromNamesResponse, error) {
 
 	execRequest := ExecuteRequest{}
@@ -1553,7 +1551,8 @@ func DeleteMessages(folderid []byte, messageIDCount int, messageIDs []byte) (*Ro
 
 }
 
-func OpenAttachment(folderid, messageid []byte, attachId uint32, columns []PropertyTag) (*RopFastTransferSourceGetBufferResponse, error) {
+//OpenAttachment allows for opening the attachment associated with a message
+func OpenAttachment(folderid, messageid []byte, attachid uint32, columns []PropertyTag) (*RopFastTransferSourceGetBufferResponse, error) {
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
 
@@ -1571,7 +1570,7 @@ func OpenAttachment(folderid, messageid []byte, attachId uint32, columns []Prope
 	fullReq = append(fullReq, getMessage.Marshal()...)
 
 	getAttachmentTbl := RopGetAttachmentTableRequest{RopID: 0x21, LogonID: AuthSession.LogonID, InputHandleIndex: 0x01, OutputHandleIndex: 0x02, TableFlags: 0x00}
-	getAttachment := RopOpenAttachmentRequest{RopID: 0x022, LogonID: AuthSession.LogonID, InputHandleIndex: 0x01, OutputHandleIndex: 0x02, OpenAttachmentFlags: 0x01, AttachmentID: attachId}
+	getAttachment := RopOpenAttachmentRequest{RopID: 0x022, LogonID: AuthSession.LogonID, InputHandleIndex: 0x01, OutputHandleIndex: 0x02, OpenAttachmentFlags: 0x01, AttachmentID: attachid}
 
 	fullReq = append(fullReq, getAttachmentTbl.Marshal()...)
 	fullReq = append(fullReq, getAttachment.Marshal()...)
@@ -2325,10 +2324,8 @@ func GetTableContents(folderid []byte, assoc bool, columns []PropertyTag) (*RopQ
 		return nil, e
 	}
 	rows := RopQueryRowsResponse{}
-	//TODO
-	if _, e = rows.Unmarshal(execResponse.RopBuffer.Body[bufPtr:], setColumns.PropertyTags); e != nil {
-		return nil, e
-	}
+	propRops := []GetProperties{&rows}
+	_, e = UnmarshalPropertyRops(execResponse.RopBuffer.Body[bufPtr:], propRops, setColumns.PropertyTags)
 
 	return &rows, e
 

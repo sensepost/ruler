@@ -66,6 +66,14 @@ type AndRestriction struct {
 	Restricts     []Restriction
 }
 
+//OrRestriction structure describes a combination of nested conditions that need to be
+//OR'ed with each other
+type OrRestriction struct {
+	RestrictType  uint8 //0x01
+	RestrictCount uint16
+	Restricts     []Restriction
+}
+
 //NotRestriction is used to apply a logical NOT operation to a single restriction
 type NotRestriction struct {
 	RestrictType uint8 //0x02
@@ -87,6 +95,11 @@ func (restriction ContentRestriction) Marshal() []byte {
 
 //Marshal turn AndResetriction into Bytes
 func (restriction AndRestriction) Marshal() []byte {
+	return utils.BodyToBytes(restriction)
+}
+
+//Marshal turn OrResetriction into Bytes
+func (restriction OrRestriction) Marshal() []byte {
 	return utils.BodyToBytes(restriction)
 }
 

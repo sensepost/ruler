@@ -1447,6 +1447,10 @@ func (execResponse *ExecuteResponse) Unmarshal(resp []byte) error {
 		execResponse.ErrorCode, pos = utils.ReadUint32(pos, resp) //error code if MAPIHTTP else this is also the buffer size
 		execResponse.Flags, pos = utils.ReadUint32(pos, resp)
 		execResponse.RopBufferSize, pos = utils.ReadUint32(pos, resp)
+		//Empty Rop Buffer indicates there is a problem...
+		if execResponse.RopBufferSize == 0 {
+			return fmt.Errorf("Empty Rop Buffer returned. Likely a malformed request was sent.")
+		}
 		if len(resp) < pos+int(execResponse.RopBufferSize) {
 			//buf, pos = utils.ReadBytes(pos, (len(resp)-pos)+8, resp)
 			//execResponse.RopBuffer = buf
@@ -2242,12 +2246,22 @@ func (actionData *ActionData) Unmarshal(resp []byte) (int, error) {
 	return pos, nil
 }
 
+//GetData is a wrapper function for RopGetPropertiesSpecificResponse struct, allows retrieving the values stored in RowData
 func (ropGetPropertiesSpecificResponse *RopGetPropertiesSpecificResponse) GetData() []PropertyRow {
 	return ropGetPropertiesSpecificResponse.RowData
 }
 
+//GetData is a wrapper function for RopGetPropertiesAllResponse struct, allows retrieving the values stored in PropertyValues
 func (ropGetPropertiesAllResponse *RopGetPropertiesAllResponse) GetData() []PropertyRow {
 	return ropGetPropertiesAllResponse.PropertyValues
+}
+
+//GetData is a wrapper function for RopQueryRowsResponse struct, allows retrieving the values stored in the first row of RowData
+func (queryRows *RopQueryRowsResponse) GetData() []PropertyRow {
+	if len(queryRows.RowData) > 0 {
+		return queryRows.RowData[0]
+	}
+	return nil
 }
 
 //Unmarshal func

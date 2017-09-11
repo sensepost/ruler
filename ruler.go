@@ -510,28 +510,51 @@ func connect(c *cli.Context) error {
 }
 
 func printRules() error {
-	rules, er := mapi.DisplayRules()
+	//rules, er := mapi.DisplayRules()
+	cols := make([]mapi.PropertyTag, 3)
+	cols[0] = mapi.PidTagRuleName
+	cols[1] = mapi.PidTagRuleID
+	cols[2] = mapi.PidTagRuleActions
+
+	rows, er := mapi.FetchRules(cols)
 
 	if er != nil {
 		return er
 	}
 
-	if len(rules) > 0 {
-		utils.Info.Printf("Found %d rules\n", len(rules))
+	if rows.RowCount > 0 {
+		utils.Info.Printf("Found %d rules\n", rows.RowCount)
 		maxwidth := 30
 
-		for _, v := range rules {
-			if len(string(v.RuleName)) > maxwidth {
-				maxwidth = len(string(v.RuleName))
+		for k := 0; k < int(rows.RowCount); k++ {
+			if len(string(rows.RowData[k][0].ValueArray)) > maxwidth {
+				maxwidth = len(string(rows.RowData[k][0].ValueArray))
 			}
 		}
 		maxwidth -= 10
-		fmstr1 := fmt.Sprintf("%%-%ds | %%-s\n", maxwidth)
-		fmstr2 := fmt.Sprintf("%%-%ds | %%x\n", maxwidth)
-		utils.Info.Printf(fmstr1, "Rule Name", "Rule ID")
-		utils.Info.Printf("%s|%s\n", (strings.Repeat("-", maxwidth+1)), strings.Repeat("-", 18))
-		for _, v := range rules {
-			utils.Info.Printf(fmstr2, string(utils.FromUnicode(v.RuleName)), v.RuleID)
+		fmstr1 := fmt.Sprintf("%%-%ds | %%-16s | %%-s\n", maxwidth)
+		fmstr2 := fmt.Sprintf("%%-%ds | %%x | %%s\n", maxwidth)
+		utils.Info.Printf(fmstr1, "Rule Name", "Rule ID", "Client-Side")
+		utils.Info.Printf("%s|%s|%s\n", (strings.Repeat("-", maxwidth+1)), strings.Repeat("-", 18), strings.Repeat("-", 11))
+		for k := 0; k < int(rows.RowCount); k++ {
+			clientSide := false
+			clientApp := ""
+			rd := mapi.RuleAction{}
+			rd.Unmarshal(rows.RowData[k][2].ValueArray)
+			if rd.ActionType == 0x05 {
+				for _, a := range rd.ActionData.Conditions {
+					if a.Tag[1] == 0x49 {
+						clientSide = true
+						clientApp = string(utils.FromUnicode(a.Value))
+						break
+					}
+				}
+			}
+			if clientSide == true {
+				utils.Info.Printf(fmstr2, string(utils.FromUnicode(rows.RowData[k][0].ValueArray)), rows.RowData[k][1].ValueArray, fmt.Sprintf("* %s", clientApp))
+			} else {
+				utils.Info.Printf(fmstr2, string(utils.FromUnicode(rows.RowData[k][0].ValueArray)), rows.RowData[k][1].ValueArray, "")
+			}
 		}
 		utils.Info.Println()
 	} else {
@@ -848,24 +871,45 @@ func searchFolders(c *cli.Context) error {
 	restrict := mapi.AndRestriction{RestrictType: 0x00}
 	restrict.RestrictCount = uint16(2)
 
-	//restrict PidTagBody
+	var orRestrict mapi.OrRestriction
+
+	//restrict by subject or PidTagBody
 	restrictContent := mapi.ContentRestriction{RestrictType: 0x03}
 	restrictContent.FuzzyLevelLow = mapi.FLSUBSTRING
 	restrictContent.FuzzyLevelHigh = mapi.FLIGNORECASE
-	restrictContent.PropertyTag = mapi.PidTagBody
+	if c.Bool("subject") == true {
+		restrictContent.PropertyTag = mapi.PidTagSubject
+	} else {
+		restrictContent.PropertyTag = mapi.PidTagBody
+	}
 	restrictContent.PropertyValue = mapi.TaggedPropertyValue{PropertyTag: restrictContent.PropertyTag, PropertyValue: utils.UniString(c.String("term"))}
 
-	//restrict PidTagHTMLBody
+	//restrict by PidTagBodyHTML if subject is not set
+	restrictHTML := mapi.ContentRestriction{RestrictType: 0x03}
+	restrictHTML.FuzzyLevelLow = mapi.FLSUBSTRING
+	restrictHTML.FuzzyLevelHigh = mapi.FLIGNORECASE
+	restrictHTML.PropertyTag = mapi.PidTagSubject
+	restrictHTML.PropertyValue = mapi.TaggedPropertyValue{PropertyTag: restrictContent.PropertyTag, PropertyValue: utils.UniString(c.String("term"))}
 
+	//Restrict to IPM.Note
 	restrictContent2 := mapi.ContentRestriction{RestrictType: 0x03}
 	restrictContent2.FuzzyLevelLow = mapi.FLPREFIX
 	restrictContent2.FuzzyLevelHigh = mapi.FLIGNORECASE
 	restrictContent2.PropertyTag = mapi.PidTagMessageClass
 	restrictContent2.PropertyValue = mapi.TaggedPropertyValue{PropertyTag: restrictContent2.PropertyTag, PropertyValue: utils.UniString("IPM.Note")}
 
-	restrict.Restricts = []mapi.Restriction{restrictContent, restrictContent2}
+	if c.Bool("subject") == true {
+		restrict.Restricts = []mapi.Restriction{restrictContent, restrictContent2}
+	} else {
+		orRestrict = mapi.OrRestriction{RestrictType: 0x01}
+		orRestrict.RestrictCount = uint16(2)
+		orRestrict.Restricts = []mapi.Restriction{restrictContent, restrictHTML}
+		restrict.Restricts = []mapi.Restriction{orRestrict, restrictContent2}
+	}
 
-	mapi.SetSearchCriteria(folderids, searchFolder, restrict)
+	if _, err := mapi.SetSearchCriteria(folderids, searchFolder, restrict); err != nil {
+		return fmt.Errorf("Unable to set search criteria: %s", err)
+	}
 
 	utils.Info.Println("Waiting for search folder to populate")
 	for x := 0; x < 1; x++ {
@@ -899,7 +943,10 @@ func searchFolders(c *cli.Context) error {
 		//convert buffer to rows
 
 		messagerows := mapi.DecodeBufferToRows(buff.TransferBuffer, columns)
-		payload := utils.FromUnicode(messagerows[0].ValueArray[:len(messagerows[0].ValueArray)-4])
+		payload := ""
+		if len(messagerows[0].ValueArray) > 4 {
+			payload = utils.FromUnicode(messagerows[0].ValueArray[:len(messagerows[0].ValueArray)-4])
+		}
 		utils.Info.Printf("Subject: %s\nBody: %s\n", messageSubject, payload)
 
 	}
@@ -1660,6 +1707,9 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 				},
 			},
 			Action: func(c *cli.Context) error {
+				if c.String("term") == "" {
+					return cli.NewExitError("You need to supply a valid search term. Use --term ", 1)
+				}
 				err := connect(c)
 				if err != nil {
 					utils.Error.Println(err)
