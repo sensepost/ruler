@@ -240,13 +240,15 @@ func RPCOpenOut(URL string, readySignal chan<- bool, errOccurred chan<- error) (
 			r.Body = b
 			mutex.Lock() //lets be safe, lock the responses array before adding a new value to it
 
-			//if the PFCFlag is set to 2, this packet is fragment of the previous packet
+			//if the PFCFlag is set to 0 or 2, this packet is fragment of the previous packet
 			//take the PDU of this packet and append it to our previous packet
-			if r.Header.PFCFlags == uint8(2) {
+			if r.Header.PFCFlags == uint8(2) || r.Header.PFCFlags == uint8(0) {
 				for k, v := range responses {
 					if v.Header.CallID == r.Header.CallID {
 						responses[k].PDU = append(v.PDU, r.PDU...)
-						responses[k].Header.PFCFlags = 3
+						if r.Header.PFCFlags == uint8(2) {
+							responses[k].Header.PFCFlags = 3
+						}
 						break
 					}
 				}

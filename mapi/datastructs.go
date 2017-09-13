@@ -1126,6 +1126,11 @@ type Request interface {
 	Marshal() []byte
 }
 
+/*
+func RopOpenFolderRequest() Request {
+	return RopOpenFolderRequest{RopID: 0x02, LogonID: AuthSession.LogonID}
+}*/
+
 //Marshal turn ExecuteRequest into Bytes
 func (execRequest ExecuteRequest) Marshal() []byte {
 	execRequest.CalcSizes(false)

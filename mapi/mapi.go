@@ -574,7 +574,7 @@ func SendExistingMessage(folderID, messageID []byte, recipient string) (*RopSubm
 	getMessage.FolderID = folderID
 	getMessage.MessageID = messageID
 	getMessage.CodePageID = 0xFFF
-	getMessage.OpenModeFlags = 0x03
+	getMessage.OpenModeFlags = 0x03 //BestAccess
 
 	fullReq := getMessage.Marshal()
 
@@ -595,7 +595,7 @@ func SendExistingMessage(folderID, messageID []byte, recipient string) (*RopSubm
 	modRecipients.RowCount = 0x0001
 
 	modRecipients.RecipientRows = make([]ModifyRecipientRow, modRecipients.RowCount)
-	modRecipients.RecipientRows[0] = ModifyRecipientRow{RowID: 0x00000001, RecipientType: 0x00000001}
+	modRecipients.RecipientRows[0] = ModifyRecipientRow{RowID: 1, RecipientType: 1}
 	modRecipients.RecipientRows[0].RecipientRow = RecipientRow{}
 	modRecipients.RecipientRows[0].RecipientRow.RecipientFlags = 0x0008 | 0x0003 | 0x0200 | 0x0010 | 0x3 | 0x0020
 	modRecipients.RecipientRows[0].RecipientRow.EmailAddress = utils.UniString(recipient)   //email address
@@ -663,11 +663,11 @@ func SendMessage(triggerWord, body string) (*RopSubmitMessageResponse, error) {
 	propertyTags := make([]TaggedPropertyValue, setProperties.PropertValueCount)
 	propertyTags[0] = TaggedPropertyValue{PidTagBody, utils.UniString(fmt.Sprintf("%s\n\r", body))}
 	propertyTags[1] = TaggedPropertyValue{PropertyTag{PtypString, 0x001A}, utils.UniString("IPM.Note")}
-	propertyTags[2] = TaggedPropertyValue{PidTagMessageFlags, []byte{0x00, 0x00, 0x00, 0x08}} //unsent
+	propertyTags[2] = TaggedPropertyValue{PidTagMessageFlags, utils.EncodeNum(uint32(8))} //[]byte{0x00, 0x00, 0x00, 0x08}} //unsent
 	propertyTags[3] = TaggedPropertyValue{PidTagConversationTopic, utils.UniString(triggerWord)}
-	propertyTags[4] = TaggedPropertyValue{PropertyTag: PidTagIconIndex, PropertyValue: []byte{0x00, 0x00, 0x00, 0x01}}
+	propertyTags[4] = TaggedPropertyValue{PropertyTag: PidTagIconIndex, PropertyValue: utils.EncodeNum(uint32(1))} //[]byte{0x00, 0x00, 0x00, 0x01}}
 	propertyTags[5] = TaggedPropertyValue{PropertyTag: PidTagMessageEditorFormat, PropertyValue: []byte{0x01, 0x00, 0x00, 0x00}}
-	propertyTags[5] = TaggedPropertyValue{PidTagNativeBody, []byte{0x00, 0x00, 0x00, 0x01}}
+	propertyTags[5] = TaggedPropertyValue{PidTagNativeBody, utils.EncodeNum(uint32(1))} //[]byte{0x00, 0x00, 0x00, 0x01}}
 	propertyTags[6] = TaggedPropertyValue{PidTagSubject, utils.UniString(triggerWord)}
 	propertyTags[7] = TaggedPropertyValue{PidTagNormalizedSubject, utils.UniString(triggerWord)}
 	propertyTags[8] = TaggedPropertyValue{PidTagHidden, []byte{0x01}} //hide message during "composition"
@@ -699,7 +699,7 @@ func SendMessage(triggerWord, body string) (*RopSubmitMessageResponse, error) {
 	modRecipients.RowCount = 0x0001
 
 	modRecipients.RecipientRows = make([]ModifyRecipientRow, modRecipients.RowCount)
-	modRecipients.RecipientRows[0] = ModifyRecipientRow{RowID: 0x00000001, RecipientType: 0x00000001}
+	modRecipients.RecipientRows[0] = ModifyRecipientRow{RowID: 1, RecipientType: 1}
 	modRecipients.RecipientRows[0].RecipientRow = RecipientRow{}
 	modRecipients.RecipientRows[0].RecipientRow.RecipientFlags = 0x0008 | 0x0003 | 0x0200 | 0x0010 | 0x3 | 0x0020
 	modRecipients.RecipientRows[0].RecipientRow.EmailAddress = utils.UniString(AuthSession.Email) //email address
@@ -710,14 +710,14 @@ func SendMessage(triggerWord, body string) (*RopSubmitMessageResponse, error) {
 	modRecipients.RecipientRows[0].RecipientRow.RecipientProperties = StandardPropertyRow{Flag: 0x00}
 
 	modRecipients.RecipientRows[0].RecipientRow.RecipientProperties.ValueArray = make([][]byte, modRecipients.RecipientRows[0].RecipientRow.RecipientColumnCount)
-	modRecipients.RecipientRows[0].RecipientRow.RecipientProperties.ValueArray[0] = []byte{0x06, 0x00, 0x00, 0x00}
-	modRecipients.RecipientRows[0].RecipientRow.RecipientProperties.ValueArray[1] = []byte{0x00, 0x00, 0x00, 0x00}
+	modRecipients.RecipientRows[0].RecipientRow.RecipientProperties.ValueArray[0] = utils.EncodeNum(uint32(6)) //[]byte{0x00, 0x00, 0x00, 0x06}
+	modRecipients.RecipientRows[0].RecipientRow.RecipientProperties.ValueArray[1] = utils.EncodeNum(uint32(0)) //[]byte{0x00, 0x00, 0x00, 0x00}
 	modRecipients.RecipientRows[0].RecipientRow.RecipientProperties.ValueArray[2] = utils.UniString(AuthSession.Email)
-	modRecipients.RecipientRows[0].RecipientRow.RecipientProperties.ValueArray[3] = []byte{0x00, 0x00, 0x00, 0x00}
-	modRecipients.RecipientRows[0].RecipientRow.RecipientProperties.ValueArray[4] = []byte{0x00, 0x00, 0x00, 0x40}
+	modRecipients.RecipientRows[0].RecipientRow.RecipientProperties.ValueArray[3] = utils.EncodeNum(uint32(0))  //[]byte{0x00, 0x00, 0x00, 0x00}
+	modRecipients.RecipientRows[0].RecipientRow.RecipientProperties.ValueArray[4] = utils.EncodeNum(uint32(64)) //[]byte{0x00, 0x00, 0x00, 0x40}
 	modRecipients.RecipientRows[0].RecipientRow.RecipientProperties.ValueArray[5] = utils.UniString("Self")
 	modRecipients.RecipientRows[0].RecipientRow.RecipientProperties.ValueArray[6] = []byte{0x01, 0x00, 0x00, 0x00}
-	modRecipients.RecipientRows[0].RecipientRow.RecipientProperties.ValueArray[7] = []byte{0x00, 0x00, 0x00, 0x00}
+	modRecipients.RecipientRows[0].RecipientRow.RecipientProperties.ValueArray[7] = utils.EncodeNum(uint32(0)) //[]byte{0x00, 0x00, 0x00, 0x00}
 
 	modRecipients.RecipientRows[0].RecipientRowSize = uint16(len(utils.BodyToBytes(modRecipients.RecipientRows[0].RecipientRow)))
 	fullReq = append(fullReq, modRecipients.Marshal()...)
