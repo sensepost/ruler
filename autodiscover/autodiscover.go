@@ -333,10 +333,11 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, string, er
 
 	defer resp.Body.Close()
 
+
 	if resp.StatusCode == 401 || resp.StatusCode == 403 {
 		return nil, autodiscoverURL, fmt.Errorf("Access denied. Check your credentials")
 	}
-
+  
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return nil, "", err

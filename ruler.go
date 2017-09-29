@@ -37,12 +37,15 @@ func exit(err error) {
 	os.Exit(exitcode)
 }
 
+
 //function to perform an autodiscover
 func discover(c *cli.Context) error {
+
 
 	if c.GlobalString("domain") == "" {
 		return fmt.Errorf("Required param --domain is missing")
 	}
+
 
 	if c.Bool("dump") == true && (c.GlobalString("username") == "" && c.GlobalString("email") == "") {
 		return fmt.Errorf("--dump requires credentials to be set")
@@ -127,6 +130,7 @@ func discover(c *cli.Context) error {
 			utils.Debug.Println(resp.StatusCode)
 		}
 	}
+
 
 	return nil
 }
@@ -1358,6 +1362,25 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 				}
 				err = sendMessage(c.String("subject"), c.String("body"))
 				exit(err)
+				return nil
+			},
+		},
+    {
+			Name:    "autodiscover",
+			Aliases: []string{"u"},
+			Usage:   "Just run the autodiscover service to find the authentication point",
+			Flags: []cli.Flag{
+				cli.BoolFlag{
+					Name:  "verbose,v",
+					Usage: "Display each attempt",
+				},
+			},
+			Action: func(c *cli.Context) error {
+				err := discover(c)
+				if err != nil {
+					utils.Error.Println(err)
+					cli.OsExiter(1)
+				}
 				return nil
 			},
 		},
