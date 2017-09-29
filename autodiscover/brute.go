@@ -1,6 +1,7 @@
 package autodiscover
 
 import (
+	"crypto/tls"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -8,7 +9,6 @@ import (
 	"regexp"
 	"strings"
 	"time"
-    "crypto/tls"
 
 	"github.com/sensepost/ruler/http-ntlm"
 	"github.com/sensepost/ruler/utils"
@@ -57,10 +57,10 @@ func autodiscoverDomain(domain string) string {
 
 	req, err := http.NewRequest("GET", autodiscoverURL, nil)
 	req.Header.Add("Content-Type", "text/xml")
-    tr := &http.Transport{
-                TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-            }
-    client := http.Client{Transport:tr}
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	client := http.Client{Transport: tr}
 	resp, err := client.Do(req)
 
 	if err != nil {
@@ -111,7 +111,7 @@ func BruteForce(domain, usersFile, passwordsFile string, basic, insecure, stopSu
 			if u == "" || p == "" {
 				continue
 			}
-      time.Sleep(time.Millisecond * 500) //lets not flood it
+			time.Sleep(time.Millisecond * 500) //lets not flood it
 			sem <- true
 
 			go func(u string, p string, i int) {
@@ -186,7 +186,7 @@ func UserPassBruteForce(domain, userpassFile string, basic, insecure, stopSucces
 		if u == "" {
 			continue
 		}
-    time.Sleep(time.Millisecond * 500) //lets not flood it
+		time.Sleep(time.Millisecond * 500) //lets not flood it
 		sem <- true
 
 		go func(u string, p string) {
@@ -234,10 +234,10 @@ func connect(autodiscoverURL, user, password string, basic, insecure bool) Resul
 	result := Result{user, password, -1, -1, nil}
 
 	cookie, _ := cookiejar.New(nil)
-    tr := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-                          DisableKeepAlives:true, //should fix mutex issues
-    }
-    client := http.Client{Transport:tr}
+	tr := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		DisableKeepAlives: true, //should fix mutex issues
+	}
+	client := http.Client{Transport: tr}
 	if basic == false {
 		//check if this is a first request or a redirect
 		//create an ntml http client

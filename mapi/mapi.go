@@ -94,7 +94,7 @@ func Init(config *utils.Session, lid, URL, ABKURL string, transport int) {
 	AuthSession.Transport = transport
 	AuthSession.ClientSet = false
 	AuthSession.ReqCounter = 1
-	AuthSession.LogonID = 0x0c
+	AuthSession.LogonID = 0x06
 	AuthSession.Authenticated = false
 
 	//default to Encrypt + Sign for NTLM
@@ -135,7 +135,7 @@ func sendMapiRequest(mapi ExecuteRequest) (*ExecuteResponse, error) {
 		}
 	}
 	//debug flag
-	//utils.Debug.Printf("%s\n", hex.Dump(rawResp))
+
 	executeResponse := ExecuteResponse{}
 	err = executeResponse.Unmarshal(rawResp)
 

@@ -1448,28 +1448,30 @@ func (execResponse *ExecuteResponse) Unmarshal(resp []byte) error {
 	if execResponse.StatusCode == 255 { //error occurred..
 		execResponse.AuxilliaryBufSize, pos = utils.ReadUint32(pos, resp)
 		execResponse.AuxilliaryBuf = resp[8 : 8+execResponse.AuxilliaryBufSize]
-	} else {
-		execResponse.ErrorCode, pos = utils.ReadUint32(pos, resp) //error code if MAPIHTTP else this is also the buffer size
-		execResponse.Flags, pos = utils.ReadUint32(pos, resp)
-		execResponse.RopBufferSize, pos = utils.ReadUint32(pos, resp)
-		//Empty Rop Buffer indicates there is a problem...
-		if execResponse.RopBufferSize == 0 {
-			return fmt.Errorf("Empty Rop Buffer returned. Likely a malformed request was sent.")
-		}
-		if len(resp) < pos+int(execResponse.RopBufferSize) {
-			//buf, pos = utils.ReadBytes(pos, (len(resp)-pos)+8, resp)
-			//execResponse.RopBuffer = buf
-			//execResponse.AuxilliaryBufSize = uint32(0)
-			return fmt.Errorf("Packet size mismatch. RopBuffer Size %d, got packet of %d", execResponse.RopBufferSize, len(resp))
-		}
-		//parse out ROPBuffer header and body
-		rpbuff := RopBufferResp{}
-		rpbuff.Header, pos = utils.ReadBytes(pos, 10, resp)
-		rpbuff.Body, pos = utils.ReadBytes(pos, int(execResponse.RopBufferSize)-10, resp)
-		execResponse.RopBuffer = rpbuff
-		execResponse.AuxilliaryBufSize, _ = utils.ReadUint32(pos, resp)
-		//execResponse.AuxilliaryBuf, _ = utils.ReadBytes(pos, int(execResponse.AuxilliaryBufSize), resp)
+		return fmt.Errorf("Non-Zero status-code returned")
 	}
+
+	execResponse.ErrorCode, pos = utils.ReadUint32(pos, resp) //error code if MAPIHTTP else this is also the buffer size
+	if execResponse.ErrorCode == 0x000004B6 {                 //ecRpcFormat
+		return fmt.Errorf("ecRPCFormat error response. Indicates a malformed request")
+	}
+	execResponse.Flags, pos = utils.ReadUint32(pos, resp)
+	execResponse.RopBufferSize, pos = utils.ReadUint32(pos, resp)
+	//Empty Rop Buffer indicates there is a problem...
+	if execResponse.RopBufferSize == 0 {
+		return fmt.Errorf("Empty Rop Buffer returned. Likely a malformed request was sent.")
+	}
+	if len(resp) < pos+int(execResponse.RopBufferSize) {
+		return fmt.Errorf("Packet size mismatch. RopBuffer Size %d, got packet of %d", execResponse.RopBufferSize, len(resp))
+	}
+	//parse out ROPBuffer header and body
+	rpbuff := RopBufferResp{}
+	rpbuff.Header, pos = utils.ReadBytes(pos, 10, resp)
+	rpbuff.Body, pos = utils.ReadBytes(pos, int(execResponse.RopBufferSize)-10, resp)
+	execResponse.RopBuffer = rpbuff
+	//execResponse.AuxilliaryBufSize, _ = utils.ReadUint32(pos, resp)
+	//execResponse.AuxilliaryBuf, _ = utils.ReadBytes(pos, int(execResponse.AuxilliaryBufSize), resp)
+
 	return nil
 }
 
