@@ -34,6 +34,10 @@ var (
 	ErrUnknown = errors.New("mapi: an unhandled exception occurred")
 	//ErrNotAdmin when attempting to get admin access to a mailbox
 	ErrNotAdmin = errors.New("mapi: Invalid logon. Admin privileges requested but user is not admin")
+	//ErrEmptyBuffer when we have returned a buffer that is too big for our RPC packet.. sometimes this happens..
+	ErrEmptyBuffer = errors.New("An empty response buffer has been encountered. Likely that our response was too big for the current implementation of RPC/HTTP")
+	//ErrNonZeroStatus when the execute response status is not zero - this is not the same as the individual ROP messages erroring out
+	ErrNonZeroStatus = errors.New("The execute request returned a non-zero status code. Use --debug to see full response.")
 )
 
 const (
@@ -496,6 +500,9 @@ var PidTagPrimarySendAccount = PropertyTag{PtypString, 0x0E28}
 //PidTagObjectType used in recepient
 var PidTagObjectType = PropertyTag{PtypInteger32, 0x0FFE}
 
+//PidTagImportance used in recepient
+var PidTagImportance = PropertyTag{PtypInteger32, 0x0017}
+
 //PidTagDisplayType  used in recepient
 var PidTagDisplayType = PropertyTag{PtypInteger32, 0x3900}
 
@@ -609,3 +616,8 @@ var PidTag6900 = PropertyTag{0x0003, 0x6900}
 var PidTagComment = PropertyTag{PtypString, 0x3004}
 
 var PidTagSenderEntryId = PropertyTag{PtypBinary, 0x0C19}
+var PidTagFolderWebViewInfo = PropertyTag{PtypBinary, 0x36DF}
+var PidTagPurportedSenderDomain = PropertyTag{PtypString, 0x4083}
+var PidTagBodyContentLocation = PropertyTag{PtypString, 0x1014}
+
+var PidTagClientInfo = PropertyTag{PtypString, 0x80C7}

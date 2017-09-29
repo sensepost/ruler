@@ -27,24 +27,24 @@ func Init(
 		Trace = log.New(traceHandle, "[*] ", 0)
 		Info = log.New(infoHandle, "[+] ", 0)
 		Clear = log.New(infoHandle, "    ", 0)
-		Debug = log.New(warningHandle, " ", 0)
+		Debug = log.New(warningHandle, "", 0)
 		Fail = log.New(infoHandle, "[x] ", 0)
 		Question = log.New(infoHandle, "[?] ", 0)
-		Warning = log.New(warningHandle,
+		Warning = log.New(infoHandle,
 			"[WARNING] ", 0)
 		Error = log.New(errorHandle,
-			"ERROR: ", log.Ldate|log.Ltime)
+			"ERROR: ", log.Ltime|log.Lshortfile)
 
 	} else {
 		Trace = log.New(traceHandle, "\033[33m[*] \033[0m", 0)
 		Info = log.New(infoHandle, "\033[32m[+] \033[0m", 0)
 		Clear = log.New(infoHandle, "    ", 0)
-		Debug = log.New(warningHandle, " ", 0)
+		Debug = log.New(warningHandle, "", 0)
 		Fail = log.New(infoHandle, "\033[91m[x] \033[0m", 0)
 		Question = log.New(infoHandle, "\033[91m[?] \033[0m", 0)
-		Warning = log.New(warningHandle,
+		Warning = log.New(infoHandle,
 			"\033[91m[WARNING] \033[0m", 0)
 		Error = log.New(errorHandle,
-			"\033[31mERROR\033[0m: ", log.Ldate|log.Ltime)
+			"\033[31mERROR\033[0m: ", log.Ltime|log.Lshortfile)
 	}
 }

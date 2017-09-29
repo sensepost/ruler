@@ -31,7 +31,7 @@ type Session struct {
 	Insecure      bool
 	Verbose       bool
 	Admin         bool
-	DiscoURL      *url.URL
+  DiscoURL      *url.URL
 	LID           string
 	URL           *url.URL
 	ABKURL        *url.URL //URL for the AddressBook Provider

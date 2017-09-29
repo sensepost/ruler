@@ -46,42 +46,92 @@ func discover(c *cli.Context) error {
 		return fmt.Errorf("Required param --domain is missing")
 	}
 
-  //setup our autodiscover service
-  config.Domain = c.GlobalString("domain")
-  config.User = "nosuchuser"
-  config.Email = "nosuchemail"
-  config.Basic = c.GlobalBool("basic")
-  config.Insecure = c.GlobalBool("insecure")
-  config.Verbose = c.GlobalBool("verbose")
-  config.Admin = c.GlobalBool("admin")
-  config.RPCEncrypt = !c.GlobalBool("noencrypt")
-  config.CookieJar, _ = cookiejar.New(nil)
-  config.Proxy = c.GlobalString("proxy")
+
+	if c.Bool("dump") == true && (c.GlobalString("username") == "" && c.GlobalString("email") == "") {
+		return fmt.Errorf("--dump requires credentials to be set")
+	}
+
+	if c.Bool("dump") == true && c.String("out") == "" {
+		return fmt.Errorf("--dump requires an out file to be set with --out /path/to/file.txt")
+	}
+
+	var err error
+	if c.Bool("dump") == true && c.GlobalString("password") == "" && c.GlobalString("hash") == "" {
+		fmt.Printf("Password: ")
+		var pass []byte
+		pass, err = gopass.GetPasswd()
+		if err != nil {
+			// Handle gopass.ErrInterrupted or getch() read error
+			return fmt.Errorf("Password or hash required. Supply NTLM hash with --hash")
+		}
+		config.Pass = string(pass)
+	} else {
+		config.Pass = c.GlobalString("password")
+		if config.NTHash, err = hex.DecodeString(c.GlobalString("hash")); err != nil {
+			return fmt.Errorf("Invalid hash provided. Hex decode failed")
+		}
+	}
+	//setup our autodiscover service
+	config.Domain = c.GlobalString("domain")
+	if c.GlobalString("username") == "" {
+		config.User = "nosuchuser"
+	} else {
+		config.User = c.GlobalString("username")
+	}
+	if c.GlobalString("email") == "" {
+		config.Email = "nosuchemail"
+	} else {
+		config.Email = c.GlobalString("email")
+	}
+	config.Basic = c.GlobalBool("basic")
+	config.Insecure = c.GlobalBool("insecure")
+	config.Verbose = c.GlobalBool("verbose")
+	config.Admin = c.GlobalBool("admin")
+	config.RPCEncrypt = !c.GlobalBool("noencrypt")
+	config.CookieJar, _ = cookiejar.New(nil)
+	config.Proxy = c.GlobalString("proxy")
+	url := c.GlobalString("url")
+
+	if url == "" {
+		url = config.Domain
+	}
 
 	autodiscover.SessionConfig = &config
-  _, domain, err := autodiscover.Autodiscover(config.Domain)
 
-  if domain == "" && err != nil {
-    return err
-  }
+	_, domain, err := autodiscover.Autodiscover(url)
 
-  utils.Info.Printf("Looks like the autodiscover service is at: %s \n",domain)
-  utils.Info.Println("Checking if domain is hosted on Office 365")
-  //smart check to see if domain is on office365
-  //A request to https://login.microsoftonline.com/<domain>/.well-known/openid-configuration
-  //response with 400 for none-hosted domains
-  //response with 200 for office365 domains
+	if domain == "" && err != nil {
+		return err
+	}
+
+	if c.Bool("dump") == true {
+		path := c.String("out")
+		utils.Info.Printf("Looks like the autodiscover service was found, Writing to: %s \n", path)
+		fout, _ := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0666)
+		_, err := fout.WriteString(domain)
+		if err != nil {
+			return fmt.Errorf("Couldn't write to file for some reason... %s", err)
+		}
+	} else {
+		utils.Info.Printf("Looks like the autodiscover service is at: %s \n", domain)
+		utils.Info.Println("Checking if domain is hosted on Office 365")
+		//smart check to see if domain is on office365
+		//A request to https://login.microsoftonline.com/<domain>/.well-known/openid-configuration
+		//response with 400 for none-hosted domains
+		//response with 200 for office365 domains
+
+		resp, _ := http.Get(fmt.Sprintf("https://login.microsoftonline.com/%s/.well-known/openid-configuration", config.Domain))
+		if resp.StatusCode == 400 {
+			utils.Info.Println("Domain is not hosted on Office 365")
+		} else if resp.StatusCode == 200 {
+			utils.Info.Println("Domain is hosted on Office 365")
+		} else {
+			utils.Error.Println("Received an unexpected response")
+			utils.Debug.Println(resp.StatusCode)
+		}
+	}
 
 
-  resp, _ := http.Get(fmt.Sprintf("https://login.microsoftonline.com/%s/.well-known/openid-configuration",config.Domain))
-  if resp.StatusCode == 400 {
-    utils.Info.Println("Domain is not hosted on Office 365")
-  } else if resp.StatusCode == 200 {
-    utils.Info.Println("Domain is hosted on Office 365")
-  } else {
-    utils.Error.Println("Received an unexpected response")
-    utils.Debug.Println(resp.StatusCode)
-  }
 	return nil
 }
 
@@ -242,7 +292,6 @@ func connect(c *cli.Context) error {
 		if config.NTHash, err = hex.DecodeString(c.GlobalString("hash")); err != nil {
 			return fmt.Errorf("Invalid hash provided. Hex decode failed")
 		}
-
 	}
 	//setup our autodiscover service
 	config.Domain = c.GlobalString("domain")
@@ -465,28 +514,51 @@ func connect(c *cli.Context) error {
 }
 
 func printRules() error {
-	rules, er := mapi.DisplayRules()
+	//rules, er := mapi.DisplayRules()
+	cols := make([]mapi.PropertyTag, 3)
+	cols[0] = mapi.PidTagRuleName
+	cols[1] = mapi.PidTagRuleID
+	cols[2] = mapi.PidTagRuleActions
+
+	rows, er := mapi.FetchRules(cols)
 
 	if er != nil {
 		return er
 	}
 
-	if len(rules) > 0 {
-		utils.Info.Printf("Found %d rules\n", len(rules))
+	if rows.RowCount > 0 {
+		utils.Info.Printf("Found %d rules\n", rows.RowCount)
 		maxwidth := 30
 
-		for _, v := range rules {
-			if len(string(v.RuleName)) > maxwidth {
-				maxwidth = len(string(v.RuleName))
+		for k := 0; k < int(rows.RowCount); k++ {
+			if len(string(rows.RowData[k][0].ValueArray)) > maxwidth {
+				maxwidth = len(string(rows.RowData[k][0].ValueArray))
 			}
 		}
 		maxwidth -= 10
-		fmstr1 := fmt.Sprintf("%%-%ds | %%-s\n", maxwidth)
-		fmstr2 := fmt.Sprintf("%%-%ds | %%x\n", maxwidth)
-		utils.Info.Printf(fmstr1, "Rule Name", "Rule ID")
-		utils.Info.Printf("%s|%s\n", (strings.Repeat("-", maxwidth+1)), strings.Repeat("-", 18))
-		for _, v := range rules {
-			utils.Info.Printf(fmstr2, string(utils.FromUnicode(v.RuleName)), v.RuleID)
+		fmstr1 := fmt.Sprintf("%%-%ds | %%-16s | %%-s\n", maxwidth)
+		fmstr2 := fmt.Sprintf("%%-%ds | %%x | %%s\n", maxwidth)
+		utils.Info.Printf(fmstr1, "Rule Name", "Rule ID", "Client-Side")
+		utils.Info.Printf("%s|%s|%s\n", (strings.Repeat("-", maxwidth+1)), strings.Repeat("-", 18), strings.Repeat("-", 11))
+		for k := 0; k < int(rows.RowCount); k++ {
+			clientSide := false
+			clientApp := ""
+			rd := mapi.RuleAction{}
+			rd.Unmarshal(rows.RowData[k][2].ValueArray)
+			if rd.ActionType == 0x05 {
+				for _, a := range rd.ActionData.Conditions {
+					if a.Tag[1] == 0x49 {
+						clientSide = true
+						clientApp = string(utils.FromUnicode(a.Value))
+						break
+					}
+				}
+			}
+			if clientSide == true {
+				utils.Info.Printf(fmstr2, string(utils.FromUnicode(rows.RowData[k][0].ValueArray)), rows.RowData[k][1].ValueArray, fmt.Sprintf("* %s", clientApp))
+			} else {
+				utils.Info.Printf(fmstr2, string(utils.FromUnicode(rows.RowData[k][0].ValueArray)), rows.RowData[k][1].ValueArray, "")
+			}
 		}
 		utils.Info.Println()
 	} else {
@@ -710,13 +782,323 @@ func displayForms(c *cli.Context) error {
 	return nil
 }
 
+func createHomePage(c *cli.Context) error {
+	utils.Info.Println("Creating new endpoint")
+	wvpObjectStream := mapi.WebViewPersistenceObjectStream{Version: 2, Type: 1, Flags: 1}
+	wvpObjectStream.Reserved = []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
+	wvpObjectStream.Value = utils.UniString(c.String("url"))
+	wvpObjectStream.Size = uint32(len(wvpObjectStream.Value))
+	prop := wvpObjectStream.Marshal()
+	folderid := mapi.AuthSession.Folderids[mapi.INBOX]
+	propertyTags := make([]mapi.TaggedPropertyValue, 1)
+	propertyTags[0] = mapi.TaggedPropertyValue{PropertyTag: mapi.PidTagFolderWebViewInfo, PropertyValue: append(utils.COUNT(len(prop)), prop...)}
+
+	if _, e := mapi.SetFolderProperties(folderid, propertyTags); e != nil {
+		return e
+	}
+	utils.Info.Println("Verifying...")
+	props := make([]mapi.PropertyTag, 1)
+	props[0] = mapi.PidTagFolderWebViewInfo
+	_, _, e := mapi.GetFolderProps(mapi.INBOX, props)
+	if e == nil {
+		utils.Info.Println("New endpoint set")
+	}
+	return e
+}
+
+func displayHomePage() error {
+	utils.Info.Println("Getting existing endpoint")
+	props := make([]mapi.PropertyTag, 1)
+	props[0] = mapi.PidTagFolderWebViewInfo
+	_, c, e := mapi.GetFolderProps(mapi.INBOX, props)
+	if e == nil {
+		wvp := mapi.WebViewPersistenceObjectStream{}
+		wvp.Unmarshal(c.RowData[0].ValueArray)
+
+		if utils.FromUnicode(wvp.Value) == "" {
+			utils.Info.Println("No endpoint set")
+			return nil
+		}
+
+		utils.Info.Printf("Found endpoint: %s\n", utils.FromUnicode(wvp.Value))
+
+		if wvp.Flags == 0 {
+			utils.Info.Println("Webview is set as DISABLED")
+		} else {
+			utils.Info.Println("Webview is set as ENABLED")
+		}
+	}
+	return e
+}
+
+func deleteHomePage() error {
+	utils.Info.Println("Unsetting homepage. Remember to use 'add' if you want to reset this to the original value")
+	wvpObjectStream := mapi.WebViewPersistenceObjectStream{Version: 2, Type: 1, Flags: 0}
+	wvpObjectStream.Reserved = []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
+	wvpObjectStream.Value = utils.UniString("")
+	wvpObjectStream.Size = uint32(len(wvpObjectStream.Value))
+	prop := wvpObjectStream.Marshal()
+	folderid := mapi.AuthSession.Folderids[mapi.INBOX]
+	propertyTags := make([]mapi.TaggedPropertyValue, 1)
+	propertyTags[0] = mapi.TaggedPropertyValue{PropertyTag: mapi.PidTagFolderWebViewInfo, PropertyValue: append(utils.COUNT(len(prop)), prop...)}
+
+	if _, e := mapi.SetFolderProperties(folderid, propertyTags); e != nil {
+		return e
+	}
+	utils.Info.Println("Verifying...")
+	props := make([]mapi.PropertyTag, 1)
+	props[0] = mapi.PidTagFolderWebViewInfo
+	_, _, e := mapi.GetFolderProps(mapi.INBOX, props)
+	if e == nil {
+		utils.Info.Println("Webview reset")
+	}
+	return e
+}
+
+func searchFolders(c *cli.Context) error {
+
+	utils.Info.Println("Checking if a search folder exists")
+
+	searchFolderName := "searcher"
+
+	searchFolder, err := checkFolder(searchFolderName)
+	if err != nil {
+		return fmt.Errorf("Unable to create a search folder to use. %s", err)
+	}
+
+	utils.Info.Println("Setting search criteria")
+
+	folderids := mapi.AuthSession.Folderids[mapi.INBOX]
+
+	//create the search criteria restrictions
+
+	restrict := mapi.AndRestriction{RestrictType: 0x00}
+	restrict.RestrictCount = uint16(2)
+
+	var orRestrict mapi.OrRestriction
+
+	//restrict by subject or PidTagBody
+	restrictContent := mapi.ContentRestriction{RestrictType: 0x03}
+	restrictContent.FuzzyLevelLow = mapi.FLSUBSTRING
+	restrictContent.FuzzyLevelHigh = mapi.FLIGNORECASE
+	if c.Bool("subject") == true {
+		restrictContent.PropertyTag = mapi.PidTagSubject
+	} else {
+		restrictContent.PropertyTag = mapi.PidTagBody
+	}
+	restrictContent.PropertyValue = mapi.TaggedPropertyValue{PropertyTag: restrictContent.PropertyTag, PropertyValue: utils.UniString(c.String("term"))}
+
+	//restrict by PidTagBodyHTML if subject is not set
+	restrictHTML := mapi.ContentRestriction{RestrictType: 0x03}
+	restrictHTML.FuzzyLevelLow = mapi.FLSUBSTRING
+	restrictHTML.FuzzyLevelHigh = mapi.FLIGNORECASE
+	restrictHTML.PropertyTag = mapi.PidTagSubject
+	restrictHTML.PropertyValue = mapi.TaggedPropertyValue{PropertyTag: restrictContent.PropertyTag, PropertyValue: utils.UniString(c.String("term"))}
+
+	//Restrict to IPM.Note
+	restrictContent2 := mapi.ContentRestriction{RestrictType: 0x03}
+	restrictContent2.FuzzyLevelLow = mapi.FLPREFIX
+	restrictContent2.FuzzyLevelHigh = mapi.FLIGNORECASE
+	restrictContent2.PropertyTag = mapi.PidTagMessageClass
+	restrictContent2.PropertyValue = mapi.TaggedPropertyValue{PropertyTag: restrictContent2.PropertyTag, PropertyValue: utils.UniString("IPM.Note")}
+
+	if c.Bool("subject") == true {
+		restrict.Restricts = []mapi.Restriction{restrictContent, restrictContent2}
+	} else {
+		orRestrict = mapi.OrRestriction{RestrictType: 0x01}
+		orRestrict.RestrictCount = uint16(2)
+		orRestrict.Restricts = []mapi.Restriction{restrictContent, restrictHTML}
+		restrict.Restricts = []mapi.Restriction{orRestrict, restrictContent2}
+	}
+
+	if _, err := mapi.SetSearchCriteria(folderids, searchFolder, restrict); err != nil {
+		return fmt.Errorf("Unable to set search criteria: %s", err)
+	}
+
+	utils.Info.Println("Waiting for search folder to populate")
+	for x := 0; x < 1; x++ {
+		//	time.Sleep(time.Second * (time.Duration)(5))
+		res, _ := mapi.GetSearchCriteria(searchFolder)
+		//do check if search is complete
+		//fmt.Printf("Search Flag: %x\n", res.SearchFlags)
+		if res.SearchFlags == 0x00001000 {
+			break
+		}
+	}
+	mapi.GetFolderFromID(searchFolder, nil)
+
+	rows, err := mapi.GetContents(searchFolder)
+
+	if rows == nil {
+		utils.Info.Println("No results returned")
+		return nil
+	}
+
+	for k := 0; k < len(rows.RowData); k++ {
+		messageSubject := utils.FromUnicode(rows.RowData[k][0].ValueArray)
+		messageid := rows.RowData[k][1].ValueArray
+		columns := make([]mapi.PropertyTag, 1)
+		columns[0] = mapi.PidTagBody //Column for the Message Body containing our payload
+
+		buff, err := mapi.GetMessageFast(searchFolder, messageid, columns)
+		if err != nil {
+			continue
+		}
+		//convert buffer to rows
+
+		messagerows := mapi.DecodeBufferToRows(buff.TransferBuffer, columns)
+		payload := ""
+		if len(messagerows[0].ValueArray) > 4 {
+			payload = utils.FromUnicode(messagerows[0].ValueArray[:len(messagerows[0].ValueArray)-4])
+		}
+		utils.Info.Printf("Subject: %s\nBody: %s\n", messageSubject, payload)
+
+	}
+
+	return nil
+}
+
+func checkFolder(folderName string) ([]byte, error) {
+
+	var folderID []byte
+	propertyTags := make([]mapi.PropertyTag, 2)
+	propertyTags[0] = mapi.PidTagDisplayName
+	propertyTags[1] = mapi.PidTagSubfolders
+
+	rows, er := mapi.GetSubFolders(mapi.AuthSession.Folderids[mapi.INBOX])
+
+	if er == nil {
+		for k := 0; k < len(rows.RowData); k++ {
+			//convert string from unicode and then check if it is our target folder
+			if utils.FromUnicode(rows.RowData[k][0].ValueArray) == folderName {
+				folderID = rows.RowData[k][1].ValueArray
+				break
+			}
+		}
+	}
+
+	if len(folderID) == 0 {
+		utils.Info.Println("No 'ruler' search folder exists. Creating one to use")
+		_, err := mapi.CreateSearchFolder(folderName)
+		if err != nil {
+			return nil, err
+		}
+
+		time.Sleep(time.Second * (time.Duration)(5))
+
+		rows, er = mapi.GetSubFolders(mapi.AuthSession.Folderids[mapi.INBOX])
+		if er != nil || rows != nil {
+			for k := 0; k < len(rows.RowData); k++ {
+				//convert string from unicode and then check if it is our target folder
+				if utils.FromUnicode(rows.RowData[k][0].ValueArray) == folderName {
+					folderID = rows.RowData[k][1].ValueArray
+					break
+				}
+			}
+		} else {
+			return nil, er
+		}
+	}
+
+	return folderID, nil
+}
+
+func checkLastSent() error {
+	//This gets the "Sent Items" folder and grabs the last sent message.
+	//Using the ClientInfo tag, we check who if this message was sent from Outlook or OWA
+
+	//get the PropTag for ClientInfo
+	folderid := mapi.AuthSession.Folderids[mapi.SENT]
+	rows, err := mapi.GetContents(folderid)
+
+	if err != nil {
+		return err
+	}
+
+	if rows == nil {
+		return fmt.Errorf("Sent folder is empty")
+	}
+	//get most recent message
+	messageid := rows.RowData[0][1].ValueArray
+
+	//for some reason getting named property tags isn't working for me. Maybe I'm an idiot
+	//so lets simply grab all tags. And then filter until we find one that starts with Client=
+	buff, err := mapi.GetPropertyIdsList(folderid, messageid)
+
+	var props []byte
+	idcount := 0
+	for _, prop := range buff.PropertyTags {
+		props = append(props, utils.EncodeNum(prop.PropertyID)...)
+		idcount++
+	}
+
+	propNames, e := mapi.GetPropertyNamesFromID(folderid, messageid, props, idcount)
+
+	if e != nil {
+		return e
+	}
+
+	var getProps []mapi.PropertyTag
+	var clientPropID uint16
+	var clientIPPropID uint16
+	var serverIPPropID uint16
+
+	for i, p := range propNames.PropertyNames {
+		if p.Kind == 0x01 {
+			pName := utils.FromUnicode(p.Name)
+			if pName == "ClientInfo" {
+				getProps = append(getProps, buff.PropertyTags[i])
+				clientPropID = buff.PropertyTags[i].PropertyID
+			} else if pName == "x-ms-exchange-organization-originalclientipaddress" {
+				getProps = append(getProps, buff.PropertyTags[i])
+				clientIPPropID = buff.PropertyTags[i].PropertyID
+			} else if pName == "x-ms-exchange-organization-originalserveripaddress" {
+				getProps = append(getProps, buff.PropertyTags[i])
+				serverIPPropID = buff.PropertyTags[i].PropertyID
+			}
+		} else {
+			if buff.PropertyTags[i].PropertyID == 0x0039 {
+				getProps = append(getProps, buff.PropertyTags[i])
+			}
+		}
+
+	}
+	messageProps, err := mapi.GetMessage(folderid, messageid, getProps)
+	if err != nil {
+		return err
+	}
+
+	for _, row := range messageProps.GetData() {
+
+		id := utils.DecodeUint16(row.PropID)
+		switch id {
+		case 0x0039:
+			t := (utils.DecodeUint64(row.ValueArray) - 116444736000000000) * 100
+			x := time.Unix(0, int64(t))
+			utils.Info.Printf("Last Message sent at: %s \n", x.UTC())
+		case clientPropID:
+			clstring := utils.FromUnicode(row.ValueArray)
+			if clstring[6:9] == "OWA" {
+				utils.Warning.Printf("Last message sent from OWA! User-Agent: %s\n", clstring[10:])
+			} else {
+				utils.Info.Printf("Last message sent from: %s\n", clstring[6:])
+			}
+		case clientIPPropID:
+			utils.Info.Printf("Client IP Address: %s\n", utils.FromUnicode(row.ValueArray))
+		case serverIPPropID:
+			utils.Info.Printf("Exchange Server IP: %s\n", utils.FromUnicode(row.ValueArray))
+		}
+	}
+	return nil
+}
+
 func main() {
 
 	app := cli.NewApp()
 
 	app.Name = "ruler"
 	app.Usage = "A tool to abuse Exchange Services"
-	app.Version = "2.1.7"
+	app.Version = "2.1.9"
 	app.Author = "Etienne Stalmans <etienne@sensepost.com>, @_staaldraad"
 	app.Description = `         _
  _ __ _   _| | ___ _ __
@@ -930,13 +1312,25 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 			Name:    "check",
 			Aliases: []string{"c"},
 			Usage:   "Check if the credentials work and we can interact with the mailbox",
+			Flags: []cli.Flag{
+				cli.BoolFlag{
+					Name:  "last",
+					Usage: "Returns information about the last client used to send an email",
+				},
+			},
 			Action: func(c *cli.Context) error {
 				err := connect(c)
 				if err != nil {
 					utils.Error.Println(err)
 					cli.OsExiter(1)
 				}
+
 				utils.Info.Println("Looks like we are good to go!")
+
+				if c.Bool("last") == true {
+					err = checkLastSent()
+				}
+				exit(err)
 				return nil
 			},
 		},
@@ -979,6 +1373,30 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 				cli.BoolFlag{
 					Name:  "verbose,v",
 					Usage: "Display each attempt",
+				},
+			},
+			Action: func(c *cli.Context) error {
+				err := discover(c)
+				if err != nil {
+					utils.Error.Println(err)
+					cli.OsExiter(1)
+				}
+				return nil
+			},
+		},
+		{
+			Name:    "autodiscover",
+			Aliases: []string{"u"},
+			Usage:   "Just run the autodiscover service to find the authentication point",
+			Flags: []cli.Flag{
+				cli.BoolFlag{
+					Name:  "dump,d",
+					Usage: "Dump the autodiscover record to a text file (this needs credentails)",
+				},
+				cli.StringFlag{
+					Name:  "out,o",
+					Value: "",
+					Usage: "The file to write to",
 				},
 			},
 			Action: func(c *cli.Context) error {
@@ -1228,6 +1646,101 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 						return nil
 					},
 				},
+			},
+		},
+		{
+			Name:  "homepage",
+			Usage: "Interact with the homepage function.",
+			Subcommands: []cli.Command{
+				{
+					Name:  "add",
+					Usage: "creates a new homepage. ",
+					Flags: []cli.Flag{
+						cli.StringFlag{
+							Name:  "url,u",
+							Value: "",
+							Usage: "The location where the page is stored",
+						},
+					},
+					Action: func(c *cli.Context) error {
+						if c.String("url") == "" {
+							return cli.NewExitError("You need to supply a valid URL. Use --url 'http://location/x.html'", 1)
+						}
+						//parse URL to ensure valid
+						if _, e := url.Parse(c.String("url")); e != nil {
+							return cli.NewExitError("You need to supply a valid URL. Use --url 'http://location/x.html'", 1)
+						}
+
+						err := connect(c)
+						if err != nil {
+							utils.Error.Println(err)
+							cli.OsExiter(1)
+						}
+						createHomePage(c)
+						exit(err)
+						return nil
+					},
+				},
+				{
+					Name:  "delete",
+					Usage: "delete an existing homepage and resets to using folder view",
+					Flags: []cli.Flag{},
+					Action: func(c *cli.Context) error {
+
+						err := connect(c)
+						if err != nil {
+							utils.Error.Println(err)
+							cli.OsExiter(1)
+						}
+						err = deleteHomePage()
+						exit(err)
+						return nil
+					},
+				},
+				{
+					Name:  "display",
+					Usage: "display current homepage setting",
+
+					Action: func(c *cli.Context) error {
+
+						err := connect(c)
+						if err != nil {
+							utils.Error.Println(err)
+							cli.OsExiter(1)
+						}
+						err = displayHomePage()
+						exit(err)
+						return nil
+					},
+				},
+			},
+		},
+		{
+			Name:  "search",
+			Usage: "Search for items",
+			Flags: []cli.Flag{
+				cli.BoolFlag{
+					Name:  "subject",
+					Usage: "Search the subject",
+				},
+				cli.StringFlag{
+					Name:  "term",
+					Value: "",
+					Usage: "The term to search for",
+				},
+			},
+			Action: func(c *cli.Context) error {
+				if c.String("term") == "" {
+					return cli.NewExitError("You need to supply a valid search term. Use --term ", 1)
+				}
+				err := connect(c)
+				if err != nil {
+					utils.Error.Println(err)
+					cli.OsExiter(1)
+				}
+				err = searchFolders(c)
+				exit(err)
+				return nil
 			},
 		},
 	}

@@ -248,6 +248,7 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, string, er
 	if SessionConfig.Basic == false {
 		//check if this is a first request or a redirect
 		//create an ntml http client
+
 		client = http.Client{
 			Transport: &httpntlm.NtlmTransport{
 				Domain:    SessionConfig.Domain,
@@ -256,9 +257,11 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, string, er
 				NTHash:    SessionConfig.NTHash,
 				Insecure:  SessionConfig.Insecure,
 				CookieJar: SessionConfig.CookieJar,
+				Proxy:     SessionConfig.Proxy,
 			},
 			Jar: SessionConfig.CookieJar,
 		}
+
 	}
 
 	var autodiscoverURL string
@@ -330,10 +333,11 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, string, er
 
 	defer resp.Body.Close()
 
-  if resp.StatusCode == 401 || resp.StatusCode == 403 {
-    return nil, autodiscoverURL, fmt.Errorf("Access denied. Check your credentials")
-  }
 
+	if resp.StatusCode == 401 || resp.StatusCode == 403 {
+		return nil, autodiscoverURL, fmt.Errorf("Access denied. Check your credentials")
+	}
+  
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return nil, "", err

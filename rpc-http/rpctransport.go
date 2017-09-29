@@ -239,7 +239,23 @@ func RPCOpenOut(URL string, readySignal chan<- bool, errOccurred chan<- error) (
 			r.Unmarshal(b)
 			r.Body = b
 			mutex.Lock() //lets be safe, lock the responses array before adding a new value to it
-			responses = append(responses, r)
+
+			//if the PFCFlag is set to 0 or 2, this packet is fragment of the previous packet
+			//take the PDU of this packet and append it to our previous packet
+			if r.Header.PFCFlags == uint8(2) || r.Header.PFCFlags == uint8(0) {
+				for k, v := range responses {
+					if v.Header.CallID == r.Header.CallID {
+						responses[k].PDU = append(v.PDU, r.PDU...)
+						if r.Header.PFCFlags == uint8(2) {
+							responses[k].Header.PFCFlags = 3
+						}
+						break
+					}
+				}
+			} else {
+				responses = append(responses, r)
+			}
+
 			mutex.Unlock()
 		}
 	}
@@ -450,7 +466,7 @@ func RPCWriteN(MAPI []byte, auxlen uint32, opnum byte) {
 	req := RTSRequest{}
 	req.Header = header
 
-	req.MaxRecv = 0x0000
+	req.MaxRecv = 0x1000
 	req.Command = []byte{0x00, 0x00, opnum, 0x00} //command 10
 
 	pdu := PDUData{}
@@ -461,7 +477,7 @@ func RPCWriteN(MAPI []byte, auxlen uint32, opnum byte) {
 	pdu.Data = MAPI
 
 	pdu.CbAuxIn = uint32(auxlen)
-	pdu.AuxOut = 0x000001008
+	pdu.AuxOut = 0x000001000
 
 	req.PduData = pdu.Marshal() //MAPI
 	req.MaxFrag = uint16(len(pdu.Marshal()) + 24)
@@ -540,7 +556,8 @@ func RPCRead(callID int) (RPCResponse, error) {
 		stop := false
 		for stop != true {
 			for k, v := range responses {
-				if v.Header.CallID == uint32(callID) {
+				//if the PFCFlags is set to 1, this is a fragmented packet. wait to update it first
+				if v.Header.CallID == uint32(callID) && v.Header.PFCFlags != 1 {
 					responses = append(responses[:k], responses[k+1:]...)
 					stop = true
 					c <- v
