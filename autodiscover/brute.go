@@ -294,19 +294,20 @@ func connect(autodiscoverURL, user, password string, basic, insecure bool) Resul
 		if m, _ := regexp.Match("illegal base64", []byte(err.Error())); m == true {
 			client = http.Client{Transport: InsecureRedirectsO365{User: user, Pass: password, Insecure: insecure}}
 			resp, err = client.Do(req)
-		} else {
-			if resp != nil {
-				resp.Body.Close()
+			if err != nil {
+				result.Error = err
+				return result
 			}
+		} else {
 
 			result.Error = err
 			return result
 		}
 
 	}
-
-	defer resp.Body.Close()
-
+	if resp != nil {
+		defer resp.Body.Close()
+	}
 	result.Status = resp.StatusCode
 	return result
 }
