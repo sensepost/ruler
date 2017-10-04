@@ -140,25 +140,26 @@ func brute(c *cli.Context) error {
 		return fmt.Errorf("Either --passwords or --userpass required")
 
 	}
-	if c.GlobalString("domain") == "" && c.GlobalString("url") == "" {
+	if c.GlobalString("domain") == "" && c.GlobalString("url") == "" && c.GlobalBool("o365") == false {
 		return fmt.Errorf("Either --domain or --url required")
 	}
 
 	utils.Info.Println("Starting bruteforce")
-	userpass := c.String("userpass")
+	domain := c.GlobalString("domain")
+	if c.GlobalString("url") != "" {
+		domain = c.GlobalString("url")
+	}
+	if c.GlobalBool("o365") == true {
+		domain = "https://autodiscover-s.outlook.com/autodiscover/autodiscover.xml"
+	}
+	if e := autodiscover.Init(domain, c.String("users"), c.String("passwords"), c.String("userpass"), c.GlobalBool("basic"), c.GlobalBool("insecure"), c.Bool("stop"), c.Bool("verbose"), c.Int("attempts"), c.Int("delay"), c.Int("threads")); e != nil {
+		return e
+	}
 
-	if userpass == "" {
-		if c.GlobalString("domain") != "" {
-			autodiscover.BruteForce(c.GlobalString("domain"), c.String("users"), c.String("passwords"), c.GlobalBool("basic"), c.GlobalBool("insecure"), c.Bool("stop"), c.Bool("verbose"), c.Int("attempts"), c.Int("delay"))
-		} else {
-			autodiscover.BruteForce(c.GlobalString("url"), c.String("users"), c.String("passwords"), c.GlobalBool("basic"), c.GlobalBool("insecure"), c.Bool("stop"), c.Bool("verbose"), c.Int("attempts"), c.Int("delay"))
-		}
+	if c.String("userpass") == "" {
+		autodiscover.BruteForce()
 	} else {
-		if c.GlobalString("domain") != "" {
-			autodiscover.UserPassBruteForce(c.GlobalString("domain"), c.String("userpass"), c.GlobalBool("basic"), c.GlobalBool("insecure"), c.Bool("stop"), c.Bool("verbose"), c.Int("attempts"), c.Int("delay"))
-		} else {
-			autodiscover.UserPassBruteForce(c.GlobalString("url"), c.String("userpass"), c.GlobalBool("basic"), c.GlobalBool("insecure"), c.Bool("stop"), c.Bool("verbose"), c.Int("attempts"), c.Int("delay"))
-		}
+		autodiscover.UserPassBruteForce()
 	}
 	return nil
 }
@@ -1409,6 +1410,11 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 					Name:  "attempts,a",
 					Value: 3,
 					Usage: "Number of attempts before delay",
+				},
+				cli.IntFlag{
+					Name:  "threads,t",
+					Value: 3,
+					Usage: "Number of concurrent attempts. Reduce if mutex issues appear.",
 				},
 				cli.IntFlag{
 					Name:  "delay,d",

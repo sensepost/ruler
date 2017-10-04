@@ -272,26 +272,24 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, string, er
 	} else {
 		//create the autodiscover url
 		if autodiscoverStep == 0 {
-			autodiscoverURL = createAutodiscover(domain, true)
-			if autodiscoverURL == "" {
-				autodiscoverStep++
-			}
-		}
-		if autodiscoverStep == 1 {
 			autodiscoverURL = createAutodiscover(fmt.Sprintf("autodiscover.%s", domain), true)
 			if autodiscoverURL == "" {
 				autodiscoverStep++
 			}
 		}
-		if autodiscoverStep == 2 {
+		if autodiscoverStep == 1 {
 			autodiscoverURL = createAutodiscover(fmt.Sprintf("autodiscover.%s", domain), false)
+			if autodiscoverURL == "" {
+				autodiscoverStep++
+			}
+		}
+		if autodiscoverStep == 2 {
+			autodiscoverURL = createAutodiscover(domain, true)
 			if autodiscoverURL == "" {
 				return nil, "", fmt.Errorf("Invalid domain or no autodiscover DNS record found")
 			}
 		}
 	}
-
-	utils.Trace.Printf("Autodiscover step %d - URL: %s\n", autodiscoverStep, autodiscoverURL)
 
 	req, err := http.NewRequest("POST", autodiscoverURL, strings.NewReader(r))
 	req.Header.Add("Content-Type", "text/xml")
