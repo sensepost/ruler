@@ -83,6 +83,8 @@ func autodiscoverDomain(domain string) string {
 		}
 		return ""
 	}
+
+	//check if we got prompted for authentication, this is normally an indicator of a valid endpoint
 	if resp.StatusCode == 401 || resp.StatusCode == 403 {
 		return autodiscoverURL
 	}

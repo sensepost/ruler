@@ -1723,14 +1723,14 @@ func EmptyFolder(folderid []byte) (*RopEmptyFolderResponse, error) {
 }
 
 //DeleteFolder is used to delete  a folder
-func DeleteFolder(folderid []byte) (*RopDeleteFolderResponse, error) {
+func DeleteFolder(parentFolder, folderid []byte) (*RopDeleteFolderResponse, error) {
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
 
 	getFolder := RopOpenFolderRequest{RopID: 0x02, LogonID: AuthSession.LogonID}
 	getFolder.InputHandleIndex = 0x00
 	getFolder.OutputHandleIndex = 0x01
-	getFolder.FolderID = folderid
+	getFolder.FolderID = parentFolder
 	getFolder.OpenModeFlags = 0x00
 
 	fullReq := getFolder.Marshal()

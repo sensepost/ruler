@@ -797,10 +797,15 @@ func createHomePage(c *cli.Context) error {
 	props := make([]mapi.PropertyTag, 1)
 	props[0] = mapi.PidTagFolderWebViewInfo
 	_, _, e := mapi.GetFolderProps(mapi.INBOX, props)
-	if e == nil {
-		utils.Info.Println("New endpoint set")
+	if e != nil {
+		utils.Warning.Println("New endpoint not set")
+		return e
 	}
-	return e
+	utils.Info.Println("New endpoint set")
+	utils.Info.Println("Trying to force trigger")
+	mapi.CreateFolder("xyz", true)
+
+	return nil
 }
 
 func displayHomePage() error {
@@ -849,7 +854,26 @@ func deleteHomePage() error {
 	if e == nil {
 		utils.Info.Println("Webview reset")
 	}
-	return e
+
+	utils.Info.Println("Cleaning up and removing trigger")
+
+	rows, er := mapi.GetSubFolders(mapi.AuthSession.Folderids[mapi.INBOX])
+	var FolderID []byte
+	if er == nil {
+		for k := 0; k < len(rows.RowData); k++ {
+			//utils.Info.Println(fromUnicode(rows.RowData[k][0].ValueArray))
+			//convert string from unicode and then check if it is our target folder
+			if utils.FromUnicode(rows.RowData[k][0].ValueArray) == "xyz" {
+				FolderID = rows.RowData[k][1].ValueArray
+				break
+			}
+		}
+	}
+	if _, er := mapi.DeleteFolder(folderid, FolderID); er != nil {
+		utils.Warning.Println("Failed to delete trigger. Should be fine though.")
+	}
+
+	return nil
 }
 
 func searchFolders(c *cli.Context) error {
