@@ -15,6 +15,7 @@ type BindRequest struct {
 	AuxiliaryBuffer     []byte
 }
 
+//BindRequestRPC the bind request used for abk
 type BindRequestRPC struct {
 	Flags      uint32
 	State      []byte //optional 36 bytes

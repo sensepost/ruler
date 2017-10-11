@@ -248,6 +248,7 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, string, er
 	if SessionConfig.Basic == false {
 		//check if this is a first request or a redirect
 		//create an ntml http client
+
 		client = http.Client{
 			Transport: &httpntlm.NtlmTransport{
 				Domain:    SessionConfig.Domain,
@@ -256,9 +257,11 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, string, er
 				NTHash:    SessionConfig.NTHash,
 				Insecure:  SessionConfig.Insecure,
 				CookieJar: SessionConfig.CookieJar,
+				Proxy:     SessionConfig.Proxy,
 			},
 			Jar: SessionConfig.CookieJar,
 		}
+
 	}
 
 	var autodiscoverURL string
@@ -269,26 +272,24 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, string, er
 	} else {
 		//create the autodiscover url
 		if autodiscoverStep == 0 {
-			autodiscoverURL = createAutodiscover(domain, true)
-			if autodiscoverURL == "" {
-				autodiscoverStep++
-			}
-		}
-		if autodiscoverStep == 1 {
 			autodiscoverURL = createAutodiscover(fmt.Sprintf("autodiscover.%s", domain), true)
 			if autodiscoverURL == "" {
 				autodiscoverStep++
 			}
 		}
-		if autodiscoverStep == 2 {
+		if autodiscoverStep == 1 {
 			autodiscoverURL = createAutodiscover(fmt.Sprintf("autodiscover.%s", domain), false)
+			if autodiscoverURL == "" {
+				autodiscoverStep++
+			}
+		}
+		if autodiscoverStep == 2 {
+			autodiscoverURL = createAutodiscover(domain, true)
 			if autodiscoverURL == "" {
 				return nil, "", fmt.Errorf("Invalid domain or no autodiscover DNS record found")
 			}
 		}
 	}
-
-	utils.Trace.Printf("Autodiscover step %d - URL: %s\n", autodiscoverStep, autodiscoverURL)
 
 	req, err := http.NewRequest("POST", autodiscoverURL, strings.NewReader(r))
 	req.Header.Add("Content-Type", "text/xml")
@@ -330,9 +331,11 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, string, er
 
 	defer resp.Body.Close()
 
-  if resp.StatusCode == 401 || resp.StatusCode == 403 {
-    return nil, autodiscoverURL, fmt.Errorf("Access denied. Check your credentials")
-  }
+
+	if resp.StatusCode == 401 || resp.StatusCode == 403 {
+		return nil, autodiscoverURL, fmt.Errorf("Access denied. Check your credentials")
+	}
+
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {

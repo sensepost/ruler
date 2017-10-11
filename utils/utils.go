@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"hash/fnv"
 	"io/ioutil"
 	"math/rand"
 	"os"
 	"reflect"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v2"
@@ -95,6 +97,14 @@ func UTF16BE(str string) []byte {
 
 	bt = append(byteNum.Bytes(), bt...)
 	return bt
+}
+
+//DecodeInt64 decode 8 byte value into int64
+func DecodeInt64(num []byte) int64 {
+	var number int64
+	bf := bytes.NewReader(num)
+	binary.Read(bf, binary.BigEndian, &number)
+	return number
 }
 
 //DecodeUint64 decode 4 byte value into uint32
@@ -309,4 +319,36 @@ func ReadYml(yml string) (YamlConfig, error) {
 		return YamlConfig{}, err
 	}
 	return config, err
+}
+
+//GUIDToByteArray mimics Guid.ToByteArray Method () from .NET
+// The example displays the following output:
+//    Guid: 35918bc9-196d-40ea-9779-889d79b753f0
+//    C9 8B 91 35 6D 19 EA 40 97 79 88 9D 79 B7 53 F0
+func GUIDToByteArray(guid string) (array []byte, err error) {
+	//get rid of {} if passed in
+	guid = strings.Replace(guid, "{", "", 1)
+	guid = strings.Replace(guid, "}", "", 1)
+
+	sp := strings.Split(guid, "-") //chunk
+	//we should have 5 chunks
+	if len(sp) != 5 {
+		return nil, fmt.Errorf("Invalid GUID")
+	}
+	//add first 4 chunks to array in reverse order
+	for i := 0; i < 4; i++ {
+		chunk, e := hex.DecodeString(sp[i])
+		if e != nil {
+			return nil, e
+		}
+		for k := len(chunk) - 1; k >= 0; k-- {
+			array = append(array, chunk[k])
+		}
+	}
+	chunk, e := hex.DecodeString(sp[4])
+	if e != nil {
+		return nil, e
+	}
+	array = append(array, chunk...)
+	return array, nil
 }
