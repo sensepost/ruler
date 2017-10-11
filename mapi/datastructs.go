@@ -1904,7 +1904,11 @@ func (queryRows *RopQueryRowsResponse) Unmarshal(resp []byte, properties []Prope
 				l, _ := utils.ReadUint16(pos, resp)
 				//read the whole RuleAction into the valueArray, this means
 				pos -= 2 //reset the position
-				trow.ValueArray, pos = utils.ReadBytes(pos, int(l+4), resp)
+				if pos+int(l+4) > len(resp) {
+					break
+				} else {
+					trow.ValueArray, pos = utils.ReadBytes(pos, int(l+4), resp)
+				}
 				rows[k] = append(rows[k], trow)
 			}
 		}
