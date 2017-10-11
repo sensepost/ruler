@@ -512,10 +512,10 @@ func connect(c *cli.Context) error {
 
 func printRules() error {
 	//rules, er := mapi.DisplayRules()
-	cols := make([]mapi.PropertyTag, 3)
+	cols := make([]mapi.PropertyTag, 2)
 	cols[0] = mapi.PidTagRuleName
 	cols[1] = mapi.PidTagRuleID
-	cols[2] = mapi.PidTagRuleActions
+	//cols[2] = mapi.PidTagRuleActions
 
 	rows, er := mapi.FetchRules(cols)
 
@@ -533,28 +533,30 @@ func printRules() error {
 			}
 		}
 		maxwidth -= 10
-		fmstr1 := fmt.Sprintf("%%-%ds | %%-16s | %%-s\n", maxwidth)
-		fmstr2 := fmt.Sprintf("%%-%ds | %%x | %%s\n", maxwidth)
-		utils.Info.Printf(fmstr1, "Rule Name", "Rule ID", "Client-Side")
-		utils.Info.Printf("%s|%s|%s\n", (strings.Repeat("-", maxwidth+1)), strings.Repeat("-", 18), strings.Repeat("-", 11))
+		fmstr1 := fmt.Sprintf("%%-%ds | %%-16s \n", maxwidth)
+		fmstr2 := fmt.Sprintf("%%-%ds | %%x \n", maxwidth)
+		utils.Info.Printf(fmstr1, "Rule Name", "Rule ID")
+		utils.Info.Printf("%s|%s\n", (strings.Repeat("-", maxwidth+1)), strings.Repeat("-", 18))
 		for k := 0; k < int(rows.RowCount); k++ {
 			clientSide := false
 			clientApp := ""
-			rd := mapi.RuleAction{}
-			rd.Unmarshal(rows.RowData[k][2].ValueArray)
-			if rd.ActionType == 0x05 {
-				for _, a := range rd.ActionData.Conditions {
-					if a.Tag[1] == 0x49 {
-						clientSide = true
-						clientApp = string(utils.FromUnicode(a.Value))
-						break
+			/*
+				rd := mapi.RuleAction{}
+				rd.Unmarshal(rows.RowData[k][2].ValueArray)
+				if rd.ActionType == 0x05 {
+					for _, a := range rd.ActionData.Conditions {
+						if a.Tag[1] == 0x49 {
+							clientSide = true
+							clientApp = string(utils.FromUnicode(a.Value))
+							break
+						}
 					}
 				}
-			}
+			*/
 			if clientSide == true {
 				utils.Info.Printf(fmstr2, string(utils.FromUnicode(rows.RowData[k][0].ValueArray)), rows.RowData[k][1].ValueArray, fmt.Sprintf("* %s", clientApp))
 			} else {
-				utils.Info.Printf(fmstr2, string(utils.FromUnicode(rows.RowData[k][0].ValueArray)), rows.RowData[k][1].ValueArray, "")
+				utils.Info.Printf(fmstr2, string(utils.FromUnicode(rows.RowData[k][0].ValueArray)), rows.RowData[k][1].ValueArray)
 			}
 		}
 		utils.Info.Println()
