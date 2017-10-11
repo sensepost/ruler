@@ -9,7 +9,6 @@ import (
 	"regexp"
 	"strings"
 	"time"
-  "crypto/tls"
 
 	"github.com/sensepost/ruler/http-ntlm"
 	"github.com/sensepost/ruler/utils"
