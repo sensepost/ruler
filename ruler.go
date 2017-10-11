@@ -37,11 +37,10 @@ func exit(err error) {
 	os.Exit(exitcode)
 }
 
-
 //function to perform an autodiscover
 func discover(c *cli.Context) error {
 
-  if c.GlobalString("domain") == "" {
+	if c.GlobalString("domain") == "" {
 		return fmt.Errorf("Required param --domain is missing")
 	}
 
@@ -1387,7 +1386,7 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 				return nil
 			},
 		},
-    {
+		{
 			Name:    "autodiscover",
 			Aliases: []string{"u"},
 			Usage:   "Just run the autodiscover service to find the authentication point",

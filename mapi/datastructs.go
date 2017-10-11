@@ -2200,6 +2200,10 @@ func (recipientRow *RecipientRow) Unmarshal(resp []byte) (int, error) {
 //Unmarshal func
 func (ruleAction *RuleAction) Unmarshal(resp []byte) (int, error) {
 	pos := 0
+	if len(resp) == 0 {
+		ruleAction.ActionType = 0x00
+		return pos, nil
+	}
 	ruleAction.Actions, pos = utils.ReadUint16(pos, resp)
 	ruleAction.ActionLen, pos = utils.ReadUint16(pos, resp)
 	ruleAction.ActionType, pos = utils.ReadByte(pos, resp)
