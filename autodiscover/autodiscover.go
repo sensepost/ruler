@@ -270,6 +270,7 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, string, er
 	if m, _ := regexp.Match("http[s]?://", []byte(domain)); m == true {
 		autodiscoverURL = domain
 	} else {
+
 		//create the autodiscover url
 		if autodiscoverStep == 0 {
 			autodiscoverURL = createAutodiscover(fmt.Sprintf("autodiscover.%s", domain), true)
@@ -290,6 +291,7 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, string, er
 			}
 		}
 	}
+	utils.Trace.Printf("Autodiscover step %d - URL: %s\n", autodiscoverStep, autodiscoverURL)
 
 	req, err := http.NewRequest("POST", autodiscoverURL, strings.NewReader(r))
 	req.Header.Add("Content-Type", "text/xml")
@@ -331,11 +333,9 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, string, er
 
 	defer resp.Body.Close()
 
-
 	if resp.StatusCode == 401 || resp.StatusCode == 403 {
 		return nil, autodiscoverURL, fmt.Errorf("Access denied. Check your credentials")
 	}
-
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {

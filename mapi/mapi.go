@@ -94,7 +94,7 @@ func Init(config *utils.Session, lid, URL, ABKURL string, transport int) {
 	AuthSession.Transport = transport
 	AuthSession.ClientSet = false
 	AuthSession.ReqCounter = 1
-	AuthSession.LogonID = 0x06
+	AuthSession.LogonID = 0x0C
 	AuthSession.Authenticated = false
 
 	//default to Encrypt + Sign for NTLM
@@ -171,6 +171,7 @@ func mapiRequestHTTP(URL, mapiType string, body []byte) ([]byte, error) {
 	req, err := http.NewRequest("POST", URL, bytes.NewReader(body))
 	addMapiHeaders(req, mapiType)
 	req.SetBasicAuth(AuthSession.Email, AuthSession.Pass)
+
 	req.Close = true
 	//request the auth url
 	resp, err := client.Do(req)
