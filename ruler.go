@@ -1464,7 +1464,7 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 				cli.IntFlag{
 					Name:  "delay,d",
 					Value: 5,
-					Usage: "Number of seconds to delay between attempts",
+					Usage: "Number of minutes to delay between attempts",
 				},
 				cli.BoolFlag{
 					Name:  "stop,s",
