@@ -1899,16 +1899,24 @@ func (queryRows *RopQueryRowsResponse) Unmarshal(resp []byte, properties []Prope
 				//Unmarshal the ruleaction and then add it into the ValueArray again. messy
 				//or grab the action len, which is the second uint16 and use this to determine how much to read
 				//read ahead to get the length
-				_, pos = utils.ReadUint16(pos, resp)
+				noofActions := uint16(0)
+				noofActions, pos = utils.ReadUint16(pos, resp) //NoOfActions - this is 2bytes for normal rules, 4 for extended
+				utils.Info.Println("NoOfActttions: ", noofActions)
 				//read length but don't advance the buffer
-				l, _ := utils.ReadUint16(pos, resp)
-				//read the whole RuleAction into the valueArray, this means
-				pos -= 2 //reset the position
-				if pos+int(l+4) > len(resp) {
-					break
-				} else {
-					trow.ValueArray, pos = utils.ReadBytes(pos, int(l+4), resp)
+				trow.ValueArray = []byte{}
+				for x := 0; x < int(noofActions); x++ {
+					l, _ := utils.ReadUint16(pos, resp) //length is part of the RuleAction in an ActionBlock
+					//read the whole RuleAction into the valueArray, this means
+					pos -= 2 //reset the position
+					if pos+int(l+4) > len(resp) {
+						break
+					} else {
+						tk := []byte{}
+						tk, pos = utils.ReadBytes(pos, int(l+4), resp)
+						trow.ValueArray = append(trow.ValueArray, tk...)
+					}
 				}
+				//if NoOfActions > 1 read the rest of the actions
 				rows[k] = append(rows[k], trow)
 			}
 		}
