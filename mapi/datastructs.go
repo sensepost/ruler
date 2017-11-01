@@ -1901,7 +1901,7 @@ func (queryRows *RopQueryRowsResponse) Unmarshal(resp []byte, properties []Prope
 				//read ahead to get the length
 				noofActions := uint16(0)
 				noofActions, pos = utils.ReadUint16(pos, resp) //NoOfActions - this is 2bytes for normal rules, 4 for extended
-				utils.Info.Println("NoOfActttions: ", noofActions)
+
 				//read length but don't advance the buffer
 				trow.ValueArray = []byte{}
 				for x := 0; x < int(noofActions); x++ {
