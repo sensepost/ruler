@@ -31,7 +31,7 @@ type Session struct {
 	Insecure      bool
 	Verbose       bool
 	Admin         bool
-  DiscoURL      *url.URL
+	DiscoURL      *url.URL
 	LID           string
 	URL           *url.URL
 	ABKURL        *url.URL //URL for the AddressBook Provider
@@ -186,4 +186,11 @@ func (autodiscresp *AutodiscoverResp) Unmarshal(resp []byte) error {
 		//return nil
 	}
 	return nil
+}
+
+//Unmarshal returns the XML response as golang structs
+func (autodiscresp *AutodiscoverResp) Marshal() (resp []byte, err error) {
+	//var autodiscresp *AutodiscoverResp
+	resp, err = xml.Marshal(autodiscresp)
+	return resp, err
 }

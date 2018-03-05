@@ -48,6 +48,10 @@ func discover(c *cli.Context) error {
 		return fmt.Errorf("--dump requires credentials to be set")
 	}
 
+	if c.Bool("dump") == false && (c.GlobalString("username") != "" || c.GlobalString("email") != "") {
+		return fmt.Errorf("Credentials supplied, but no --dump. No credentials required for URL discovery. Dumping requires credentials to be set")
+	}
+
 	if c.Bool("dump") == true && c.String("out") == "" {
 		return fmt.Errorf("--dump requires an out file to be set with --out /path/to/file.txt")
 	}
@@ -68,6 +72,7 @@ func discover(c *cli.Context) error {
 			return fmt.Errorf("Invalid hash provided. Hex decode failed")
 		}
 	}
+
 	//setup our autodiscover service
 	config.Domain = c.GlobalString("domain")
 	if c.GlobalString("username") == "" {
@@ -95,7 +100,14 @@ func discover(c *cli.Context) error {
 
 	autodiscover.SessionConfig = &config
 
-	_, domain, err := autodiscover.Autodiscover(url)
+	//var resp *utils.AutodiscoverResp
+	var domain string
+
+	if c.Bool("mapi") == true {
+		_, domain, err = autodiscover.MAPIDiscover(url)
+	} else {
+		_, domain, err = autodiscover.Autodiscover(url)
+	}
 
 	if domain == "" && err != nil {
 		return err
@@ -1121,7 +1133,7 @@ func main() {
 
 	app.Name = "ruler"
 	app.Usage = "A tool to abuse Exchange Services"
-	app.Version = "2.1.9"
+	app.Version = "2.1.10"
 	app.Author = "Etienne Stalmans <etienne@sensepost.com>, @_staaldraad"
 	app.Description = `         _
  _ __ _   _| | ___ _ __
@@ -1394,27 +1406,12 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 			Usage:   "Just run the autodiscover service to find the authentication point",
 			Flags: []cli.Flag{
 				cli.BoolFlag{
-					Name:  "verbose,v",
-					Usage: "Display each attempt",
-				},
-			},
-			Action: func(c *cli.Context) error {
-				err := discover(c)
-				if err != nil {
-					utils.Error.Println(err)
-					cli.OsExiter(1)
-				}
-				return nil
-			},
-		},
-		{
-			Name:    "autodiscover",
-			Aliases: []string{"u"},
-			Usage:   "Just run the autodiscover service to find the authentication point",
-			Flags: []cli.Flag{
-				cli.BoolFlag{
 					Name:  "dump,d",
 					Usage: "Dump the autodiscover record to a text file (this needs credentails)",
+				},
+				cli.BoolFlag{
+					Name:  "mapi,m",
+					Usage: "Dump the MAPI version of the autodiscover record",
 				},
 				cli.StringFlag{
 					Name:  "out,o",
@@ -1464,7 +1461,7 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 				cli.IntFlag{
 					Name:  "delay,d",
 					Value: 5,
-					Usage: "Number of seconds to delay between attempts",
+					Usage: "Number of minutes to delay between attempts",
 				},
 				cli.BoolFlag{
 					Name:  "stop,s",
