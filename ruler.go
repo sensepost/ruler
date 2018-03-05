@@ -1133,7 +1133,7 @@ func main() {
 
 	app.Name = "ruler"
 	app.Usage = "A tool to abuse Exchange Services"
-	app.Version = "2.1.9"
+	app.Version = "2.1.10"
 	app.Author = "Etienne Stalmans <etienne@sensepost.com>, @_staaldraad"
 	app.Description = `         _
  _ __ _   _| | ___ _ __
@@ -1461,7 +1461,7 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 				cli.IntFlag{
 					Name:  "delay,d",
 					Value: 5,
-					Usage: "Number of seconds to delay between attempts",
+					Usage: "Number of minutes to delay between attempts",
 				},
 				cli.BoolFlag{
 					Name:  "stop,s",
