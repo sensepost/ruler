@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"net/url"
 
 	"github.com/sensepost/ruler/http-ntlm"
 	"github.com/sensepost/ruler/utils"
@@ -35,7 +36,7 @@ var basic = false
 var verbose = false
 var insecure = false
 var stopSuccess = false
-
+var proxyURL string
 
 func autodiscoverDomain(domain string) string {
 	var autodiscoverURL string
@@ -76,6 +77,17 @@ func autodiscoverDomain(domain string) string {
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
+
+	if proxyURL != "" {
+		proxy, err := url.Parse(proxyURL)
+		if err != nil {
+			return ""
+		}
+		tr = &http.Transport{Proxy: http.ProxyURL(proxy),
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}
+	}
+
 	client := http.Client{Transport: tr}
 
 	resp, err := client.Do(req)
@@ -100,7 +112,7 @@ func autodiscoverDomain(domain string) string {
 }
 
 //Init function to setup the brute-force session
-func Init(domain, usersFile, passwordsFile, userpassFile string, b, i, s, v bool, c, d, t int) error {
+func Init(domain, usersFile, passwordsFile, userpassFile, pURL string, b, i, s, v bool, c, d, t int) error {
 	autodiscoverURL = autodiscoverDomain(domain)
 
 	if autodiscoverURL == "" {
@@ -114,6 +126,7 @@ func Init(domain, usersFile, passwordsFile, userpassFile string, b, i, s, v bool
 	delay = d
 	consc = c
 	concurrency = t
+	proxyURL = pURL
 
 	if autodiscoverURL == "https://autodiscover-s.outlook.com/autodiscover/autodiscover.xml" {
 		basic = true
@@ -274,6 +287,17 @@ func connect(autodiscoverURL, user, password string, basic, insecure bool) Resul
 
 	tr := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 		DisableKeepAlives: true, //should fix mutex issues
+	}
+	if proxyURL != "" {
+		proxy, err := url.Parse(proxyURL)
+		if err != nil {
+			result.Error = err
+			return result 
+		}
+		tr = &http.Transport{Proxy: http.ProxyURL(proxy),
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			DisableKeepAlives: true,
+		}
 	}
 	client := http.Client{Transport: tr}
 
