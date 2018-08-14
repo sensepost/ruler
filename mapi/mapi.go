@@ -33,7 +33,10 @@ var AuthSession *utils.Session
 func ExtractMapiURL(resp *utils.AutodiscoverResp) string {
 	for _, v := range resp.Response.Account.Protocol {
 		if v.TypeAttr == "mapiHttp" {
-			return v.MailStore.ExternalUrl
+			if v.MailStore.ExternalUrl != "" {
+				return v.MailStore.ExternalUrl
+			}
+			return v.MailStore.InternalUrl
 		}
 	}
 	return ""
@@ -43,7 +46,10 @@ func ExtractMapiURL(resp *utils.AutodiscoverResp) string {
 func ExtractRPCURL(resp *utils.AutodiscoverResp) string {
 	for _, v := range resp.Response.Account.Protocol {
 		if v.TypeAttr == "rpcHttp" {
-			return v.MailStore.ExternalUrl
+			if v.MailStore.ExternalUrl != "" {
+				return v.MailStore.ExternalUrl
+			}
+			return v.MailStore.InternalUrl
 		}
 	}
 	return ""

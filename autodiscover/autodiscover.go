@@ -344,7 +344,9 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, string, er
 
 	//check if we got a 200 response
 	if resp.StatusCode == 200 {
-		SessionConfig.Basic = useBasic
+        if useBasic == true { // don't overwrite --basic as pointed out here: https://github.com/sensepost/ruler/issues/67
+		    SessionConfig.Basic = useBasic
+        }
 		err := autodiscoverResp.Unmarshal(body)
 		if err != nil {
 			if SessionConfig.Verbose == true {
