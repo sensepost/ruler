@@ -629,3 +629,5 @@ var PidTagVoiceMessageSenderName = PropertyTag{PtypString, 0x6803}
 var PidTagRoamingDatatypes = PropertyTag{PtypInteger32, 0x7C06}
 var PidTagRoamingDictionary = PropertyTag{PtypBinary, 0x7C07}
 var PidTagRoamingXmlStream = PropertyTag{PtypBinary, 0x7C08}
+
+var PidTagSearchAllIndexedProps = PropertyTag{PtypString, 0x0EAF}

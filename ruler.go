@@ -918,9 +918,13 @@ func searchFolders(c *cli.Context) error {
 	restrictContent.FuzzyLevelHigh = mapi.FLIGNORECASE
 	if c.Bool("subject") == true {
 		restrictContent.PropertyTag = mapi.PidTagSubject
-	} else {
+	} else if c.Bool("body") {
 		restrictContent.PropertyTag = mapi.PidTagBody
+	}else {
+		restrictContent.PropertyTag = mapi.PidTagSearchAllIndexedProps
 	}
+
+	
 	restrictContent.PropertyValue = mapi.TaggedPropertyValue{PropertyTag: restrictContent.PropertyTag, PropertyValue: utils.UniString(c.String("term"))}
 
 	//restrict by PidTagBodyHTML if subject is not set
@@ -1746,7 +1750,11 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 			Flags: []cli.Flag{
 				cli.BoolFlag{
 					Name:  "subject",
-					Usage: "Search the subject",
+					Usage: "Search only in the subject",
+				},
+				cli.BoolFlag{
+					Name:  "body",
+					Usage: "Search only in the message body",
 				},
 				cli.StringFlag{
 					Name:  "term",
