@@ -621,3 +621,13 @@ var PidTagPurportedSenderDomain = PropertyTag{PtypString, 0x4083}
 var PidTagBodyContentLocation = PropertyTag{PtypString, 0x1014}
 
 var PidTagClientInfo = PropertyTag{PtypString, 0x80C7}
+
+var PidTagVoiceMessageAttachmentOrder = PropertyTag{PtypString, 0x6805}
+var PidTagVoiceMessageDuration = PropertyTag{PtypInteger32, 0x6801}
+var PidTagVoiceMessageSenderName = PropertyTag{PtypString, 0x6803}
+
+var PidTagRoamingDatatypes = PropertyTag{PtypInteger32, 0x7C06}
+var PidTagRoamingDictionary = PropertyTag{PtypBinary, 0x7C07}
+var PidTagRoamingXmlStream = PropertyTag{PtypBinary, 0x7C08}
+
+var PidTagSearchAllIndexedProps = PropertyTag{PtypString, 0x0EAF}

@@ -164,7 +164,7 @@ func brute(c *cli.Context) error {
 	if c.GlobalBool("o365") == true {
 		domain = "https://autodiscover-s.outlook.com/autodiscover/autodiscover.xml"
 	}
-	if e := autodiscover.Init(domain, c.String("users"), c.String("passwords"), c.String("userpass"),c.String("proxy"), c.GlobalBool("basic"), c.GlobalBool("insecure"), c.Bool("stop"), c.Bool("verbose"), c.Int("attempts"), c.Int("delay"), c.Int("threads")); e != nil {
+	if e := autodiscover.Init(domain, c.String("users"), c.String("passwords"), c.String("userpass"), c.String("proxy"), c.GlobalBool("basic"), c.GlobalBool("insecure"), c.Bool("stop"), c.Bool("verbose"), c.Int("attempts"), c.Int("delay"), c.Int("threads")); e != nil {
 		return e
 	}
 
@@ -910,7 +910,7 @@ func searchFolders(c *cli.Context) error {
 	restrict := mapi.AndRestriction{RestrictType: 0x00}
 	restrict.RestrictCount = uint16(2)
 
-	var orRestrict mapi.OrRestriction
+	//var orRestrict mapi.OrRestriction
 
 	//restrict by subject or PidTagBody
 	restrictContent := mapi.ContentRestriction{RestrictType: 0x03}
@@ -921,31 +921,27 @@ func searchFolders(c *cli.Context) error {
 	} else {
 		restrictContent.PropertyTag = mapi.PidTagBody
 	}
+
 	restrictContent.PropertyValue = mapi.TaggedPropertyValue{PropertyTag: restrictContent.PropertyTag, PropertyValue: utils.UniString(c.String("term"))}
 
-	//restrict by PidTagBodyHTML if subject is not set
-	restrictHTML := mapi.ContentRestriction{RestrictType: 0x03}
-	restrictHTML.FuzzyLevelLow = mapi.FLSUBSTRING
-	restrictHTML.FuzzyLevelHigh = mapi.FLIGNORECASE
-	restrictHTML.PropertyTag = mapi.PidTagSubject
-	restrictHTML.PropertyValue = mapi.TaggedPropertyValue{PropertyTag: restrictContent.PropertyTag, PropertyValue: utils.UniString(c.String("term"))}
-
 	//Restrict to IPM.Note
-	restrictContent2 := mapi.ContentRestriction{RestrictType: 0x03}
-	restrictContent2.FuzzyLevelLow = mapi.FLPREFIX
-	restrictContent2.FuzzyLevelHigh = mapi.FLIGNORECASE
-	restrictContent2.PropertyTag = mapi.PidTagMessageClass
-	restrictContent2.PropertyValue = mapi.TaggedPropertyValue{PropertyTag: restrictContent2.PropertyTag, PropertyValue: utils.UniString("IPM.Note")}
+	restrictMsgClass := mapi.ContentRestriction{RestrictType: 0x03}
+	restrictMsgClass.FuzzyLevelLow = mapi.FLPREFIX
+	restrictMsgClass.FuzzyLevelHigh = mapi.FLIGNORECASE
+	restrictMsgClass.PropertyTag = mapi.PidTagMessageClass
+	restrictMsgClass.PropertyValue = mapi.TaggedPropertyValue{PropertyTag: restrictMsgClass.PropertyTag, PropertyValue: utils.UniString("IPM.Note")}
 
-	if c.Bool("subject") == true {
-		restrict.Restricts = []mapi.Restriction{restrictContent, restrictContent2}
-	} else {
-		orRestrict = mapi.OrRestriction{RestrictType: 0x01}
-		orRestrict.RestrictCount = uint16(2)
-		orRestrict.Restricts = []mapi.Restriction{restrictContent, restrictHTML}
-		restrict.Restricts = []mapi.Restriction{orRestrict, restrictContent2}
-	}
-
+	restrict.Restricts = []mapi.Restriction{restrictContent, restrictMsgClass}
+	/*
+		if c.Bool("subject") == true {
+			restrict.Restricts = []mapi.Restriction{restrictContent, restrictMsgClass}
+		} else {
+			orRestrict = mapi.OrRestriction{RestrictType: 0x01}
+			orRestrict.RestrictCount = uint16(2)
+			orRestrict.Restricts = []mapi.Restriction{restrictContent, restrictHTML}
+			restrict.Restricts = []mapi.Restriction{orRestrict, restrictMsgClass}
+		}
+	*/
 	if _, err := mapi.SetSearchCriteria(folderids, searchFolder, restrict); err != nil {
 		return fmt.Errorf("Unable to set search criteria: %s", err)
 	}
@@ -1133,7 +1129,7 @@ func main() {
 
 	app.Name = "ruler"
 	app.Usage = "A tool to abuse Exchange Services"
-	app.Version = "2.2.0"
+	app.Version = "2.2.1"
 	app.Author = "Etienne Stalmans <etienne@sensepost.com>, @_staaldraad"
 	app.Description = `         _
  _ __ _   _| | ___ _ __
@@ -1746,7 +1742,7 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 			Flags: []cli.Flag{
 				cli.BoolFlag{
 					Name:  "subject",
-					Usage: "Search the subject",
+					Usage: "Search only in the subject",
 				},
 				cli.StringFlag{
 					Name:  "term",

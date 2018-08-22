@@ -99,6 +99,14 @@ func UTF16BE(str string) []byte {
 	return bt
 }
 
+//ToBinary takes a string and hexlyfies it
+func ToBinary(str string) []byte {
+	src := []byte(str)
+	//binary requires length
+	dst := append(COUNT(len(src)), src...)
+	return dst
+}
+
 //DecodeInt64 decode 8 byte value into int64
 func DecodeInt64(num []byte) int64 {
 	var number int64
