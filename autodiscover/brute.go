@@ -114,12 +114,6 @@ func autodiscoverDomain(domain string) string {
 
 //Init function to setup the brute-force session
 func Init(domain, usersFile, passwordsFile, userpassFile, pURL string, b, i, s, v bool, c, d, t int) error {
-	autodiscoverURL = autodiscoverDomain(domain)
-
-	if autodiscoverURL == "" {
-		return fmt.Errorf("No autodiscover end-point found")
-	}
-
 	stopSuccess = s
 	insecure = i
 	basic = b
@@ -128,6 +122,13 @@ func Init(domain, usersFile, passwordsFile, userpassFile, pURL string, b, i, s, 
 	consc = c
 	concurrency = t
 	proxyURL = pURL
+
+	autodiscoverURL = autodiscoverDomain(domain)
+
+	if autodiscoverURL == "" {
+		return fmt.Errorf("No autodiscover end-point found")
+	}
+
 
 	if autodiscoverURL == "https://autodiscover-s.outlook.com/autodiscover/autodiscover.xml" {
 		basic = true

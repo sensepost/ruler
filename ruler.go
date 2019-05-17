@@ -164,7 +164,7 @@ func brute(c *cli.Context) error {
 	if c.GlobalBool("o365") == true {
 		domain = "https://autodiscover-s.outlook.com/autodiscover/autodiscover.xml"
 	}
-	if e := autodiscover.Init(domain, c.String("users"), c.String("passwords"), c.String("userpass"), c.String("proxy"), c.GlobalBool("basic"), c.GlobalBool("insecure"), c.Bool("stop"), c.Bool("verbose"), c.Int("attempts"), c.Int("delay"), c.Int("threads")); e != nil {
+	if e := autodiscover.Init(domain, c.String("users"), c.String("passwords"), c.String("userpass"), c.GlobalString("proxy"), c.GlobalBool("basic"), c.GlobalBool("insecure"), c.Bool("stop"), c.Bool("verbose"), c.Int("attempts"), c.Int("delay"), c.Int("threads")); e != nil {
 		return e
 	}
 
