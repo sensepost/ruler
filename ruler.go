@@ -639,9 +639,12 @@ func abkDump(c *cli.Context) error {
 	columns := make([]mapi.PropertyTag, 2)
 	columns[0] = mapi.PidTagDisplayName
 	columns[1] = mapi.PidTagSMTPAddress
-	rows, _ := mapi.QueryRows(100, []byte{}, columns) //pull first 255 entries
+	rows, err := mapi.QueryRows(100, []byte{}, columns) //pull first 255 entries
+    if err != nil {
+        return fmt.Errorf("Couldn't read address book: %s", err)
+    }
 
-	for k := 0; k < int(rows.RowCount); k++ {
+    for k := 0; k < int(rows.RowCount); k++ {
 		if len(rows.RowData[k].AddressBookPropertyValue) == 2 {
 			disp := utils.FromUnicode(rows.RowData[k].AddressBookPropertyValue[0].Value)
 			email := utils.FromUnicode(rows.RowData[k].AddressBookPropertyValue[1].Value)
