@@ -37,6 +37,7 @@ var verbose = false
 var insecure = false
 var stopSuccess = false
 var proxyURL string
+var userAgent string
 var user_as_pass = true
 
 func autodiscoverDomain(domain string) string {
@@ -74,6 +75,7 @@ func autodiscoverDomain(domain string) string {
 
 	req, err := http.NewRequest("GET", autodiscoverURL, nil)
 	req.Header.Add("Content-Type", "text/xml")
+	req.Header.Add("User-Agent", userAgent)
 
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
@@ -113,7 +115,7 @@ func autodiscoverDomain(domain string) string {
 }
 
 //Init function to setup the brute-force session
-func Init(domain, usersFile, passwordsFile, userpassFile, pURL string, b, i, s, v bool, c, d, t int) error {
+func Init(domain, usersFile, passwordsFile, userpassFile, pURL, u string, b, i, s, v bool, c, d, t int) error {
 	stopSuccess = s
 	insecure = i
 	basic = b
@@ -122,6 +124,7 @@ func Init(domain, usersFile, passwordsFile, userpassFile, pURL string, b, i, s, 
 	consc = c
 	concurrency = t
 	proxyURL = pURL
+	userAgent = u
 
 	autodiscoverURL = autodiscoverDomain(domain)
 
@@ -332,7 +335,7 @@ func connect(autodiscoverURL, user, password string, basic, insecure bool) Resul
 		proxy, err := url.Parse(proxyURL)
 		if err != nil {
 			result.Error = err
-			return result 
+			return result
 		}
 		tr = &http.Transport{Proxy: http.ProxyURL(proxy),
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
@@ -357,6 +360,7 @@ func connect(autodiscoverURL, user, password string, basic, insecure bool) Resul
 
 	req, err := http.NewRequest("GET", autodiscoverURL, nil)
 	req.Header.Add("Content-Type", "text/xml")
+	req.Header.Add("User-Agent", userAgent)
 
 	//if basic authi is required, set auth header
 	if basic == true {

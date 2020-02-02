@@ -176,6 +176,7 @@ func mapiRequestHTTP(URL, mapiType string, body []byte) ([]byte, error) {
 
 	req, err := http.NewRequest("POST", URL, bytes.NewReader(body))
 	addMapiHeaders(req, mapiType)
+	req.Header.Add("User-Agent", AuthSession.UserAgent)
 	req.SetBasicAuth(AuthSession.Email, AuthSession.Pass)
 
 	req.Close = true

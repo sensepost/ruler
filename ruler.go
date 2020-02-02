@@ -92,6 +92,7 @@ func discover(c *cli.Context) error {
 	config.RPCEncrypt = !c.GlobalBool("noencrypt")
 	config.CookieJar, _ = cookiejar.New(nil)
 	config.Proxy = c.GlobalString("proxy")
+	config.UserAgent = c.GlobalString("useragent")
 	url := c.GlobalString("url")
 
 	if url == "" {
@@ -164,7 +165,7 @@ func brute(c *cli.Context) error {
 	if c.GlobalBool("o365") == true {
 		domain = "https://autodiscover-s.outlook.com/autodiscover/autodiscover.xml"
 	}
-	if e := autodiscover.Init(domain, c.String("users"), c.String("passwords"), c.String("userpass"), c.GlobalString("proxy"), c.GlobalBool("basic"), c.GlobalBool("insecure"), c.Bool("stop"), c.Bool("verbose"), c.Int("attempts"), c.Int("delay"), c.Int("threads")); e != nil {
+	if e := autodiscover.Init(domain, c.String("users"), c.String("passwords"), c.String("userpass"), c.GlobalString("proxy"), c.GlobalString("useragent"), c.GlobalBool("basic"), c.GlobalBool("insecure"), c.Bool("stop"), c.Bool("verbose"), c.Int("attempts"), c.Int("delay"), c.Int("threads")); e != nil {
 		return e
 	}
 
@@ -313,6 +314,7 @@ func connect(c *cli.Context) error {
 	config.RPCEncrypt = !c.GlobalBool("noencrypt")
 	config.CookieJar, _ = cookiejar.New(nil)
 	config.Proxy = c.GlobalString("proxy")
+	config.UserAgent = c.GlobalString("useragent")
 	//add supplied cookie to the cookie jar
 	if c.GlobalString("cookie") != "" {
 		//split into cookies and then into name : value
@@ -1188,6 +1190,11 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 			Name:  "proxy",
 			Value: "",
 			Usage: "If you need to use an upstream proxy. Works with https://user:pass@ip:port or https://ip:port",
+		},
+		cli.StringFlag{
+			Name:  "useragent",
+			Value: "ruler",
+			Usage: "Custom User-Agent string",
 		},
 		cli.BoolFlag{
 			Name:  "insecure,k",

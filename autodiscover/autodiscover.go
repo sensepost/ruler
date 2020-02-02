@@ -295,7 +295,7 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, string, er
 
 	req, err := http.NewRequest("POST", autodiscoverURL, strings.NewReader(r))
 	req.Header.Add("Content-Type", "text/xml")
-	req.Header.Add("User-Agent", "ruler")
+	req.Header.Add("User-Agent", SessionConfig.UserAgent)
 
 	if mapi == true {
 		req.Header.Add("X-MapiHttpCapability", "1")            //we want MAPI info
@@ -453,7 +453,7 @@ func (l InsecureRedirectsO365) RoundTrip(req *http.Request) (resp *http.Response
 
 		req, err = http.NewRequest("POST", URL.String(), strings.NewReader(r))
 		req.Header.Add("Content-Type", "text/xml")
-		req.Header.Add("User-Agent", "ruler")
+		req.Header.Add("User-Agent", SessionConfig.UserAgent)
 
 		req.Header.Add("X-MapiHttpCapability", "1") //we want MAPI info
 		req.Header.Add("X-AnchorMailbox", l.User)   //we want MAPI info

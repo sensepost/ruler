@@ -9,15 +9,16 @@ import (
 
 //Config containing the session variables
 type Config struct {
-	Domain   string
-	User     string
-	Pass     string
-	Email    string
-	Basic    bool
-	Insecure bool
-	Verbose  bool
-	Admin    bool
-	Proxy    string
+	Domain    string
+	User      string
+	Pass      string
+	Email     string
+	Basic     bool
+	Insecure  bool
+	Verbose   bool
+	Admin     bool
+	Proxy     string
+	UserAgent string
 }
 
 //Session stores authentication cookies ect
@@ -27,6 +28,7 @@ type Session struct {
 	Email         string
 	Domain        string
 	Proxy         string
+	UserAgent     string
 	Basic         bool
 	Insecure      bool
 	Verbose       bool
