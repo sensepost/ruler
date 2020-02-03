@@ -117,18 +117,40 @@ func GetRPCHTTP(email, autoURLPtr string, resp *utils.AutodiscoverResp) (*utils.
 	url := ""
 	user := ""
 	ntlmAuth := false
+	firstExHTTPResp := true
 
 	for _, v := range resp.Response.Account.Protocol {
-		if v.Type == "EXPR" {
-			if v.SSL == "Off" {
-				url = "http://" + v.Server
-			} else {
-				url = "https://" + v.Server
-			}
-			if v.AuthPackage == "Ntlm" { //set the encryption on if the server specifies NTLM auth
-				ntlmAuth = true
+		// use the first available Outlook provider and skip the others
+		if url == "" {
+			// ExHTTP (Exchange 2013+)
+			// the first ExHTTP answer is for internal Outlook clients
+			// and the second one is for external Outlook clients
+			// EXPR (Exchange 2007/2010) is for external Outlook clients
+			if v.Type == "EXHTTP" || v.Type == "EXPR" {
+				if v.Type == "EXHTTP" {
+					// skip the first answer
+					if firstExHTTPResp == true {
+						firstExHTTPResp = false
+						continue
+					}
+				}
+				if SessionConfig.Verbose == true {
+					utils.Trace.Printf("%s provider was selected", v.Type)
+				}
+				if v.SSL == "Off" {
+					url = "http://" + v.Server
+				} else {
+					url = "https://" + v.Server
+				}
+				if v.AuthPackage == "Ntlm" || v.AuthPackage == "Negotiate" { //set the encryption on if the server specifies NTLM or Negotiate auth
+					if SessionConfig.Verbose == true {
+						utils.Trace.Printf("Authentication scheme is %s", v.AuthPackage)
+					}
+					ntlmAuth = true
+				}
 			}
 		}
+		// EXCH (Exchange 2007/2010) is for internal Outlook clients
 		if v.Type == "EXCH" {
 			user = v.Server
 		}
