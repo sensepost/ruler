@@ -237,7 +237,7 @@ func DeleteForm(suffix string, folderid []byte) ([]byte, error) {
 					ruleid := v.RuleID
 					err = mapi.ExecuteMailRuleDelete(ruleid)
 					if err != nil {
-						utils.Error.Printf("Failed to delete rule")
+						utils.Error.Println("Failed to delete rule")
 						return nil, err
 					}
 					utils.Info.Println("Rule deleted successfully")

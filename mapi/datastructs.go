@@ -73,7 +73,7 @@ type ExecuteResponse struct {
 	AuxilliaryBuf     []byte
 }
 
-//ConnectResponse strcut
+//ConnectResponse struct
 type ConnectResponse struct {
 	StatusCode           uint32 //if 0x00000 --> failure and we only have AuzilliaryBufferSize and AuxilliaryBuffer
 	ErrorCode            uint32
@@ -826,7 +826,7 @@ type RopReadStreamRequest struct {
 	MaximumByteCount uint32
 }
 
-//RopRestrictRequest strcut
+//RopRestrictRequest struct
 type RopRestrictRequest struct {
 	RopID            uint8 //0x14
 	LogonID          uint8
@@ -836,7 +836,7 @@ type RopRestrictRequest struct {
 	RestrictionData  []byte
 }
 
-//RopRestrictResponse strcut
+//RopRestrictResponse struct
 type RopRestrictResponse struct {
 	RopID            uint8 //0x14
 	InputHandleIndex uint8
@@ -929,7 +929,7 @@ type RopModifyRulesResponse struct {
 	ReturnValue      uint32
 }
 
-//RopGetRulesTableResponse strcut
+//RopGetRulesTableResponse struct
 type RopGetRulesTableResponse struct {
 	RopID             uint8
 	OutputHandleIndex uint8

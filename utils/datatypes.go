@@ -20,7 +20,7 @@ type Config struct {
 	Proxy    string
 }
 
-//Session stores authentication cookies ect
+//Session stores authentication cookies etc
 type Session struct {
 	User          string
 	Pass          string

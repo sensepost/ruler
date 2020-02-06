@@ -480,8 +480,6 @@ func (response *RPCResponse) Unmarshal(raw []byte) (int, error) {
 				return pos, nil
 			}
 			response.SecTrailer, pos = utils.ReadBytes(pos, int(response.Header.AuthLen), raw)
-		} else {
-
 		}
 	}
 	return pos, nil

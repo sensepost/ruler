@@ -341,7 +341,7 @@ func readResponse(headers http.Header, body []byte) ([]byte, error) {
 	return body[start+4:], nil
 }
 
-//Authenticate is used to create the MAPI session, get's session cookie ect
+//Authenticate is used to create the MAPI session, get's session cookie etc
 func Authenticate() (*RopLogonResponse, error) {
 	if AuthSession.Transport == RPC {
 		return AuthenticateRPC()
@@ -385,7 +385,7 @@ func AuthenticateRPC() (*RopLogonResponse, error) {
 		return nil, &TransportError{fmt.Errorf("An error occurred setting up RPC. %s", err)}
 	}
 
-	utils.Trace.Println("User DN: ", string(connRequest.UserDN))
+	utils.Trace.Printf("User DN: %s", string(connRequest.UserDN))
 	utils.Trace.Println("Got Context, Doing ROPLogin")
 
 	AuthSession.UserDN = append([]byte(AuthSession.LID), []byte{0x00}...)
@@ -418,7 +418,7 @@ func AuthenticateHTTP() (*RopLogonResponse, error) {
 	connResponse.Unmarshal(responseBody)
 
 	if connResponse.StatusCode == 0 {
-		utils.Trace.Println("User DN: ", string(connRequest.UserDN))
+		utils.Trace.Printf("User DN: %s", string(connRequest.UserDN))
 		utils.Trace.Println("Got Context, Doing ROPLogin")
 
 		AuthSession.UserDN = connRequest.UserDN
@@ -2037,7 +2037,7 @@ func FastTransferFetchStep(handles []byte) ([]byte, error) {
 	pprops := RopFastTransferSourceGetBufferResponse{}
 	rops := []RopResponse{&pprops}
 	bufPtr, e := UnmarshalRops(execResponse.RopBuffer.Body, rops)
-	utils.Trace.Printf("Large transfer in progress. Status: %d ", pprops.TransferStatus)
+	utils.Trace.Printf("Large transfer in progress. Status: %d", pprops.TransferStatus)
 
 	if pprops.TransferStatus == 0x0001 {
 		buff, err := FastTransferFetchStep(execResponse.RopBuffer.Body[bufPtr:])
