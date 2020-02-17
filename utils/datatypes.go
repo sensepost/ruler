@@ -21,7 +21,7 @@ type Config struct {
 	UserAgent string
 }
 
-//Session stores authentication cookies ect
+//Session stores authentication cookies etc
 type Session struct {
 	User          string
 	Pass          string
