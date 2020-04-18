@@ -25,7 +25,6 @@ var callcounter int
 var responses = make([]RPCResponse, 0)
 var httpResponses = make([][]byte, 0)
 var rpcntlmsession ntlm.ClientSession
-var fragged bool
 var mutex = &sync.Mutex{}
 var writemutex = &sync.Mutex{}
 
@@ -591,71 +590,44 @@ func RPCRead(callID int) (RPCResponse, error) {
 
 //SplitData is used to scan through the input stream and split data into individual responses
 func SplitData(data []byte, atEOF bool) (advance int, token []byte, err error) {
-	if atEOF && len(data) == 0 {
-		return 0, nil, nil
-	}
-
 	//check if HTTP response
 	if string(data[0:4]) == "HTTP" {
 		for k := range data {
 			if bytes.Equal(data[k:k+4], []byte{0x0d, 0x0a, 0x0d, 0x0a}) {
-				if bytes.Equal(data[k+4:k+5], []byte{0x31}) { //check if there is fragmentation
-					fragged = true
-				}
 				return k + 4, data[0:k], nil //return the HTTP packet
 			}
 		}
 	}
 
-	if fragged {
-		dbuf := []byte{}
-		offset := 10 //the default offset for the location of the fragment length
-		//find next 0x0d,0x0a
-		for k := 0; k < len(data); k++ {
-			if bytes.Equal(data[k:k+3], []byte{0x31, 0x0d, 0x0a}) { //this is a part of a fragment
-				dbuf = []byte{0x05} //start the new fragment
-				offset = 9          //adjust the offset, because the rest of the packet is in another fragment
-				k += 4              //jump ahead to the next fragment
-				continue
-			} else if bytes.Equal(data[k:k+2], []byte{0x0d, 0x0a}) { //we have a fragment
-				if len(data) < 12 { //check that there is enough data
-					return 0, nil, nil
-				}
-				//get the length of the fragment
-				fragLen := int(utils.DecodeUint16(data[k+offset : k+offset+2]))
-				if offset == 9 { //we already have the start of the fragment, so adjust the length by 1
-					fragLen--
-				}
+	// get rpc packet
+	// strip trailing {0x0d, 0x0a} bytes
+	end := bytes.LastIndex(data, []byte{0x0d, 0x0a})
+	if end != -1 {
+		data = data[0:end]
 
-				if len(data) < fragLen { //check that there is enough data to read
-					return 0, nil, nil //not enough data, restart the scan
-				}
-
-				dbuf = append(dbuf, data[k+2:k+fragLen+2]...) //get the fragment data
-				if offset == 9 {                              //multiple fragments, so adjust the offset
-					return k + len(dbuf) + 2, dbuf, nil
-				}
-				return k + len(dbuf) + 4, dbuf, nil //return the rpcpacket and the new scan position
-			}
+		start := bytes.LastIndex(data, []byte{0x0d, 0x0a})
+		if start != -1 {
+			start += 2
+			data = data[start:len(data)]
 		}
-	} else if !fragged && !atEOF { //there is no fragmentation
+
 		if len(data) < 12 { //check that we have enough data
 			return 0, nil, nil
 		}
-		fragLen := int(utils.DecodeUint16(data[8:10])) //get the length of the RPC packet
 
-		if len(data) < fragLen { //check that we have enough data
+		//get the length of the RPC packet
+		if len(data) < int(utils.DecodeUint16(data[8:10])) { //check that we have enough data
 			return 0, nil, nil
 		}
-		dbuf := []byte{}
-		dbuf = append(dbuf, data[:fragLen]...) //read rpc packet
 
-		return len(dbuf), dbuf, nil //return current position and rpc packet
+		return start + len(data) + 2, data, nil //return current position and rpc packet
 	}
 
-	if atEOF {
-		return len(data), data, nil
+	// some data may remain
+	if !atEOF {
+		return 0, nil, nil
 	}
 
-	return 0, nil, nil
+	// EOF
+	return 0, nil, bufio.ErrFinalToken
 }
