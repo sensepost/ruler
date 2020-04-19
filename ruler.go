@@ -450,12 +450,18 @@ func connect(c *cli.Context) error {
 				exit(err)
 			}
 		}
+
 		mapiURL = mapi.ExtractMapiURL(resp)
 		abkURL = mapi.ExtractMapiAddressBookURL(resp)
 		userDN = resp.Response.User.LegacyDN
 
 		if mapiURL == "" { //try RPC
-			resp, rawAutodiscover, config.RPCURL, config.RPCMailbox, config.RPCNtlm, err = autodiscover.GetRPCHTTP(config.Email, url, resp)
+			if rawAutodiscover != "" {
+			    resp, _, config.RPCURL, config.RPCMailbox, config.RPCNtlm, err = autodiscover.GetRPCHTTP(config.Email, url, resp)
+			} else {
+			    resp, rawAutodiscover, config.RPCURL, config.RPCMailbox, config.RPCNtlm, err = autodiscover.GetRPCHTTP(config.Email, url, resp)
+			}
+
 			if err != nil {
 				exit(err)
 			}
