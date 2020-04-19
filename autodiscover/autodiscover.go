@@ -24,7 +24,7 @@ var SessionConfig *utils.Session
 var autodiscoverStep int
 var secondaryEmail string //a secondary email to use, edge case seen in office365
 var Transport http.Transport
-var useBasic = false
+var basicAuth = false
 
 //the xml for the autodiscover service
 const autodiscoverXML = `<?xml version="1.0" encoding="utf-8"?><Autodiscover xmlns="http://schemas.microsoft.com/exchange/autodiscover/outlook/requestschema/2006">
@@ -134,25 +134,37 @@ func GetRPCHTTP(email, autoURLPtr string, resp *utils.AutodiscoverResp) (*utils.
 						continue
 					}
 				}
+
 				if SessionConfig.Verbose == true {
 					utils.Trace.Printf("%s provider was selected", v.Type)
 				}
+
 				if v.SSL == "Off" {
 					url = "http://" + v.Server
 				} else {
 					url = "https://" + v.Server
 				}
-				if v.AuthPackage == "Ntlm" || v.AuthPackage == "Negotiate" { //set the encryption on if the server specifies NTLM or Negotiate auth
-					if SessionConfig.Verbose == true {
-						utils.Trace.Printf("Authentication scheme is %s", v.AuthPackage)
+
+				if SessionConfig.Basic == true {
+					basicAuth = true
+				} else {
+					if v.AuthPackage == "Ntlm" || v.AuthPackage == "Negotiate" { //set the encryption on if the server specifies NTLM or Negotiate auth
+						ntlmAuth = true
 					}
-					ntlmAuth = true
 				}
 			}
 		}
 		// EXCH (Exchange 2007/2010) is for internal Outlook clients
 		if v.Type == "EXCH" {
 			user = v.Server
+		}
+	}
+
+	if SessionConfig.Verbose == true {
+		if ntlmAuth == true {
+			utils.Trace.Printf("Authentication scheme is NTLM")
+		} else {
+			utils.Trace.Printf("Authentication scheme is Basic")
 		}
 	}
 
@@ -342,7 +354,7 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, string, er
 			if err != nil {
 				return nil, "", err
 			}
-			useBasic = true
+			basicAuth = true
 		} else {
 			if autodiscoverStep < 2 {
 				autodiscoverStep++
@@ -366,9 +378,9 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, string, er
 
 	//check if we got a 200 response
 	if resp.StatusCode == 200 {
-        if useBasic == true { // don't overwrite --basic as pointed out here: https://github.com/sensepost/ruler/issues/67
-		    SessionConfig.Basic = useBasic
-        }
+		if basicAuth == true { // don't overwrite --basic as pointed out here: https://github.com/sensepost/ruler/issues/67
+			SessionConfig.Basic = basicAuth
+		}
 		err := autodiscoverResp.Unmarshal(body)
 		if err != nil {
 			if SessionConfig.Verbose == true {
