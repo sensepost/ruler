@@ -300,11 +300,9 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, string, er
 
 	var autodiscoverURL string
 	//check if this is just a domain, a redirect or a url (starts with http[s]://)
-
 	if m, _ := regexp.Match("http[s]?://", []byte(domain)); m == true {
 		autodiscoverURL = domain
 	} else {
-
 		//create the autodiscover url
 		if autodiscoverStep == 0 {
 			autodiscoverURL = createAutodiscover(fmt.Sprintf("autodiscover.%s", domain), true)
@@ -336,13 +334,14 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, string, er
 		req.Header.Add("X-AnchorMailbox", SessionConfig.Email) //we want MAPI info
 	}
 
-	//if we have been redirected to outlook, change the auth header to basic auth
-	if SessionConfig.Basic == false {
-		req.SetBasicAuth(SessionConfig.Email, SessionConfig.Pass)
-		SessionConfig.BasicAuth = req.Header.Get("WWW-Authenticate")
-	} else {
-		req.SetBasicAuth(SessionConfig.User, SessionConfig.Pass)
+	if SessionConfig.Basic == true {
+		if SessionConfig.Domain != "" {
+			req.SetBasicAuth(SessionConfig.Domain + "\\" + SessionConfig.User, SessionConfig.Pass)
+		} else {
+			req.SetBasicAuth(SessionConfig.Email, SessionConfig.Pass)
+		}
 	}
+
 	//request the autodiscover url
 	resp, err := client.Do(req)
 

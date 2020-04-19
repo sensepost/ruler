@@ -173,18 +173,23 @@ func sendMapiDisconnect(mapi DisconnectRequest) ([]byte, error) {
 //After the authentication is complete, we can simply use the mapiRequest
 //and the session cookies.
 func mapiRequestHTTP(URL, mapiType string, body []byte) ([]byte, error) {
-
 	req, err := http.NewRequest("POST", URL, bytes.NewReader(body))
 	addMapiHeaders(req, mapiType)
 	req.Header.Add("User-Agent", AuthSession.UserAgent)
-	req.SetBasicAuth(AuthSession.Email, AuthSession.Pass)
-
+	if AuthSession.Basic == true {
+		if AuthSession.Domain != "" {
+			req.SetBasicAuth(AuthSession.Domain + "\\" + AuthSession.User, AuthSession.Pass)
+		} else {
+			req.SetBasicAuth(AuthSession.Email, AuthSession.Pass)
+		}
+	}
 	req.Close = true
+
 	//request the auth url
 	resp, err := client.Do(req)
 
 	if err != nil {
-		//check if this error was because of ntml auth when basic auth was expected.
+		//check if this error was because of ntlm auth when basic auth was expected.
 		if m, _ := regexp.Match("illegal base64", []byte(err.Error())); m == true {
 			resp, err = client.Do(req)
 		} else {
