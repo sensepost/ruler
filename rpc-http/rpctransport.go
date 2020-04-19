@@ -172,17 +172,17 @@ func setupHTTP(rpctype string, URL string, ntlmAuth bool, full bool) (net.Conn, 
 }
 
 //RPCOpen opens HTTP for RPC_IN_DATA and RPC_OUT_DATA
-func RPCOpen(URL string, readySignal chan bool, errOccurred chan error) (err error) {
+func RPCOpen(URL string, readySignal chan bool, errOccurred chan error) {
 	//I'm so damn frustrated at not being able to use the http client here
 	//can't find a way to keep the write channel open (other than going over to http/2, which isn't valid here)
 	//so this is some damn messy code, but screw it
 
+	var err error
 	rpcInConn, err = setupHTTP("RPC_IN_DATA", URL, AuthSession.RPCNtlm, true)
 
 	if err != nil {
 		readySignal <- false
 		errOccurred <- err
-		return err
 	}
 
 	//open the RPC_OUT_DATA channel, receive a "ready" signal when this is setup
@@ -195,7 +195,6 @@ func RPCOpen(URL string, readySignal chan bool, errOccurred chan error) (err err
 			readySignal <- true
 		} else {
 			readySignal <- false
-			return err
 		}
 	case <-time.After(time.Second * 5): // call timed out
 		readySignal <- true
@@ -212,19 +211,18 @@ func RPCOpen(URL string, readySignal chan bool, errOccurred chan error) (err err
 			break
 		}
 	}
-	return nil
 }
 
 //RPCOpenOut function opens the RPC_OUT_DATA channel
 //starts our listening "loop" which scans for new responses and pushes
 //these to our list of recieved responses
-func RPCOpenOut(URL string, readySignal chan<- bool, errOccurred chan<- error) (err error) {
+func RPCOpenOut(URL string, readySignal chan<- bool, errOccurred chan<- error) {
 
+	var err error
 	rpcOutConn, err = setupHTTP("RPC_OUT_DATA", URL, AuthSession.RPCNtlm, true)
 	if err != nil {
 		readySignal <- false
 		errOccurred <- err
-		return err
 	}
 
 	scanner := bufio.NewScanner(rpcOutConn)
@@ -260,7 +258,6 @@ func RPCOpenOut(URL string, readySignal chan<- bool, errOccurred chan<- error) (
 		}
 	}
 
-	return nil
 }
 
 //RPCBind function establishes our session
