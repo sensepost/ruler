@@ -1191,7 +1191,7 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 			Usage: "If you need to use an upstream proxy. Works with https://user:pass@ip:port or https://ip:port",
 		},
 		cli.StringFlag{
-			Name:  "useragent",
+			Name:  "useragent,ua",
 			Value: "ruler",
 			Usage: "Custom User-Agent string",
 		},
