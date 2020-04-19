@@ -93,9 +93,13 @@ func (t NtlmTransport) RoundTrip(req *http.Request) (res *http.Response, err err
 			return nil, err
 		}
 
-		// retrieve Www-Authenticate header from response
-
-		ntlmChallengeHeader := resp.Header.Get("WWW-Authenticate")
+		// retrieve WWW-Authenticate header from response
+		ntlmChallengeHeader := ""
+		for _, header := range resp.Header[http.CanonicalHeaderKey("WWW-Authenticate")] {
+			if strings.HasPrefix(header, "NTLM") {
+				ntlmChallengeHeader = header
+			}
+		}
 		if ntlmChallengeHeader == "" {
 			return nil, errors.New("Wrong WWW-Authenticate header")
 		}

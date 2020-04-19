@@ -101,9 +101,12 @@ func setupHTTP(rpctype string, URL string, ntlmAuth bool, full bool) (net.Conn, 
 		ntlmChallengeHeader := ""
 		for _, v := range parts {
 			if n := strings.Split(v, ": "); len(n) > 0 {
-				if n[0] == "WWW-Authenticate" {
-					ntlmChallengeHeader = n[1]
-					break
+				//sometimes header name may be WWW or Www
+				if strings.ToLower(n[0]) == strings.ToLower("WWW-Authenticate") {
+					if strings.HasPrefix(n[1], "NTLM") {
+						ntlmChallengeHeader = n[1]
+						break
+					}
 				}
 			}
 		}

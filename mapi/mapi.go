@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"regexp"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/sensepost/ruler/http-ntlm"
@@ -191,17 +192,52 @@ func mapiRequestHTTP(URL, mapiType string, body []byte) ([]byte, error) {
 			return nil, err //&TransportError{err}
 		}
 	}
+
+	defer resp.Body.Close()
+
 	if resp == nil {
 		return nil, &TransportError{fmt.Errorf("Empty HTTP Response")}
 	}
+
+	if resp.StatusCode == 401 || resp.StatusCode == 403 {
+		var authMethods []string
+		var currentAuthMethod string
+		var found = false
+
+		if AuthSession.Basic == true {
+			currentAuthMethod = "Basic"
+		} else {
+			currentAuthMethod = "NTLM"
+		}
+
+		for _, header := range resp.Header[http.CanonicalHeaderKey("WWW-Authenticate")] {
+			authMethods = append(authMethods, header)
+
+			if strings.HasPrefix(header, currentAuthMethod) {
+				found = true
+			}
+		}
+
+		if !found {
+			if AuthSession.Verbose == true {
+				utils.Trace.Printf("Available authentication scheme(s): %s", strings.Join(authMethods, ", "))
+			}
+
+			err := "It looks like that this authentication scheme is not supported"
+			if AuthSession.Basic == true {
+				err += ". Try to remove --basic option or specify --rpc option"
+			}
+
+			return nil, fmt.Errorf(err)
+		}
+	}
+
 	rbody, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return nil, &TransportError{err}
 	}
 	responseBody, err := readResponse(resp.Header, rbody)
-	if resp != nil {
-		defer resp.Body.Close()
-	}
+
 	return responseBody, err
 }
 

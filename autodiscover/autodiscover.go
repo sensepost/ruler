@@ -355,10 +355,6 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, string, er
 
 	defer resp.Body.Close()
 
-	if resp.StatusCode == 401 || resp.StatusCode == 403 {
-		return nil, autodiscoverURL, fmt.Errorf("Access denied. Check your credentials")
-	}
-
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return nil, "", err
@@ -405,6 +401,42 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, string, er
 			SessionConfig.Email = secondaryEmail
 			return autodiscover(domain, mapi)
 		}
+
+		if resp.StatusCode == 401 || resp.StatusCode == 403 {
+			var authMethods []string
+			var currentAuthMethod string
+			var found = false
+
+			if SessionConfig.Basic == true {
+				currentAuthMethod = "Basic"
+			} else {
+				currentAuthMethod = "NTLM"
+			}
+
+			for _, header := range resp.Header[http.CanonicalHeaderKey("WWW-Authenticate")] {
+				authMethods = append(authMethods, header)
+
+				if strings.HasPrefix(header, currentAuthMethod) {
+					found = true
+				}
+			}
+
+			if !found {
+				if SessionConfig.Verbose == true {
+					utils.Trace.Printf("Available authentication scheme(s): %s", strings.Join(authMethods, ", "))
+				}
+
+				err := "It looks like that this authentication scheme is not supported"
+				if SessionConfig.Basic == true {
+					err += ". Try to remove --basic option or specify --rpc option"
+				}
+
+				return nil, "", fmt.Errorf(err)
+			}
+
+			return nil, autodiscoverURL, fmt.Errorf("Access denied. Check your credentials")
+		}
+
 		if m, _ := regexp.Match("http[s]?://", []byte(domain)); m == true {
 			return nil, "", fmt.Errorf("Failed to authenticate: StatusCode [%d]\n", resp.StatusCode)
 		}
