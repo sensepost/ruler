@@ -24,7 +24,7 @@ var SessionConfig *utils.Session
 var autodiscoverStep int
 var secondaryEmail string //a secondary email to use, edge case seen in office365
 var Transport http.Transport
-var useBasic = false
+var basicAuth = false
 
 //the xml for the autodiscover service
 const autodiscoverXML = `<?xml version="1.0" encoding="utf-8"?><Autodiscover xmlns="http://schemas.microsoft.com/exchange/autodiscover/outlook/requestschema/2006">
@@ -134,25 +134,37 @@ func GetRPCHTTP(email, autoURLPtr string, resp *utils.AutodiscoverResp) (*utils.
 						continue
 					}
 				}
+
 				if SessionConfig.Verbose == true {
 					utils.Trace.Printf("%s provider was selected", v.Type)
 				}
+
 				if v.SSL == "Off" {
 					url = "http://" + v.Server
 				} else {
 					url = "https://" + v.Server
 				}
-				if v.AuthPackage == "Ntlm" || v.AuthPackage == "Negotiate" { //set the encryption on if the server specifies NTLM or Negotiate auth
-					if SessionConfig.Verbose == true {
-						utils.Trace.Printf("Authentication scheme is %s", v.AuthPackage)
+
+				if SessionConfig.Basic == true {
+					basicAuth = true
+				} else {
+					if v.AuthPackage == "Ntlm" || v.AuthPackage == "Negotiate" { //set the encryption on if the server specifies NTLM or Negotiate auth
+						ntlmAuth = true
 					}
-					ntlmAuth = true
 				}
 			}
 		}
 		// EXCH (Exchange 2007/2010) is for internal Outlook clients
 		if v.Type == "EXCH" {
 			user = v.Server
+		}
+	}
+
+	if SessionConfig.Verbose == true {
+		if ntlmAuth == true {
+			utils.Trace.Printf("Authentication scheme is NTLM")
+		} else {
+			utils.Trace.Printf("Authentication scheme is Basic")
 		}
 	}
 
@@ -288,11 +300,9 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, string, er
 
 	var autodiscoverURL string
 	//check if this is just a domain, a redirect or a url (starts with http[s]://)
-
 	if m, _ := regexp.Match("http[s]?://", []byte(domain)); m == true {
 		autodiscoverURL = domain
 	} else {
-
 		//create the autodiscover url
 		if autodiscoverStep == 0 {
 			autodiscoverURL = createAutodiscover(fmt.Sprintf("autodiscover.%s", domain), true)
@@ -324,13 +334,14 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, string, er
 		req.Header.Add("X-AnchorMailbox", SessionConfig.Email) //we want MAPI info
 	}
 
-	//if we have been redirected to outlook, change the auth header to basic auth
-	if SessionConfig.Basic == false {
-		req.SetBasicAuth(SessionConfig.Email, SessionConfig.Pass)
-		SessionConfig.BasicAuth = req.Header.Get("WWW-Authenticate")
-	} else {
-		req.SetBasicAuth(SessionConfig.User, SessionConfig.Pass)
+	if SessionConfig.Basic == true {
+		if SessionConfig.Domain != "" {
+			req.SetBasicAuth(SessionConfig.Domain + "\\" + SessionConfig.User, SessionConfig.Pass)
+		} else {
+			req.SetBasicAuth(SessionConfig.Email, SessionConfig.Pass)
+		}
 	}
+
 	//request the autodiscover url
 	resp, err := client.Do(req)
 
@@ -342,7 +353,7 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, string, er
 			if err != nil {
 				return nil, "", err
 			}
-			useBasic = true
+			basicAuth = true
 		} else {
 			if autodiscoverStep < 2 {
 				autodiscoverStep++
@@ -362,9 +373,9 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, string, er
 
 	//check if we got a 200 response
 	if resp.StatusCode == 200 {
-        if useBasic == true { // don't overwrite --basic as pointed out here: https://github.com/sensepost/ruler/issues/67
-		    SessionConfig.Basic = useBasic
-        }
+		if basicAuth == true { // don't overwrite --basic as pointed out here: https://github.com/sensepost/ruler/issues/67
+			SessionConfig.Basic = basicAuth
+		}
 		err := autodiscoverResp.Unmarshal(body)
 		if err != nil {
 			if SessionConfig.Verbose == true {

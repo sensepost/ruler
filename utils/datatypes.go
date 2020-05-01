@@ -49,7 +49,6 @@ type Session struct {
 	RulesHandle   []byte
 	NTHash        []byte
 	NTLMAuth      string
-	BasicAuth     string
 
 	RPCSet              bool
 	ContextHandle       []byte //16-byte cookie for the RPC session
