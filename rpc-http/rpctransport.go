@@ -36,6 +36,7 @@ var AuthSession *utils.Session
 
 func setupHTTP(rpctype string, URL string, ntlmAuth bool, full bool) (net.Conn, error) {
 	u, err := url.Parse(URL)
+
 	var connection net.Conn
 	if u.Scheme == "http" {
 		connection, err = net.Dial("tcp", fmt.Sprintf("%s:80", u.Host))
@@ -47,8 +48,8 @@ func setupHTTP(rpctype string, URL string, ntlmAuth bool, full bool) (net.Conn, 
 	if err != nil {
 		return nil, fmt.Errorf("RPC Setup Err: %s", err)
 	}
-	var request string
 
+	var request string
 	if full == true {
 		request = fmt.Sprintf("%s %s HTTP/1.1\r\nHost: %s\r\n", rpctype, u.String(), u.Host)
 	} else {
@@ -166,9 +167,6 @@ func setupHTTP(rpctype string, URL string, ntlmAuth bool, full bool) (net.Conn, 
 		}
 	}
 
-	if cookiestr != "" {
-		request = fmt.Sprintf("%sCookie: %s\r\n", request, cookiestr)
-	}
 	connection.Write([]byte(request))
 
 	return connection, nil
