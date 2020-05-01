@@ -25,7 +25,6 @@ type Result struct {
 }
 
 var concurrency = 3 //limit the number of consecutive attempts
-
 var delay = 5
 var consc = 3
 var usernames []string
@@ -38,6 +37,7 @@ var insecure = false
 var stopSuccess = false
 var proxyURL string
 var userAgent string
+var hostname string
 var user_as_pass = true
 
 func autodiscoverDomain(domain string) string {
@@ -115,7 +115,7 @@ func autodiscoverDomain(domain string) string {
 }
 
 //Init function to setup the brute-force session
-func Init(domain, usersFile, passwordsFile, userpassFile, pURL, u string, b, i, s, v bool, c, d, t int) error {
+func Init(domain, usersFile, passwordsFile, userpassFile, pURL, u, n string, b, i, s, v bool, c, d, t int) error {
 	stopSuccess = s
 	insecure = i
 	basic = b
@@ -125,6 +125,7 @@ func Init(domain, usersFile, passwordsFile, userpassFile, pURL, u string, b, i, 
 	concurrency = t
 	proxyURL = pURL
 	userAgent = u
+	hostname = n
 
 	autodiscoverURL = autodiscoverDomain(domain)
 
@@ -354,6 +355,7 @@ func connect(autodiscoverURL, user, password string, basic, insecure bool) Resul
 				Password:  password,
 				Insecure:  insecure,
 				CookieJar: cookie,
+				Hostname:  hostname,
 			},
 		}
 	}

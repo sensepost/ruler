@@ -89,6 +89,7 @@ func Init(config *utils.Session, lid, URL, ABKURL string, transport int) {
 					Insecure:  AuthSession.Insecure,
 					CookieJar: AuthSession.CookieJar,
 					Proxy:     AuthSession.Proxy,
+					Hostname:  AuthSession.Hostname,
 				},
 				Jar: AuthSession.CookieJar,
 			}

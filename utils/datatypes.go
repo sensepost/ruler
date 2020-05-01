@@ -19,6 +19,7 @@ type Config struct {
 	Admin     bool
 	Proxy     string
 	UserAgent string
+	Hostname string
 }
 
 //Session stores authentication cookies etc
@@ -47,6 +48,7 @@ type Session struct {
 	Authenticated bool
 	Folderids     [][]byte
 	RulesHandle   []byte
+	Hostname      string
 	NTHash        []byte
 	NTLMAuth      string
 	BasicAuth     string
