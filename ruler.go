@@ -39,7 +39,6 @@ func exit(err error) {
 
 //function to perform an autodiscover
 func discover(c *cli.Context) error {
-
 	if c.GlobalString("domain") == "" {
 		return fmt.Errorf("Required param --domain is missing")
 	}
@@ -112,7 +111,6 @@ func discover(c *cli.Context) error {
 
 	//var resp *utils.AutodiscoverResp
 	var domain string
-
 	if c.Bool("mapi") == true {
 		_, domain, err = autodiscover.MAPIDiscover(url)
 	} else {
@@ -183,6 +181,7 @@ func brute(c *cli.Context) error {
 	} else {
 		autodiscover.UserPassBruteForce()
 	}
+
 	return nil
 }
 
@@ -196,7 +195,6 @@ func addRule(c *cli.Context) error {
 	}
 
 	utils.Info.Println("Rule Added. Fetching list of rules...")
-
 	printRules()
 
 	if c.Bool("send") {
@@ -270,13 +268,13 @@ func deleteRule(c *cli.Context) error {
 func displayRules(c *cli.Context) error {
 	utils.Info.Println("Retrieving Rules")
 	er := printRules()
+
 	return er
 }
 
 //sendMessage sends a message to the user, using their own Account
 //uses supplied subject and body
 func sendMessage(subject, body string) error {
-
 	propertyTags := make([]mapi.PropertyTag, 1)
 	propertyTags[0] = mapi.PidTagDisplayName
 
@@ -296,6 +294,7 @@ func sendMessage(subject, body string) error {
 //Function to connect to the Exchange server
 func connect(c *cli.Context) error {
 	var err error
+
 	//if no password or hash was supplied, read from stdin
 	if c.GlobalString("password") == "" && c.GlobalString("hash") == "" && c.GlobalString("config") == "" {
 		fmt.Printf("Password: ")
@@ -312,6 +311,7 @@ func connect(c *cli.Context) error {
 			return fmt.Errorf("Invalid hash provided. Hex decode failed")
 		}
 	}
+
 	//setup our autodiscover service
 	config.Domain = c.GlobalString("domain")
 	config.User = c.GlobalString("username")
@@ -371,14 +371,13 @@ func connect(c *cli.Context) error {
 
 	autodiscover.SessionConfig = &config
 
-	var resp *utils.AutodiscoverResp
-	var rawAutodiscover string
-
-	var mapiURL, abkURL, userDN string
-
 	//try connect to MAPI/HTTP first -- this is faster and the code-base is more stable
 	//unless of course the global "RPC" flag has been set, which specifies we should just use
 	//RPC/HTTP from the get-go
+	var resp *utils.AutodiscoverResp
+	var rawAutodiscover string
+	var mapiURL, abkURL, userDN string
+
 	if c.GlobalString("config") != "" {
 		var yamlConfig utils.YamlConfig
 		if yamlConfig, err = utils.ReadYml(c.GlobalString("config")); err != nil {
@@ -425,10 +424,9 @@ func connect(c *cli.Context) error {
 		} else {
 			mapiURL = fmt.Sprintf("%s?MailboxId=%s", yamlConfig.MapiURL, yamlConfig.Mailbox)
 		}
+
 		userDN = yamlConfig.UserDN
-
 	} else if !c.GlobalBool("rpc") {
-
 		if config.User == "" && config.Email == "" {
 			return fmt.Errorf("Missing username and/or email argument. Use --domain (if needed), --username and --email or the --config")
 		}
@@ -465,7 +463,6 @@ func connect(c *cli.Context) error {
 				autodiscover.CreateCache(config.Email, rawAutodiscover) //store the autodiscover for future use
 			}
 		} else {
-
 			utils.Trace.Println("MAPI URL found: ", mapiURL)
 			utils.Trace.Println("MAPI AddressBook URL found: ", abkURL)
 
@@ -474,9 +471,7 @@ func connect(c *cli.Context) error {
 				autodiscover.CreateCache(config.Email, rawAutodiscover) //store the autodiscover for future use
 			}
 		}
-
 	} else {
-
 		if config.User == "" && config.Email == "" {
 			return fmt.Errorf("Missing username and/or email argument. Use --domain (if needed), --username and --email or the --config")
 		}
@@ -519,6 +514,7 @@ func connect(c *cli.Context) error {
 		propertyTags[1] = mapi.PidTagSubfolders
 		mapi.GetFolder(mapi.INBOX, propertyTags) //Open Inbox
 	}
+
 	return nil
 }
 
@@ -530,7 +526,6 @@ func printRules() error {
 	//cols[2] = mapi.PidTagRuleActions
 
 	rows, er := mapi.FetchRules(cols)
-
 	if er != nil {
 		return er
 	}
@@ -573,8 +568,9 @@ func printRules() error {
 		}
 		utils.Info.Println()
 	} else {
-		utils.Info.Printf("No Rules Found\n")
+		utils.Info.Println("No Rules Found")
 	}
+
 	return nil
 }
 
@@ -621,6 +617,7 @@ func abkList(c *cli.Context) error {
 			}
 		}
 	}
+
 	return nil
 }
 
@@ -667,6 +664,7 @@ func abkDump(c *cli.Context) error {
 			}
 		}
 	}
+
 	return nil
 }
 
@@ -768,6 +766,7 @@ func triggerForm(c *cli.Context) error {
 		return err
 	}
 	utils.Info.Println("Email sent! Hopefully you will have a shell soon.")
+
 	return nil
 }
 
@@ -790,6 +789,7 @@ func displayForms(c *cli.Context) error {
 		utils.Error.Println("Failed to find any forms.")
 		return err
 	}
+
 	return nil
 }
 
@@ -844,6 +844,7 @@ func displayHomePage() error {
 			utils.Info.Println("Webview is set as ENABLED")
 		}
 	}
+
 	return e
 }
 
@@ -891,7 +892,6 @@ func deleteHomePage() error {
 }
 
 func searchFolders(c *cli.Context) error {
-
 	utils.Info.Println("Checking if a search folder exists")
 
 	searchFolderName := "searcher"
@@ -990,7 +990,6 @@ func searchFolders(c *cli.Context) error {
 }
 
 func checkFolder(folderName string) ([]byte, error) {
-
 	var folderID []byte
 	propertyTags := make([]mapi.PropertyTag, 2)
 	propertyTags[0] = mapi.PidTagDisplayName
@@ -1190,7 +1189,7 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 			Usage: "If you need to use an upstream proxy. Works with https://user:pass@ip:port or https://ip:port",
 		},
 		cli.StringFlag{
-			Name:  "useragent",
+			Name:  "useragent,ua",
 			Value: "ruler",
 			Usage: "Custom User-Agent string",
 		},
@@ -1225,7 +1224,7 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 		},
 		cli.BoolFlag{
 			Name:  "verbose",
-			Usage: "Be verbose and show some of thei inner workings",
+			Usage: "Be verbose and show some of the inner workings",
 		},
 		cli.BoolFlag{
 			Name:  "debug",
@@ -1762,7 +1761,7 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 			},
 			Action: func(c *cli.Context) error {
 				if c.String("term") == "" {
-					return cli.NewExitError("You need to supply a valid search term. Use --term ", 1)
+					return cli.NewExitError("You need to supply a valid search term. Use --term", 1)
 				}
 				err := connect(c)
 				if err != nil {
@@ -1782,5 +1781,4 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 	}
 
 	app.Run(os.Args)
-
 }

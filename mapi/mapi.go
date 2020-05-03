@@ -133,12 +133,16 @@ func sendMapiRequest(mapi ExecuteRequest) (*ExecuteResponse, error) {
 	var err error
 	if AuthSession.Transport == HTTP { //this is always going to be an "Execute" request
 		if rawResp, err = mapiRequestHTTP(AuthSession.URL.String(), "Execute", mapi.Marshal()); err != nil {
-			utils.Debug.Printf("%s\n", hex.Dump(rawResp))
+			if rawResp != nil {
+				utils.Debug.Printf("%s\n", hex.Dump(rawResp))
+			}
 			return nil, err
 		}
 	} else {
 		if rawResp, err = mapiRequestRPC(mapi); err != nil {
-			utils.Debug.Printf("%s\n", hex.Dump(rawResp))
+			if rawResp != nil {
+				utils.Debug.Printf("%s\n", hex.Dump(rawResp))
+			}
 			return nil, err
 		}
 	}
@@ -371,6 +375,9 @@ func specialFolders(folderResponse []byte) {
 func readResponse(headers http.Header, body []byte) ([]byte, error) {
 	//check to see that the response code was 0, which indicates protocol success
 	if headers.Get("X-ResponseCode") != "0" {
+		if headers.Get("X-ResponseCode") == "10" {
+			utils.Error.Println("This is a server-side issue. See details at https://github.com/sensepost/ruler/issues/75")
+		}
 		return nil, fmt.Errorf("Got a protocol error response: %s", headers.Get("X-ResponseCode"))
 	}
 	//We need to parse out the body to get rid of the meta-tags and additional headers (if any)

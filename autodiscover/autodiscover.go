@@ -173,9 +173,16 @@ func GetRPCHTTP(email, autoURLPtr string, resp *utils.AutodiscoverResp) (*utils.
 		if resp.Response.Account.MicrosoftOnline == true {
 			lindex := strings.LastIndex(resp.Response.Account.Protocol[0].MailStore.ExternalUrl, "=")
 			user = resp.Response.Account.Protocol[0].MailStore.ExternalUrl[lindex+1:]
+			if user == "" {
+				return nil, "", "", "", false, fmt.Errorf("The user is undefined")
+			}
+
 			url = "https://outlook.office365.com"
 		}
+
+		return nil, "", "", "", false, fmt.Errorf("The user is undefined")
 	}
+
 	RPCURL := fmt.Sprintf("%s/rpc/rpcproxy.dll?%s:6001", url, user)
 
 	utils.Trace.Printf("RPC URL set: %s\n", RPCURL)
