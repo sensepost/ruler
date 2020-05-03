@@ -447,9 +447,9 @@ func connect(c *cli.Context) error {
 
 		if mapiURL == "" { //try RPC
 			if rawAutodiscover != "" {
-			    resp, _, config.RPCURL, config.RPCMailbox, config.RPCNtlm, err = autodiscover.GetRPCHTTP(config.Email, url, resp)
+				resp, _, config.RPCURL, config.RPCMailbox, config.RPCNtlm, err = autodiscover.GetRPCHTTP(config.Email, url, resp)
 			} else {
-			    resp, rawAutodiscover, config.RPCURL, config.RPCMailbox, config.RPCNtlm, err = autodiscover.GetRPCHTTP(config.Email, url, resp)
+				resp, rawAutodiscover, config.RPCURL, config.RPCMailbox, config.RPCNtlm, err = autodiscover.GetRPCHTTP(config.Email, url, resp)
 			}
 
 			if err != nil {
@@ -1128,15 +1128,25 @@ func main() {
 
 	app.Name = "ruler"
 	app.Usage = "A tool to abuse Exchange Services"
-	app.Version = "2.2.2"
-	app.Author = "Etienne Stalmans <etienne@sensepost.com>, @_staaldraad"
+	app.Version = "2.4.0"
+	app.Authors = []cli.Author{
+		cli.Author{
+			Name:  "Etienne Stalmans",
+			Email: "@_staaldraad",
+		},
+		cli.Author{
+			Name:  "Roman Maksimov",
+			Email: "@rmaksimov",
+		},
+	}
 	app.Description = `         _
  _ __ _   _| | ___ _ __
 | '__| | | | |/ _ \ '__|
 | |  | |_| | |  __/ |
 |_|   \__,_|_|\___|_|
 
-A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
+A tool by @_staaldraad and @sensepost to abuse Exchange Services.
+`
 
 	app.Flags = []cli.Flag{
 		cli.StringFlag{
