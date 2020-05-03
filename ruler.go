@@ -93,8 +93,17 @@ func discover(c *cli.Context) error {
 	config.CookieJar, _ = cookiejar.New(nil)
 	config.Proxy = c.GlobalString("proxy")
 	config.UserAgent = c.GlobalString("useragent")
-	url := c.GlobalString("url")
 
+	config.Hostname = c.GlobalString("hostname")
+	if config.Hostname == "" {
+		hostname, err := os.Hostname()
+		if err != nil {
+			return fmt.Errorf("An error is occurred while getting Hostname value. Try to specify it manually using --hostname")
+		}
+		config.Hostname = hostname
+	}
+
+	url := c.GlobalString("url")
 	if url == "" {
 		url = config.Domain
 	}
@@ -165,7 +174,7 @@ func brute(c *cli.Context) error {
 	if c.GlobalBool("o365") == true {
 		domain = "https://autodiscover-s.outlook.com/autodiscover/autodiscover.xml"
 	}
-	if e := autodiscover.Init(domain, c.String("users"), c.String("passwords"), c.String("userpass"), c.GlobalString("proxy"), c.GlobalString("useragent"), c.GlobalBool("basic"), c.GlobalBool("insecure"), c.Bool("stop"), c.Bool("verbose"), c.Int("attempts"), c.Int("delay"), c.Int("threads")); e != nil {
+	if e := autodiscover.Init(domain, c.String("users"), c.String("passwords"), c.String("userpass"), c.GlobalString("proxy"), c.GlobalString("useragent"), c.GlobalString("hostname"), c.GlobalBool("basic"), c.GlobalBool("insecure"), c.Bool("stop"), c.Bool("verbose"), c.Int("attempts"), c.Int("delay"), c.Int("threads")); e != nil {
 		return e
 	}
 
@@ -315,6 +324,16 @@ func connect(c *cli.Context) error {
 	config.CookieJar, _ = cookiejar.New(nil)
 	config.Proxy = c.GlobalString("proxy")
 	config.UserAgent = c.GlobalString("useragent")
+
+	config.Hostname = c.GlobalString("hostname")
+	if config.Hostname == "" {
+		hostname, err := os.Hostname()
+		if err != nil {
+			return fmt.Errorf("An error is occurred while getting Hostname value. Try to specify it manually using --hostname")
+		}
+		config.Hostname = hostname
+	}
+
 	//add supplied cookie to the cookie jar
 	if c.GlobalString("cookie") != "" {
 		//split into cookies and then into name : value
@@ -343,33 +362,6 @@ func connect(c *cli.Context) error {
 	}
 
 	config.CookieJar, _ = cookiejar.New(nil)
-
-	//add supplied cookie to the cookie jar
-	if c.GlobalString("cookie") != "" {
-		//split into cookies and then into name : value
-		cookies := strings.Split(c.GlobalString("cookie"), ";")
-		var cookieJarTmp []*http.Cookie
-		var cdomain string
-		//split and get the domain from the email
-		if eparts := strings.Split(c.GlobalString("email"), "@"); len(eparts) == 2 {
-			cdomain = eparts[1]
-		} else {
-			return fmt.Errorf("Invalid email address")
-		}
-
-		for _, v := range cookies {
-			cookie := strings.Split(v, "=")
-			c := &http.Cookie{
-				Name:   cookie[0],
-				Value:  cookie[1],
-				Path:   "/",
-				Domain: cdomain,
-			}
-			cookieJarTmp = append(cookieJarTmp, c)
-		}
-		u, _ := url.Parse(fmt.Sprintf("https://%s/", cdomain))
-		config.CookieJar.SetCookies(u, cookieJarTmp)
-	}
 
 	url := c.GlobalString("url")
 
@@ -1225,6 +1217,11 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 		cli.BoolFlag{
 			Name:  "rpc",
 			Usage: "Force RPC/HTTP rather than MAPI/HTTP",
+		},
+		cli.StringFlag{
+			Name:  "hostname,n",
+			Value: "RULER",
+			Usage: "Custom Hostname value",
 		},
 		cli.BoolFlag{
 			Name:  "verbose",

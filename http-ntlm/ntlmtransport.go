@@ -32,6 +32,7 @@ type NtlmTransport struct {
 	NTHash    []byte
 	Insecure  bool
 	CookieJar *cookiejar.Jar
+	Hostname  string
 }
 
 var Transport http.Transport
@@ -75,7 +76,6 @@ func (t NtlmTransport) RoundTrip(req *http.Request) (res *http.Response, err err
 	client := http.Client{Transport: tr, Timeout: time.Minute, Jar: t.CookieJar}
 
 	resp, err := client.Do(r)
-
 	if err != nil {
 		return nil, err
 	}
@@ -125,6 +125,10 @@ func (t NtlmTransport) RoundTrip(req *http.Request) (res *http.Response, err err
 		// authenticate user
 		authenticate, err := session.GenerateAuthenticateMessage()
 		//fmt.Printf("%x\n", authenticate.Bytes())
+		if err != nil {
+			return nil, err
+		}
+		authenticate.Workstation, err = ntlm.CreateStringPayload(t.Hostname)
 		if err != nil {
 			return nil, err
 		}

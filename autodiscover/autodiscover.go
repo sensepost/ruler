@@ -292,6 +292,7 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, string, er
 				Insecure:  SessionConfig.Insecure,
 				CookieJar: SessionConfig.CookieJar,
 				Proxy:     SessionConfig.Proxy,
+				Hostname:  SessionConfig.Hostname,
 			},
 			Jar: SessionConfig.CookieJar,
 		}
