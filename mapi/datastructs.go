@@ -1864,8 +1864,8 @@ func (queryRows *RopQueryRowsResponse) Unmarshal(resp []byte, properties []Prope
 	queryRows.RowCount, pos = utils.ReadUint16(pos, resp)
 
 	rows := make([][]PropertyRow, queryRows.RowCount)
-	//check if flagged properties
 
+	//loop through the rows
 	for k := 0; k < int(queryRows.RowCount); k++ {
 		trow := PropertyRow{}
 		//check if has flag (is flaggedpropertyrow)
@@ -1887,9 +1887,6 @@ func (queryRows *RopQueryRowsResponse) Unmarshal(resp []byte, properties []Prope
 			} else if property.PropertyType == PtypString {
 				trow.ValueArray, pos = utils.ReadUnicodeString(pos, resp)
 				rows[k] = append(rows[k], trow)
-				if len(trow.ValueArray) > 0 { //empty string means no extra null byte.
-					pos++
-				}
 			} else if property.PropertyType == PtypBinary {
 				cnt, p := utils.ReadUint16(pos, resp)
 				pos = p

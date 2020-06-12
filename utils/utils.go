@@ -233,6 +233,12 @@ func ReadUnicodeString(pos int, buff []byte) ([]byte, int) {
 	//stupid hack as using bufio and ReadString(byte) would terminate too early
 	//would terminate on 0x00 instead of 0x0000
 	index := bytes.Index(buff[pos:], []byte{0x00, 0x00})
+	// https://github.com/sensepost/ruler/issues/122
+	// as pointed out by l0kihardt non-english servers
+	// respond with 0x00,0x00 - english 0x00,0x00,0x00
+	if buff[pos+index+2] == 0x00 {
+		index++ //unicode string end with 0x00 0x00 0x00
+	}
 	if index == -1 {
 		return nil, 0
 	}
