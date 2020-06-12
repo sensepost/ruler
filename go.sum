@@ -13,6 +13,8 @@ github.com/shurcooL/sanitized_anchor_name v1.0.0 h1:PdmoCO6wvbs+7yrJyMORt4/BmY5I
 github.com/shurcooL/sanitized_anchor_name v1.0.0/go.mod h1:1NzhyTcUVG4SuEtjjoZeVRXNmyL/1OwPU0+IJeTBvfc=
 github.com/staaldraad/go-ntlm v0.0.0-20170317140013-447d8aaecab0 h1:uiDhrqFwkdVIv8j1eumm/pgggI51OkRUMMkPD0CcgJw=
 github.com/staaldraad/go-ntlm v0.0.0-20170317140013-447d8aaecab0/go.mod h1:Jzdz9vcdmcS8ZT5Q+UYGSx8PSIKaQtxQvNVUqN/MOMQ=
+github.com/staaldraad/go-ntlm v0.0.0-20200612175713-cd032d41aa8c h1:ZGPsFTrrYiQUmVV+86h6HX9ml4PyrA1REy8NWQwrcBE=
+github.com/staaldraad/go-ntlm v0.0.0-20200612175713-cd032d41aa8c/go.mod h1:Jzdz9vcdmcS8ZT5Q+UYGSx8PSIKaQtxQvNVUqN/MOMQ=
 github.com/urfave/cli v1.22.1 h1:+mkCCcOFKPnCmVYVcURKps1Xe+3zP90gSYGNfRkjoIY=
 github.com/urfave/cli v1.22.1/go.mod h1:Gos4lmkARVdJ6EkW0WaNv/tZAAMe9V7XWyB60NtXRu0=
 golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2 h1:VklqNMn3ovrHsnt90PveolxSbWFaJdECFbxSq0Mqo2M=
