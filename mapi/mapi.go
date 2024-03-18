@@ -13,24 +13,24 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sensepost/ruler/http-ntlm"
-	"github.com/sensepost/ruler/rpc-http"
+	httpntlm "github.com/sensepost/ruler/http-ntlm"
+	rpchttp "github.com/sensepost/ruler/rpc-http"
 	"github.com/sensepost/ruler/utils"
 )
 
-//HTTP transport type for MAPI over HTTP types
+// HTTP transport type for MAPI over HTTP types
 const HTTP int = 1
 
-//RPC over HTTP transport type for traditional MAPI
+// RPC over HTTP transport type for traditional MAPI
 const RPC int = 2
 
 var cnt = 0
 var client http.Client
 
-//AuthSession holds all our session related info
+// AuthSession holds all our session related info
 var AuthSession *utils.Session
 
-//ExtractMapiURL extract the External mapi url from the autodiscover response
+// ExtractMapiURL extract the External mapi url from the autodiscover response
 func ExtractMapiURL(resp *utils.AutodiscoverResp) string {
 	for _, v := range resp.Response.Account.Protocol {
 		if v.TypeAttr == "mapiHttp" {
@@ -43,7 +43,7 @@ func ExtractMapiURL(resp *utils.AutodiscoverResp) string {
 	return ""
 }
 
-//ExtractRPCURL extract the External RPC url from the autodiscover response
+// ExtractRPCURL extract the External RPC url from the autodiscover response
 func ExtractRPCURL(resp *utils.AutodiscoverResp) string {
 	for _, v := range resp.Response.Account.Protocol {
 		if v.TypeAttr == "rpcHttp" {
@@ -56,7 +56,7 @@ func ExtractRPCURL(resp *utils.AutodiscoverResp) string {
 	return ""
 }
 
-//Init is used to start our mapi session
+// Init is used to start our mapi session
 func Init(config *utils.Session, lid, URL, ABKURL string, transport int) {
 	AuthSession = config
 	AuthSession.LID = lid
@@ -67,18 +67,26 @@ func Init(config *utils.Session, lid, URL, ABKURL string, transport int) {
 		if AuthSession.URL.Host == "outlook.office365.com" {
 			AuthSession.Basic = true
 		}
-		if AuthSession.Basic == true {
-			var Transport http.Transport
-			if AuthSession.Proxy == "" {
-				Transport = http.Transport{
-					TLSClientConfig: &tls.Config{InsecureSkipVerify: AuthSession.Insecure},
-				}
-			} else {
-				proxyURL, _ := url.Parse(AuthSession.Proxy)
-				Transport = http.Transport{Proxy: http.ProxyURL(proxyURL),
-					TLSClientConfig: &tls.Config{InsecureSkipVerify: AuthSession.Insecure},
-				}
+		var Transport http.Transport
+		if AuthSession.Proxy == "" {
+			Transport = http.Transport{
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: AuthSession.Insecure},
 			}
+		} else {
+			proxyURL, _ := url.Parse(AuthSession.Proxy)
+			Transport = http.Transport{Proxy: http.ProxyURL(proxyURL),
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: AuthSession.Insecure},
+			}
+		}
+		if AuthSession.BearerToken != "" {
+			withHeader := utils.WithHeader(&Transport)
+			withHeader.Set("Authorization", "Bearer "+AuthSession.BearerToken)
+
+			client = http.Client{
+				Transport: withHeader,
+				Jar:       AuthSession.CookieJar,
+			}
+		} else if AuthSession.Basic {
 			client = http.Client{Jar: AuthSession.CookieJar, Transport: &Transport}
 		} else {
 			client = http.Client{
@@ -99,6 +107,7 @@ func Init(config *utils.Session, lid, URL, ABKURL string, transport int) {
 		AuthSession.URL, _ = url.Parse(AuthSession.RPCURL)
 		AuthSession.Host = URL
 	}
+
 	AuthSession.Transport = transport
 	AuthSession.ClientSet = false
 	AuthSession.ReqCounter = 1
@@ -109,7 +118,7 @@ func Init(config *utils.Session, lid, URL, ABKURL string, transport int) {
 	AuthSession.RPCNetworkAuthLevel = rpchttp.RPC_C_AUTHN_LEVEL_PKT_PRIVACY
 	AuthSession.RPCNetworkAuthType = rpchttp.RPC_C_AUTHN_WINNT
 
-	if AuthSession.URL.Host == "outlook.office365.com" || AuthSession.RPCEncrypt == false {
+	if AuthSession.URL.Host == "outlook.office365.com" || !AuthSession.RPCEncrypt {
 		AuthSession.RPCNetworkAuthLevel = rpchttp.RPC_C_AUTHN_LEVEL_NONE
 		AuthSession.RPCNetworkAuthType = rpchttp.RPC_C_AUTHN_NONE
 	}
@@ -121,13 +130,13 @@ func addMapiHeaders(req *http.Request, mapiType string) {
 	req.Header.Add("Content-Type", "application/mapi-http")
 	req.Header.Add("X-RequestType", mapiType)
 	req.Header.Add("X-User-Identity", AuthSession.Email)
-	req.Header.Add("X-RequestId", fmt.Sprintf("{C715155F-2BE8-44E0-BD34-2960065754C8}:%d", AuthSession.ReqCounter))
-	req.Header.Add("X-ClientInfo", "{2F94A2BF-A2E6-4CCC-BF98-B5F22C542226}")
-	req.Header.Add("X-ClientApplication", "Outlook/15.0.4815.1002")
+	req.Header.Add("X-RequestId", fmt.Sprintf("{1F7B74BE-D0DC-48B8-A714-29959F8C0EE0}:%d", AuthSession.ReqCounter))
+	req.Header.Add("X-ClientInfo", "{98F052FB-5F38-431A-9ECB-CC6818487954}:122000010")
+	req.Header.Add("X-ClientApplication", "Outlook/16.0.16529.20124")
 }
 
-//sendMapiRequest sends an Execute request, gets the response and processes.
-//returns the unmarshalled ExecuteResponse and/or and error
+// sendMapiRequest sends an Execute request, gets the response and processes.
+// returns the unmarshalled ExecuteResponse and/or and error
 func sendMapiRequest(mapi ExecuteRequest) (*ExecuteResponse, error) {
 	var rawResp []byte
 	var err error
@@ -174,17 +183,17 @@ func sendMapiDisconnect(mapi DisconnectRequest) ([]byte, error) {
 	return mapiDisconnectRPC()
 }
 
-//func sendMapiConnectHTTP(mapi Conn)
-//mapiAuthRequest connects and authenticates using NTLM or basic auth.
-//After the authentication is complete, we can simply use the mapiRequest
-//and the session cookies.
+// func sendMapiConnectHTTP(mapi Conn)
+// mapiAuthRequest connects and authenticates using NTLM or basic auth.
+// After the authentication is complete, we can simply use the mapiRequest
+// and the session cookies.
 func mapiRequestHTTP(URL, mapiType string, body []byte) ([]byte, error) {
 	req, err := http.NewRequest("POST", URL, bytes.NewReader(body))
 	addMapiHeaders(req, mapiType)
 	req.Header.Add("User-Agent", AuthSession.UserAgent)
 	if AuthSession.Basic == true {
 		if AuthSession.Domain != "" {
-			req.SetBasicAuth(AuthSession.Domain + "\\" + AuthSession.User, AuthSession.Pass)
+			req.SetBasicAuth(AuthSession.Domain+"\\"+AuthSession.User, AuthSession.Pass)
 		} else {
 			req.SetBasicAuth(AuthSession.Email, AuthSession.Pass)
 		}
@@ -213,6 +222,10 @@ func mapiRequestHTTP(URL, mapiType string, body []byte) ([]byte, error) {
 		var authMethods []string
 		var currentAuthMethod string
 		var found = false
+
+		if AuthSession.BearerToken != "" {
+			return nil, fmt.Errorf("Authentication failed. Check your bearer token")
+		}
 
 		if AuthSession.Basic == true {
 			currentAuthMethod = "Basic"
@@ -316,8 +329,8 @@ func mapiDisconnectRPC() ([]byte, error) {
 	return nil, nil
 }
 
-//mapiRequestRPC to our target. Takes the mapiType (Connect, Execute) to determine the
-//action performed on the server side
+// mapiRequestRPC to our target. Takes the mapiType (Connect, Execute) to determine the
+// action performed on the server side
 func mapiRequestRPC(body ExecuteRequest) ([]byte, error) {
 
 	var resp []byte
@@ -354,7 +367,7 @@ func mapiRequestRPC(body ExecuteRequest) ([]byte, error) {
 	return resp, err
 }
 
-//isAuthenticated checks if we have a session
+// isAuthenticated checks if we have a session
 func isAuthenticated() {
 	if AuthSession.CookieJar.Cookies(AuthSession.URL) == nil {
 		utils.Info.Println("No authentication cookies found. You may not be authenticated.")
@@ -391,7 +404,7 @@ func readResponse(headers http.Header, body []byte) ([]byte, error) {
 	return body[start+4:], nil
 }
 
-//Authenticate is used to create the MAPI session, get's session cookie etc
+// Authenticate is used to create the MAPI session, get's session cookie etc
 func Authenticate() (*RopLogonResponse, error) {
 	if AuthSession.Transport == RPC {
 		return AuthenticateRPC()
@@ -399,7 +412,7 @@ func Authenticate() (*RopLogonResponse, error) {
 	return AuthenticateHTTP()
 }
 
-//AuthenticateRPC does RPC version of authenticate
+// AuthenticateRPC does RPC version of authenticate
 func AuthenticateRPC() (*RopLogonResponse, error) {
 	connRequest := ConnectRequestRPC{}
 
@@ -443,7 +456,7 @@ func AuthenticateRPC() (*RopLogonResponse, error) {
 
 }
 
-//AuthenticateHTTP does the authenctication, seems like RPC/HTTP and MAPI/HTTP has slightly different auths
+// AuthenticateHTTP does the authenctication, seems like RPC/HTTP and MAPI/HTTP has slightly different auths
 func AuthenticateHTTP() (*RopLogonResponse, error) {
 	connRequest := ConnectRequest{}
 
@@ -478,7 +491,7 @@ func AuthenticateHTTP() (*RopLogonResponse, error) {
 	return nil, ErrUnknown
 }
 
-//AuthenticateFetchMailbox func to perform step two of the authentication process
+// AuthenticateFetchMailbox func to perform step two of the authentication process
 func AuthenticateFetchMailbox(essdn []byte) (*RopLogonResponse, error) {
 
 	execRequest := ExecuteRequest{}
@@ -522,8 +535,8 @@ func AuthenticateFetchMailbox(essdn []byte) (*RopLogonResponse, error) {
 	return &logonResponse, nil
 }
 
-//Disconnect function to be nice and disconnect us from the server
-//This is strictly necessary but hey... lets follow protocol
+// Disconnect function to be nice and disconnect us from the server
+// This is strictly necessary but hey... lets follow protocol
 func Disconnect() (int, error) {
 	//check if we actually authenticated and need to close our session
 	if AuthSession == nil || AuthSession.Authenticated == false {
@@ -542,7 +555,7 @@ func Disconnect() (int, error) {
 	return 0, nil
 }
 
-//ReleaseObject issues a RopReleaseRequest to free a server handle to an object
+// ReleaseObject issues a RopReleaseRequest to free a server handle to an object
 func ReleaseObject(inputHandle byte) (*RopReleaseResponse, error) {
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
@@ -565,7 +578,7 @@ func ReleaseObject(inputHandle byte) (*RopReleaseResponse, error) {
 
 }
 
-//ReadPerUserInformation issues a RopReleaseRequest to free a server handle to an object
+// ReadPerUserInformation issues a RopReleaseRequest to free a server handle to an object
 func ReadPerUserInformation(folerID []byte) (*RopReadPerUserInformationResponse, error) {
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
@@ -593,7 +606,7 @@ func ReadPerUserInformation(folerID []byte) (*RopReadPerUserInformationResponse,
 
 }
 
-//GetLongTermIDFromID issues a request for the long term ID of an Object
+// GetLongTermIDFromID issues a request for the long term ID of an Object
 func GetLongTermIDFromID(objectID []byte) (*RopLongTermIDFromIDResponse, error) {
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
@@ -619,7 +632,7 @@ func GetLongTermIDFromID(objectID []byte) (*RopLongTermIDFromIDResponse, error) 
 
 }
 
-//SendExistingMessage sends a message that has already been created. This is essentially a RopSubmitMessage
+// SendExistingMessage sends a message that has already been created. This is essentially a RopSubmitMessage
 func SendExistingMessage(folderID, messageID []byte, recipient string) (*RopSubmitMessageResponse, error) {
 
 	execRequest := ExecuteRequest{}
@@ -697,8 +710,8 @@ func SendExistingMessage(folderID, messageID []byte, recipient string) (*RopSubm
 
 }
 
-//SendMessage func to create a new message on the Exchange server
-//and then sends an email to the target using their own email
+// SendMessage func to create a new message on the Exchange server
+// and then sends an email to the target using their own email
 func SendMessage(triggerWord, body string) (*RopSubmitMessageResponse, error) {
 
 	execRequest := ExecuteRequest{}
@@ -802,7 +815,7 @@ func SendMessage(triggerWord, body string) (*RopSubmitMessageResponse, error) {
 	return &submitMessageResp, e
 }
 
-//SetMessageStatus is used to create a message on the exchange server
+// SetMessageStatus is used to create a message on the exchange server
 func SetMessageStatus(folderid, messageid []byte) (*RopSetMessageStatusResponse, error) {
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
@@ -842,7 +855,7 @@ func SetMessageStatus(folderid, messageid []byte) (*RopSetMessageStatusResponse,
 
 }
 
-//GetPropertyIds returns the specific fields from a message
+// GetPropertyIds returns the specific fields from a message
 func GetPropertyIds(folderid, messageid []byte, propids []PropertyName) (*RopGetPropertyIdsFromNamesResponse, error) {
 
 	execRequest := ExecuteRequest{}
@@ -885,7 +898,7 @@ func GetPropertyIds(folderid, messageid []byte, propids []PropertyName) (*RopGet
 
 }
 
-//GetPropertyIdsList returns the list of properties on a message
+// GetPropertyIdsList returns the list of properties on a message
 func GetPropertyIdsList(folderid, messageid []byte) (*RopGetPropertiesListResponse, error) {
 
 	execRequest := ExecuteRequest{}
@@ -923,7 +936,7 @@ func GetPropertyIdsList(folderid, messageid []byte) (*RopGetPropertiesListRespon
 
 }
 
-//GetPropertyNamesFromID returns the property names for a set of ids
+// GetPropertyNamesFromID returns the property names for a set of ids
 func GetPropertyNamesFromID(folderid, messageid, propids []byte, idcount int) (*RopGetNamesFromPropertyIdsResponse, error) {
 
 	execRequest := ExecuteRequest{}
@@ -963,7 +976,7 @@ func GetPropertyNamesFromID(folderid, messageid, propids []byte, idcount int) (*
 
 }
 
-//SetSearchCriteria function is used to set the search criteria on a folder or set of folders
+// SetSearchCriteria function is used to set the search criteria on a folder or set of folders
 func SetSearchCriteria(folderids, searchFolder []byte, restrictions Restriction) (*RopSetSearchCriteriaResponse, error) {
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
@@ -1006,7 +1019,7 @@ func SetSearchCriteria(folderids, searchFolder []byte, restrictions Restriction)
 
 }
 
-//GetSearchCriteria function is used to set the search criteria on a folder or set of folders
+// GetSearchCriteria function is used to set the search criteria on a folder or set of folders
 func GetSearchCriteria(searchFolder []byte) (*RopGetSearchCriteriaResponse, error) {
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
@@ -1045,7 +1058,7 @@ func GetSearchCriteria(searchFolder []byte) (*RopGetSearchCriteriaResponse, erro
 
 }
 
-//SetFolderProperties is used to set one or more properties on a folder
+// SetFolderProperties is used to set one or more properties on a folder
 func SetFolderProperties(folderid []byte, propertyTags []TaggedPropertyValue) (*RopSetPropertiesResponse, error) {
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
@@ -1090,17 +1103,17 @@ func SetFolderProperties(folderid []byte, propertyTags []TaggedPropertyValue) (*
 
 }
 
-//CreateMessage creates a standard message for a folder
+// CreateMessage creates a standard message for a folder
 func CreateMessage(folderID []byte, properties []TaggedPropertyValue) (*RopSaveChangesMessageResponse, error) {
 	return CreateMessageRequest(folderID, properties, 0)
 }
 
-//CreateAssocMessage creates a message that is associated with a folder
+// CreateAssocMessage creates a message that is associated with a folder
 func CreateAssocMessage(folderID []byte, properties []TaggedPropertyValue) (*RopSaveChangesMessageResponse, error) {
 	return CreateMessageRequest(folderID, properties, 1)
 }
 
-//CreateMessageRequest is used to create a message on the exchange server
+// CreateMessageRequest is used to create a message on the exchange server
 func CreateMessageRequest(folderID []byte, properties []TaggedPropertyValue, associated byte) (*RopSaveChangesMessageResponse, error) {
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
@@ -1158,9 +1171,9 @@ func CreateMessageRequest(folderID []byte, properties []TaggedPropertyValue, ass
 
 }
 
-//CreateMessageAttachment creates the attachment object for a message. If the message is attached by reference,
-//no more actions are required. If the attachment data should be included in the message, this needs to be added with
-//the WriteAttachmentProperty using the PidTagAttachDataBinary property
+// CreateMessageAttachment creates the attachment object for a message. If the message is attached by reference,
+// no more actions are required. If the attachment data should be included in the message, this needs to be added with
+// the WriteAttachmentProperty using the PidTagAttachDataBinary property
 func CreateMessageAttachment(folderid, messageid []byte, properties []TaggedPropertyValue) (*RopCreateAttachmentResponse, error) {
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
@@ -1234,7 +1247,7 @@ func CreateMessageAttachment(folderid, messageid []byte, properties []TaggedProp
 
 }
 
-//WriteAttachmentProperty opens a stream on an attachment property and writes to it
+// WriteAttachmentProperty opens a stream on an attachment property and writes to it
 func WriteAttachmentProperty(folderid, messageid []byte, attachmentid uint32, propertyTag PropertyTag, propData []byte) (*RopSaveChangesAttachmentResponse, error) {
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
@@ -1392,7 +1405,7 @@ func WriteAttachmentProperty(folderid, messageid []byte, attachmentid uint32, pr
 
 }
 
-//SetMessageProperties is used to update the properties of a message
+// SetMessageProperties is used to update the properties of a message
 func SetMessageProperties(folderid, messageid []byte, propertyTags []TaggedPropertyValue) (*RopSaveChangesMessageResponse, error) {
 
 	execRequest := ExecuteRequest{}
@@ -1447,7 +1460,7 @@ func SetMessageProperties(folderid, messageid []byte, propertyTags []TaggedPrope
 
 }
 
-//SetPropertyFast is used to create a message on the exchange server through a the RopFastTransferSourceGetBufferRequest
+// SetPropertyFast is used to create a message on the exchange server through a the RopFastTransferSourceGetBufferRequest
 func SetPropertyFast(folderid []byte, messageid []byte, property TaggedPropertyValue) (*RopSaveChangesMessageResponse, error) {
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
@@ -1533,7 +1546,7 @@ func SetPropertyFast(folderid []byte, messageid []byte, property TaggedPropertyV
 
 }
 
-//SaveMessageFast uses the RopFastTransfer buffers to save a message
+// SaveMessageFast uses the RopFastTransfer buffers to save a message
 func SaveMessageFast(inputHandle, responseHandle byte, serverHandles []byte) (*RopSaveChangesMessageResponse, error) {
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
@@ -1565,7 +1578,7 @@ func SaveMessageFast(inputHandle, responseHandle byte, serverHandles []byte) (*R
 
 }
 
-//DeleteMessages is used to delete a message on the exchange server
+// DeleteMessages is used to delete a message on the exchange server
 func DeleteMessages(folderid []byte, messageIDCount int, messageIDs []byte) (*RopDeleteMessagesResponse, error) {
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
@@ -1608,7 +1621,7 @@ func DeleteMessages(folderid []byte, messageIDCount int, messageIDs []byte) (*Ro
 
 }
 
-//OpenAttachment allows for opening the attachment associated with a message
+// OpenAttachment allows for opening the attachment associated with a message
 func OpenAttachment(folderid, messageid []byte, attachid uint32, columns []PropertyTag) (*RopFastTransferSourceGetBufferResponse, error) {
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
@@ -1680,7 +1693,7 @@ func OpenAttachment(folderid, messageid []byte, attachid uint32, columns []Prope
 
 }
 
-//GetAttachments retrieves all the valid attachment IDs for a message
+// GetAttachments retrieves all the valid attachment IDs for a message
 func GetAttachments(folderid, messageid []byte) (*RopGetValidAttachmentsResponse, error) {
 	return nil, fmt.Errorf("This function is not working at present. Weird response from exchange: Invalid rop type found: GetValidAttachments")
 	/*
@@ -1739,7 +1752,7 @@ func GetAttachments(folderid, messageid []byte) (*RopGetValidAttachmentsResponse
 	*/
 }
 
-//EmptyFolder is used to delete all contents of a folder
+// EmptyFolder is used to delete all contents of a folder
 func EmptyFolder(folderid []byte) (*RopEmptyFolderResponse, error) {
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
@@ -1779,7 +1792,7 @@ func EmptyFolder(folderid []byte) (*RopEmptyFolderResponse, error) {
 
 }
 
-//DeleteFolder is used to delete  a folder
+// DeleteFolder is used to delete  a folder
 func DeleteFolder(parentFolder, folderid []byte) (*RopDeleteFolderResponse, error) {
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
@@ -1816,23 +1829,23 @@ func DeleteFolder(parentFolder, folderid []byte) (*RopDeleteFolderResponse, erro
 
 }
 
-//GetFolder for backwards compatibility
-//This function will be replaced in newer versions
+// GetFolder for backwards compatibility
+// This function will be replaced in newer versions
 func GetFolder(folderid int, columns []PropertyTag) (*RopOpenFolderResponse, error) {
 	folderID := AuthSession.Folderids[folderid]
 	folderResp, _, e := GetFolderFromID(folderID, nil)
 	return folderResp, e
 }
 
-//GetFolderProps function get's a folder from the folders id
-//FolderIds can be any of the "specialFolders" as defined in Exchange
-//mapi/datastructs.go folder id/locations constants
+// GetFolderProps function get's a folder from the folders id
+// FolderIds can be any of the "specialFolders" as defined in Exchange
+// mapi/datastructs.go folder id/locations constants
 func GetFolderProps(folderid int, columns []PropertyTag) (*RopOpenFolderResponse, *RopGetPropertiesSpecificResponse, error) {
 	folderID := AuthSession.Folderids[folderid]
 	return GetFolderFromID(folderID, columns)
 }
 
-//GetFolderFromID newer methods to actually allow using the folder id
+// GetFolderFromID newer methods to actually allow using the folder id
 func GetFolderFromID(folderid []byte, columns []PropertyTag) (*RopOpenFolderResponse, *RopGetPropertiesSpecificResponse, error) {
 
 	execRequest := ExecuteRequest{}
@@ -1888,7 +1901,7 @@ func GetFolderFromID(folderid []byte, columns []PropertyTag) (*RopOpenFolderResp
 
 }
 
-//OpenMessage opens and returns a handle to a message
+// OpenMessage opens and returns a handle to a message
 func OpenMessage(folderid, messageid []byte) ([]byte, error) {
 
 	execRequest := ExecuteRequest{}
@@ -1926,7 +1939,7 @@ func OpenMessage(folderid, messageid []byte) ([]byte, error) {
 	return execResponse.RopBuffer.Body[len(execResponse.RopBuffer.Body)-4:], nil
 }
 
-//GetMessage returns the specific fields from a message
+// GetMessage returns the specific fields from a message
 func GetMessage(folderid, messageid []byte, columns []PropertyTag) (GetProperties, error) {
 
 	execRequest := ExecuteRequest{}
@@ -1999,7 +2012,7 @@ func GetMessage(folderid, messageid []byte, columns []PropertyTag) (GetPropertie
 
 }
 
-//GetMessageFast returns the specific fields from a message using the fast transfer buffers. This works better for large messages
+// GetMessageFast returns the specific fields from a message using the fast transfer buffers. This works better for large messages
 func GetMessageFast(folderid, messageid []byte, columns []PropertyTag) (*RopFastTransferSourceGetBufferResponse, error) {
 
 	execRequest := ExecuteRequest{}
@@ -2064,7 +2077,7 @@ func GetMessageFast(folderid, messageid []byte, columns []PropertyTag) (*RopFast
 
 }
 
-//FastTransferFetchStep fetches the next part of a fast TransferBuffer
+// FastTransferFetchStep fetches the next part of a fast TransferBuffer
 func FastTransferFetchStep(handles []byte) ([]byte, error) {
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
@@ -2104,22 +2117,22 @@ func FastTransferFetchStep(handles []byte) ([]byte, error) {
 
 }
 
-//GetContentsTable is the standard request for getting the contents of a table.
-//A wrapper function that calls GetContentsTableRequest
+// GetContentsTable is the standard request for getting the contents of a table.
+// A wrapper function that calls GetContentsTableRequest
 func GetContentsTable(folderid []byte) (*RopGetContentsTableResponse, []byte, error) {
 	return GetContentsTableRequest(folderid, 0x40)
 }
 
-//GetAssocatedContentsTable is the standard request for getting the contents of a table.
-//sets the assocated flag to get hidden items
-//A wrapper function that calls GetContentsTableRequest
+// GetAssocatedContentsTable is the standard request for getting the contents of a table.
+// sets the assocated flag to get hidden items
+// A wrapper function that calls GetContentsTableRequest
 func GetAssocatedContentsTable(folderid []byte) (*RopGetContentsTableResponse, []byte, error) {
 	return GetContentsTableRequest(folderid, 0x40|0x02)
 }
 
-//GetContentsTableRequest function get's a folder from the folders id
-//and returns a hanlde to the contents table for that folder. tableFlags can be used to
-//control whether the associated table entries etc are returned
+// GetContentsTableRequest function get's a folder from the folders id
+// and returns a hanlde to the contents table for that folder. tableFlags can be used to
+// control whether the associated table entries etc are returned
 func GetContentsTableRequest(folderid []byte, tableFlags byte) (*RopGetContentsTableResponse, []byte, error) {
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
@@ -2161,8 +2174,8 @@ func GetContentsTableRequest(folderid []byte, tableFlags byte) (*RopGetContentsT
 
 }
 
-//GetFolderHierarchy function get's a folder from the folders id
-//and returns a handle to the hierarchy table
+// GetFolderHierarchy function get's a folder from the folders id
+// and returns a handle to the hierarchy table
 func GetFolderHierarchy(folderid []byte) (*RopGetHierarchyTableResponse, []byte, error) {
 
 	execRequest := ExecuteRequest{}
@@ -2200,7 +2213,7 @@ func GetFolderHierarchy(folderid []byte) (*RopGetHierarchyTableResponse, []byte,
 
 }
 
-//GetSubFolders returns all the subfolders available in a folder
+// GetSubFolders returns all the subfolders available in a folder
 func GetSubFolders(folderid []byte) (*RopQueryRowsResponse, error) {
 	folderHeirarchy, svrhndl, err := GetFolderHierarchy(folderid)
 	if err != nil {
@@ -2246,17 +2259,17 @@ func GetSubFolders(folderid []byte) (*RopQueryRowsResponse, error) {
 
 }
 
-//CreateSearchFolder function to create a search folder
+// CreateSearchFolder function to create a search folder
 func CreateSearchFolder(folderName string) (*RopCreateFolderResponse, error) {
 	return CreateFolderRequest(folderName, true, 0x02)
 }
 
-//CreateFolder function to create a search folder
+// CreateFolder function to create a search folder
 func CreateFolder(folderName string, hidden bool) (*RopCreateFolderResponse, error) {
 	return CreateFolderRequest(folderName, hidden, 0x01)
 }
 
-//CreateFolderRequest function to create a folder on the exchange server
+// CreateFolderRequest function to create a folder on the exchange server
 func CreateFolderRequest(folderName string, hidden bool, ftype uint8) (*RopCreateFolderResponse, error) {
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
@@ -2310,9 +2323,9 @@ func CreateFolderRequest(folderName string, hidden bool, ftype uint8) (*RopCreat
 
 }
 
-//GetContents returns the rows of a folder's content table.
-//This function returns the subject and message id
-//For custom columns use GetContentsColumns
+// GetContents returns the rows of a folder's content table.
+// This function returns the subject and message id
+// For custom columns use GetContentsColumns
 func GetContents(folderid []byte) (*RopQueryRowsResponse, error) {
 	columns := make([]PropertyTag, 3)
 	columns[0] = PidTagSubject
@@ -2321,17 +2334,17 @@ func GetContents(folderid []byte) (*RopQueryRowsResponse, error) {
 	return GetTableContents(folderid, false, columns)
 }
 
-//GetAssociatedContents returns the rows of a folder's assocated content table
+// GetAssociatedContents returns the rows of a folder's assocated content table
 func GetAssociatedContents(folderid []byte, columns []PropertyTag) (*RopQueryRowsResponse, error) {
 	return GetTableContents(folderid, true, columns)
 }
 
-//GetContentsColumns returns the rows of a folder's content table
+// GetContentsColumns returns the rows of a folder's content table
 func GetContentsColumns(folderid []byte, columns []PropertyTag) (*RopQueryRowsResponse, error) {
 	return GetTableContents(folderid, false, columns)
 }
 
-//GetTableContents returns the contents of a specific table
+// GetTableContents returns the contents of a specific table
 func GetTableContents(folderid []byte, assoc bool, columns []PropertyTag) (*RopQueryRowsResponse, error) {
 	var contentsTable *RopGetContentsTableResponse
 	var svrhndl []byte
@@ -2388,8 +2401,8 @@ func GetTableContents(folderid []byte, assoc bool, columns []PropertyTag) (*RopQ
 
 }
 
-//DisplayRules function get's a folder from the folders id
-//this is more of a wrapper to facilitate legacy code until I get around to changing it in ruler.go
+// DisplayRules function get's a folder from the folders id
+// this is more of a wrapper to facilitate legacy code until I get around to changing it in ruler.go
 func DisplayRules() ([]Rule, error) {
 	cols := make([]PropertyTag, 2)
 	cols[0] = PidTagRuleID
@@ -2410,7 +2423,7 @@ func DisplayRules() ([]Rule, error) {
 	return rules, nil
 }
 
-//FetchRules function returns rules along with the associated columns
+// FetchRules function returns rules along with the associated columns
 func FetchRules(columns []PropertyTag) (*RopQueryRowsResponse, error) {
 
 	execRequest := ExecuteRequest{}
@@ -2456,8 +2469,8 @@ func FetchRules(columns []PropertyTag) (*RopQueryRowsResponse, error) {
 
 }
 
-//ExecuteDeleteRuleAdd adds a new mailrule for deleting a message
-//This should be merged with ExecuteMailRuleAdd
+// ExecuteDeleteRuleAdd adds a new mailrule for deleting a message
+// This should be merged with ExecuteMailRuleAdd
 func ExecuteDeleteRuleAdd(rulename, triggerword string) (*ExecuteResponse, error) {
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
@@ -2511,7 +2524,7 @@ func ExecuteDeleteRuleAdd(rulename, triggerword string) (*ExecuteResponse, error
 	return nil, err
 }
 
-//ExecuteMailRuleAdd adds a new mailrules
+// ExecuteMailRuleAdd adds a new mailrules
 func ExecuteMailRuleAdd(rulename, triggerword, triggerlocation string, delete bool) (*ExecuteResponse, error) {
 	//valid
 
@@ -2569,7 +2582,7 @@ func ExecuteMailRuleAdd(rulename, triggerword, triggerlocation string, delete bo
 	return execResponse, nil
 }
 
-//ExecuteMailRuleDelete function to delete mailrules
+// ExecuteMailRuleDelete function to delete mailrules
 func ExecuteMailRuleDelete(ruleid []byte) error {
 	execRequest := ExecuteRequest{}
 	execRequest.Init()
@@ -2597,7 +2610,7 @@ func ExecuteMailRuleDelete(ruleid []byte) error {
 	return e
 }
 
-//Ping send a PING message to the server
+// Ping send a PING message to the server
 func Ping() {
 	//for RPC we need to keep the socket alive so keep sending pings
 	if AuthSession.Transport != HTTP {
@@ -2609,8 +2622,8 @@ func Ping() {
 	}
 }
 
-//DecodeBufferToRows returns the property rows contained in the buffer, takes a list
-//of propertytags. These are needed to figure out how to split the columns in the rows
+// DecodeBufferToRows returns the property rows contained in the buffer, takes a list
+// of propertytags. These are needed to figure out how to split the columns in the rows
 func DecodeBufferToRows(buff []byte, cols []PropertyTag) []PropertyRow {
 
 	var pos = 0

@@ -13,20 +13,20 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/sensepost/ruler/http-ntlm"
+	httpntlm "github.com/sensepost/ruler/http-ntlm"
 	"github.com/sensepost/ruler/utils"
 )
 
 //globals
 
-//SessionConfig holds the configuration for this autodiscover session
+// SessionConfig holds the configuration for this autodiscover session
 var SessionConfig *utils.Session
 var autodiscoverStep int
 var secondaryEmail string //a secondary email to use, edge case seen in office365
 var Transport http.Transport
 var basicAuth = false
 
-//the xml for the autodiscover service
+// the xml for the autodiscover service
 const autodiscoverXML = `<?xml version="1.0" encoding="utf-8"?><Autodiscover xmlns="http://schemas.microsoft.com/exchange/autodiscover/outlook/requestschema/2006">
 <Request><EMailAddress>{{.Email}}</EMailAddress>
 <AcceptableResponseSchema>http://schemas.microsoft.com/exchange/autodiscover/outlook/responseschema/2006a</AcceptableResponseSchema>
@@ -43,10 +43,10 @@ func parseTemplate(tmpl string) (string, error) {
 	return buff.String(), nil
 }
 
-//createAutodiscover generates a domain name of the format autodiscover.domain.com
-//and checks if a DNS entry exists for it. If it doesn't it tries DNS for just the domain name.
-//returns an empty string if no valid domain was found.
-//returns the full (expected) autodiscover URL
+// createAutodiscover generates a domain name of the format autodiscover.domain.com
+// and checks if a DNS entry exists for it. If it doesn't it tries DNS for just the domain name.
+// returns an empty string if no valid domain was found.
+// returns the full (expected) autodiscover URL
 func createAutodiscover(domain string, https bool) string {
 	_, err := net.LookupHost(domain)
 	if err != nil {
@@ -58,7 +58,7 @@ func createAutodiscover(domain string, https bool) string {
 	return fmt.Sprintf("http://%s/autodiscover/autodiscover.xml", domain)
 }
 
-//GetMapiHTTP gets the details for MAPI/HTTP
+// GetMapiHTTP gets the details for MAPI/HTTP
 func GetMapiHTTP(email, autoURLPtr string, resp *utils.AutodiscoverResp) (*utils.AutodiscoverResp, string, error) {
 	//var resp *utils.AutodiscoverResp
 	var err error
@@ -87,7 +87,7 @@ func GetMapiHTTP(email, autoURLPtr string, resp *utils.AutodiscoverResp) (*utils
 	return resp, rawAutodiscover, nil
 }
 
-//GetRPCHTTP exports the RPC details for RPC/HTTP
+// GetRPCHTTP exports the RPC details for RPC/HTTP
 func GetRPCHTTP(email, autoURLPtr string, resp *utils.AutodiscoverResp) (*utils.AutodiscoverResp, string, string, string, bool, error) {
 	//var resp *utils.AutodiscoverResp
 	var err error
@@ -190,7 +190,7 @@ func GetRPCHTTP(email, autoURLPtr string, resp *utils.AutodiscoverResp) (*utils.
 	return resp, rawAutodiscover, RPCURL, user, ntlmAuth, nil
 }
 
-//CheckCache checks to see if there is a stored copy of the autodiscover record
+// CheckCache checks to see if there is a stored copy of the autodiscover record
 func CheckCache(email string) *utils.AutodiscoverResp {
 	//check the cache folder for a stored autodiscover record
 	email = strings.Replace(email, "@", "_", -1)
@@ -215,7 +215,7 @@ func CheckCache(email string) *utils.AutodiscoverResp {
 	return &autodiscoverResp
 }
 
-//CreateCache function stores the raw autodiscover record to file
+// CreateCache function stores the raw autodiscover record to file
 func CreateCache(email, autodiscover string) {
 
 	if autodiscover == "" { //no autodiscover record passed in, don't try write
@@ -240,7 +240,7 @@ func CreateCache(email, autodiscover string) {
 	}
 }
 
-//Autodiscover function to retrieve mailbox details using the autodiscover mechanism from MS Exchange
+// Autodiscover function to retrieve mailbox details using the autodiscover mechanism from MS Exchange
 func Autodiscover(domain string) (*utils.AutodiscoverResp, string, error) {
 	if SessionConfig.Proxy == "" {
 		Transport = http.Transport{
@@ -258,8 +258,8 @@ func Autodiscover(domain string) (*utils.AutodiscoverResp, string, error) {
 	return autodiscover(domain, false)
 }
 
-//MAPIDiscover function to do the autodiscover request but specify the MAPI header
-//indicating that the MAPI end-points should be returned
+// MAPIDiscover function to do the autodiscover request but specify the MAPI header
+// indicating that the MAPI end-points should be returned
 func MAPIDiscover(domain string) (*utils.AutodiscoverResp, string, error) {
 	//set transport
 	if SessionConfig.Proxy == "" {
@@ -286,7 +286,7 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, string, er
 	//var client http.Client
 	client := http.Client{Transport: &Transport}
 
-	if SessionConfig.Basic == false {
+	if SessionConfig.Basic == false && SessionConfig.BearerToken == "" {
 		//check if this is a first request or a redirect
 		//create an ntml http client
 
@@ -342,9 +342,13 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, string, er
 		req.Header.Add("X-AnchorMailbox", SessionConfig.Email) //we want MAPI info
 	}
 
+	if SessionConfig.BearerToken != "" {
+		req.Header.Add("Authorization", "Bearer "+SessionConfig.BearerToken)
+	}
+
 	if SessionConfig.Basic == true {
 		if SessionConfig.Domain != "" {
-			req.SetBasicAuth(SessionConfig.Domain + "\\" + SessionConfig.User, SessionConfig.Pass)
+			req.SetBasicAuth(SessionConfig.Domain+"\\"+SessionConfig.User, SessionConfig.Pass)
 		} else {
 			req.SetBasicAuth(SessionConfig.Email, SessionConfig.Pass)
 		}
@@ -491,7 +495,7 @@ func redirectAutodiscover(redirdom string) (string, error) {
 	return resp.Header.Get("Location"), nil
 }
 
-//InsecureRedirectsO365 allows forwarding the Authorization header even when we shouldn't
+// InsecureRedirectsO365 allows forwarding the Authorization header even when we shouldn't
 type InsecureRedirectsO365 struct {
 	Transport http.RoundTripper
 	User      string
@@ -499,9 +503,9 @@ type InsecureRedirectsO365 struct {
 	Insecure  bool
 }
 
-//RoundTrip custom redirector that allows us to forward the auth header, even when the domain changes.
-//This is needed as some office365 domains will redirect from autodiscover.domain.com to autodiscover.outlook.com
-//and Go does not forward Sensitive headers such as Authorization (https://golang.org/src/net/http/client.go#41)
+// RoundTrip custom redirector that allows us to forward the auth header, even when the domain changes.
+// This is needed as some office365 domains will redirect from autodiscover.domain.com to autodiscover.outlook.com
+// and Go does not forward Sensitive headers such as Authorization (https://golang.org/src/net/http/client.go#41)
 func (l InsecureRedirectsO365) RoundTrip(req *http.Request) (resp *http.Response, err error) {
 	t := l.Transport
 

