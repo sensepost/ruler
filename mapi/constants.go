@@ -7,7 +7,7 @@ import (
 	"github.com/sensepost/ruler/utils"
 )
 
-//ErrorCode returns the mapi error code encountered
+// ErrorCode returns the mapi error code encountered
 type ErrorCode struct {
 	ErrorCode uint32
 }
@@ -16,7 +16,7 @@ func (e *ErrorCode) Error() string {
 	return fmt.Sprintf("mapi: non-zero return value. ERROR_CODE: %x - %s", e.ErrorCode, ErrorMapiCode{mapicode(e.ErrorCode)})
 }
 
-//TransportError returns the mapi error code encountered
+// TransportError returns the mapi error code encountered
 type TransportError struct {
 	ErrorValue error
 }
@@ -52,7 +52,7 @@ const (
 	ropFlagsChain       = 0x0004 //[]byte{0x04, 0x00}       //LittleEndian 0x0004
 )
 
-//OpenFlags
+// OpenFlags
 const (
 	UseAdminPrivilege       = 0x00000001
 	Public                  = 0x00000002
@@ -65,7 +65,7 @@ const (
 	SupportProgress         = 0x20000000
 )
 
-//Property Data types
+// Property Data types
 const (
 	PtypInteger16         = 0x0002
 	PtypInteger32         = 0x0003
@@ -86,7 +86,7 @@ const (
 	PtypObject            = 0x000D
 )
 
-//Folder id/locations -- https://msdn.microsoft.com/en-us/library/office/cc815825.aspx
+// Folder id/locations -- https://msdn.microsoft.com/en-us/library/office/cc815825.aspx
 // ^ this seems to lie
 const (
 	TOP            = 0 //Contains outgoing IPM messages.
@@ -104,7 +104,7 @@ const (
 	SHORTCUTS      = 12
 )
 
-//Message status flags
+// Message status flags
 const (
 	MSRemoteDownload = 0x00001000
 	MSInConflict     = 0x00000800
@@ -290,7 +290,7 @@ func (e mapicode) String() string {
 	return "CODE_NOT_FOUND"
 }
 
-//ErrorMapiCode provides a mapping of uint32 error code to string
+// ErrorMapiCode provides a mapping of uint32 error code to string
 type ErrorMapiCode struct {
 	X mapicode
 }
@@ -387,180 +387,180 @@ const (
 
 //Find these in [MS-OXPROPS]
 
-//PidTagRuleID the TaggedPropertyValue for rule id
+// PidTagRuleID the TaggedPropertyValue for rule id
 var PidTagRuleID = PropertyTag{PtypInteger64, 0x6674}
 
-//PidTagRuleName the TaggedPropertyValue for rule id
+// PidTagRuleName the TaggedPropertyValue for rule id
 var PidTagRuleName = PropertyTag{PtypString, 0x6682}
 
-//PidTagRuleSequence the TaggedPropertyValue for rule id
+// PidTagRuleSequence the TaggedPropertyValue for rule id
 var PidTagRuleSequence = PropertyTag{PtypInteger32, 0x6676}
 
-//PidTagRuleState the TaggedPropertyValue for rule id
+// PidTagRuleState the TaggedPropertyValue for rule id
 var PidTagRuleState = PropertyTag{PtypInteger32, 0x6677}
 
-//PidTagRuleCondition the TaggedPropertyValue for rule id
+// PidTagRuleCondition the TaggedPropertyValue for rule id
 var PidTagRuleCondition = PropertyTag{PtypRestriction, 0x6679}
 
-//PidTagRuleActions the TaggedPropertyValue for rule id
+// PidTagRuleActions the TaggedPropertyValue for rule id
 var PidTagRuleActions = PropertyTag{PtypRuleAction, 0x6680}
 
-//PidTagRuleProvider the TaggedPropertyValue for rule id
+// PidTagRuleProvider the TaggedPropertyValue for rule id
 var PidTagRuleProvider = PropertyTag{PtypString, 0x6681}
 
-//PidTagRuleProviderData the TaggedPropertyValue for rule id
+// PidTagRuleProviderData the TaggedPropertyValue for rule id
 var PidTagRuleProviderData = PropertyTag{PtypBinary, 0x6684}
 
-//PidTagRuleLevel the TaggedPropertyValue for rule level
+// PidTagRuleLevel the TaggedPropertyValue for rule level
 var PidTagRuleLevel = PropertyTag{PtypInteger32, 0x6683}
 
-//PidTagRuleUserFlags the TaggedPropertyValue for rule user flags
+// PidTagRuleUserFlags the TaggedPropertyValue for rule user flags
 var PidTagRuleUserFlags = PropertyTag{PtypInteger32, 0x6678}
 
-//PidTagParentFolderID Contains a value that contains the Folder ID
+// PidTagParentFolderID Contains a value that contains the Folder ID
 var PidTagParentFolderID = PropertyTag{PtypInteger64, 0x6749}
 
-//PidTagAccess indicates operations available
+// PidTagAccess indicates operations available
 var PidTagAccess = PropertyTag{PtypInteger32, 0x0ff4}
 
-//PidTagMemberName contains user-readable name of the user
+// PidTagMemberName contains user-readable name of the user
 var PidTagMemberName = PropertyTag{PtypBinary, 0x6672}
 
-//PidTagDefaultPostMessageClass contains message class of the object
+// PidTagDefaultPostMessageClass contains message class of the object
 var PidTagDefaultPostMessageClass = PropertyTag{PtypString, 0x36e5}
 
-//PidTagDisplayName display name of the folder
+// PidTagDisplayName display name of the folder
 var PidTagDisplayName = PropertyTag{PtypString, 0x3001}
 
-//PidTagEntryID display name of the folder
+// PidTagEntryID display name of the folder
 var PidTagEntryID = PropertyTag{PtypBinary, 0x0FFF}
 
-//PidTagEmailAddress display name of the folder
+// PidTagEmailAddress display name of the folder
 var PidTagEmailAddress = PropertyTag{PtypString, 0x3003}
 
-//PidTagAddressType display name of the folder
+// PidTagAddressType display name of the folder
 var PidTagAddressType = PropertyTag{PtypString, 0x3001}
 
-//PidTagFolderType specifies the type of folder that includes the root folder,
+// PidTagFolderType specifies the type of folder that includes the root folder,
 var PidTagFolderType = PropertyTag{PtypInteger32, 0x3601}
 
-//PidTagFolderID the ID of the folder
+// PidTagFolderID the ID of the folder
 var PidTagFolderID = PropertyTag{PtypInteger64, 0x6748}
 
-//PidTagContentCount specifies the number of rows under the header row
+// PidTagContentCount specifies the number of rows under the header row
 var PidTagContentCount = PropertyTag{PtypInteger32, 0x3602}
 
-//PidTagContentUnreadCount specifies the number of rows under the header row
+// PidTagContentUnreadCount specifies the number of rows under the header row
 var PidTagContentUnreadCount = PropertyTag{PtypInteger32, 0x3603}
 
-//PidTagSubfolders specifies whether the folder has subfolders
+// PidTagSubfolders specifies whether the folder has subfolders
 var PidTagSubfolders = PropertyTag{PtypBoolean, 0x360a}
 
-//PidTagLocaleID contains the Logon object LocaleID
+// PidTagLocaleID contains the Logon object LocaleID
 var PidTagLocaleID = PropertyTag{PtypInteger32, 0x66A1}
 
 //----Tags for email properties ----
 
-//PidTagSentMailSvrEID id of the sent folder
+// PidTagSentMailSvrEID id of the sent folder
 var PidTagSentMailSvrEID = PropertyTag{0x00FB, 0x6740}
 
-//PidTagBody a
+// PidTagBody a
 var PidTagBody = PropertyTag{PtypString, 0x1000}
 
-//PidTagBodyContentID a
+// PidTagBodyContentID a
 var PidTagBodyContentID = PropertyTag{PtypString, 0x1015}
 
-//PidTagConversationTopic a
+// PidTagConversationTopic a
 var PidTagConversationTopic = PropertyTag{PtypString, 0x0070}
 
-//PidTagMessageClass this will always be IPM.Note
+// PidTagMessageClass this will always be IPM.Note
 var PidTagMessageClass = PropertyTag{PtypString, 0x001A}
 
-//PidTagMessageClassIPMNote this will always be IPM.Note
+// PidTagMessageClassIPMNote this will always be IPM.Note
 var PidTagMessageClassIPMNote = TaggedPropertyValue{PropertyTag{PtypString, 0x001A}, utils.UniString("IPM.Note")}
 
-//PidTagMessageFlags setting this to unsent
+// PidTagMessageFlags setting this to unsent
 var PidTagMessageFlags = PropertyTag{PtypInteger32, 0x0E07} //0x00000008
 
-//PidTagIconIndexOld index of the icon to display
+// PidTagIconIndexOld index of the icon to display
 var PidTagIconIndexOld = TaggedPropertyValue{PropertyTag{PtypInteger32, 0x1080}, []byte{0xFF, 0xFF, 0xFF, 0xFF}}
 
-//PidTagMessageEditorFormatOld format lets do plaintext
+// PidTagMessageEditorFormatOld format lets do plaintext
 var PidTagMessageEditorFormatOld = TaggedPropertyValue{PropertyTag{PtypInteger32, 0x5909}, []byte{0x01, 0x00, 0x00, 0x00}}
 
-//PidTagNativeBody format of the body
+// PidTagNativeBody format of the body
 var PidTagNativeBody = PropertyTag{PtypInteger32, 0x1016}
 
-//PidTagMessageLocaleID format lets do en-us
+// PidTagMessageLocaleID format lets do en-us
 var PidTagMessageLocaleID = TaggedPropertyValue{PropertyTag{PtypInteger32, 0x3FF1}, []byte{0x09, 0x04, 0x00, 0x00}}
 
-//PidTagPrimarySendAccount who is sending
+// PidTagPrimarySendAccount who is sending
 var PidTagPrimarySendAccount = PropertyTag{PtypString, 0x0E28}
 
-//PidTagObjectType used in recepient
+// PidTagObjectType used in recepient
 var PidTagObjectType = PropertyTag{PtypInteger32, 0x0FFE}
 
-//PidTagImportance used in recepient
+// PidTagImportance used in recepient
 var PidTagImportance = PropertyTag{PtypInteger32, 0x0017}
 
-//PidTagDisplayType  used in recepient
+// PidTagDisplayType  used in recepient
 var PidTagDisplayType = PropertyTag{PtypInteger32, 0x3900}
 
-//PidTagAddressBookDisplayNamePrintable  used in recepient
+// PidTagAddressBookDisplayNamePrintable  used in recepient
 var PidTagAddressBookDisplayNamePrintable = PropertyTag{PtypString, 0x39FF}
 
-//PidTagSMTPAddress used in recepient
+// PidTagSMTPAddress used in recepient
 var PidTagSMTPAddress = PropertyTag{PtypString, 0x39FE}
 
-//PidTagSendInternetEncoding  used in recepient
+// PidTagSendInternetEncoding  used in recepient
 var PidTagSendInternetEncoding = PropertyTag{PtypInteger32, 0x3a71}
 
-//PidTagDisplayTypeEx used in recepient
+// PidTagDisplayTypeEx used in recepient
 var PidTagDisplayTypeEx = PropertyTag{PtypInteger32, 0x3905}
 
-//PidTagRecipientDisplayName  used in recepient
+// PidTagRecipientDisplayName  used in recepient
 var PidTagRecipientDisplayName = PropertyTag{PtypString, 0x5FF6}
 
-//PidTagRecipientFlags used in recepient
+// PidTagRecipientFlags used in recepient
 var PidTagRecipientFlags = PropertyTag{PtypInteger32, 0x5FFD}
 
-//PidTagRecipientTrackStatus used in recepient
+// PidTagRecipientTrackStatus used in recepient
 var PidTagRecipientTrackStatus = PropertyTag{PtypInteger32, 0x5FFF}
 
-//Unspecifiedproperty  used in recepient
+// Unspecifiedproperty  used in recepient
 var Unspecifiedproperty = PropertyTag{PtypInteger32, 0x5FDE}
 
-//PidTagRecipientOrder used in recepient
+// PidTagRecipientOrder used in recepient
 var PidTagRecipientOrder = PropertyTag{PtypInteger32, 0x5FDF}
 
-//PidTagRecipientEntryID  used in recepient
+// PidTagRecipientEntryID  used in recepient
 var PidTagRecipientEntryID = PropertyTag{PtypBinary, 0x5FF7}
 
-//PidTagSubjectPrefix used in recepient
+// PidTagSubjectPrefix used in recepient
 var PidTagSubjectPrefix = PropertyTag{PtypString, 0x0003}
 
-//PidTagNormalizedSubject used in recepient
+// PidTagNormalizedSubject used in recepient
 var PidTagNormalizedSubject = PropertyTag{PtypString, 0x0E1D}
 
-//PidTagSubject used in recepient
+// PidTagSubject used in recepient
 var PidTagSubject = PropertyTag{PtypString, 0x0037}
 
-//PidTagHidden specify whether folder is hidden
+// PidTagHidden specify whether folder is hidden
 var PidTagHidden = PropertyTag{PtypBoolean, 0x10F4}
 
-//PidTagInstID identifier for all instances of a row in the table
+// PidTagInstID identifier for all instances of a row in the table
 var PidTagInstID = PropertyTag{PtypInteger64, 0x674D}
 
-//PidTagInstanceNum identifier for single instance of a row in the table
+// PidTagInstanceNum identifier for single instance of a row in the table
 var PidTagInstanceNum = PropertyTag{PtypInteger32, 0x674E}
 
-//PidTagMid is the message id of a message in a store
+// PidTagMid is the message id of a message in a store
 var PidTagMid = PropertyTag{PtypInteger64, 0x674A}
 
-//PidTagBodyHTML is the message id of a message in a store
+// PidTagBodyHTML is the message id of a message in a store
 var PidTagBodyHTML = PropertyTag{PtypBinary, 0x1013}
 
-//PidTagHTMLBody is the same as above?
+// PidTagHTMLBody is the same as above?
 var PidTagHTMLBody = PropertyTag{PtypString, 0x1013}
 
 var PidTagAttachMethod = PropertyTag{PtypInteger32, 0x3705}
@@ -599,9 +599,13 @@ var PidTagOfflineAddressBookName = PropertyTag{PtypString, 0x6800}
 var PidTagOfflineAddressBookTruncatedProps = PropertyTag{PtypMultipleInteger32, 0x6805}
 var PidTagOfflineAddressBookLangID = PropertyTag{PtypInteger32, 0x6807}
 var PidTagOfflineAddressBookFileType = PropertyTag{PtypBoolean, 0x6808}
+var PidTagOfflineAddressBookSequence = PropertyTag{PtypString, 0x6801}
 var PidTagSendOutlookRecallReport = PropertyTag{PtypBoolean, 0x6803}
 var PidTagOABCompressedSize = PropertyTag{PtypGUID, 0x6809}
+var PidTagOfflineAddressBookContainerGuid = PropertyTag{PtypString, 0x6802}
 var PidTagOABDN = PropertyTag{PtypGUID, 0x6804}
+
+var PidTagMapiFormComposeCommand = PropertyTag{PtypString, 0x682F}
 
 var PidTag6830 = PropertyTag{PtypString8, 0x6830}
 var PidTag682C = PropertyTag{PtypMultipleInteger64, 0x682C}
