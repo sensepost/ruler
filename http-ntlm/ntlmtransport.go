@@ -12,7 +12,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
@@ -54,7 +53,7 @@ func (t NtlmTransport) RoundTrip(req *http.Request) (res *http.Response, err err
 	b, _ := session.GenerateNegotiateMessage()
 	// first send NTLM Negotiate header
 	r, _ := http.NewRequest("GET", req.URL.String(), strings.NewReader(""))
-	r.Header.Add("Authorization", "NTLM " + utils.EncBase64(b.Bytes()))
+	r.Header.Add("Authorization", "NTLM "+utils.EncBase64(b.Bytes()))
 	r.Header.Add("User-Agent", req.UserAgent())
 
 	if t.Proxy == "" {
@@ -84,7 +83,7 @@ func (t NtlmTransport) RoundTrip(req *http.Request) (res *http.Response, err err
 
 		// it's necessary to reuse the same http connection
 		// in order to do that it's required to read Body and close it
-		_, err = io.Copy(ioutil.Discard, resp.Body)
+		_, err = io.Copy(io.Discard, resp.Body)
 		if err != nil {
 			return nil, err
 		}
@@ -134,7 +133,7 @@ func (t NtlmTransport) RoundTrip(req *http.Request) (res *http.Response, err err
 		}
 
 		// set NTLM Authorization header
-		req.Header.Set("Authorization", "NTLM " + utils.EncBase64(authenticate.Bytes()))
+		req.Header.Set("Authorization", "NTLM "+utils.EncBase64(authenticate.Bytes()))
 
 		resp, err = client.Do(req)
 	}

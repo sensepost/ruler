@@ -30,7 +30,7 @@ var writemutex = &sync.Mutex{}
 
 //var AuthSession.ContextHandle []byte
 
-//AuthSession Keep track of session data
+// AuthSession Keep track of session data
 var AuthSession *utils.Session
 
 func setupHTTP(rpctype string, URL string, ntlmAuth bool, full bool) (net.Conn, error) {
@@ -171,7 +171,7 @@ func setupHTTP(rpctype string, URL string, ntlmAuth bool, full bool) (net.Conn, 
 	return connection, nil
 }
 
-//RPCOpen opens HTTP for RPC_IN_DATA and RPC_OUT_DATA
+// RPCOpen opens HTTP for RPC_IN_DATA and RPC_OUT_DATA
 func RPCOpen(URL string, readySignal chan bool, errOccurred chan error) {
 	//I'm so damn frustrated at not being able to use the http client here
 	//can't find a way to keep the write channel open (other than going over to http/2, which isn't valid here)
@@ -213,9 +213,9 @@ func RPCOpen(URL string, readySignal chan bool, errOccurred chan error) {
 	}
 }
 
-//RPCOpenOut function opens the RPC_OUT_DATA channel
-//starts our listening "loop" which scans for new responses and pushes
-//these to our list of recieved responses
+// RPCOpenOut function opens the RPC_OUT_DATA channel
+// starts our listening "loop" which scans for new responses and pushes
+// these to our list of recieved responses
 func RPCOpenOut(URL string, readySignal chan<- bool, errOccurred chan<- error) {
 
 	var err error
@@ -260,7 +260,7 @@ func RPCOpenOut(URL string, readySignal chan<- bool, errOccurred chan<- error) {
 
 }
 
-//RPCBind function establishes our session
+// RPCBind function establishes our session
 func RPCBind() error {
 	var err error
 	//Generate out-channel cookie
@@ -337,12 +337,12 @@ func RPCBind() error {
 	return nil
 }
 
-//RPCPing fucntion
+// RPCPing fucntion
 func RPCPing() {
 	rpcInW.Write(Ping().Marshal())
 }
 
-//EcDoRPCExt2 does our actual RPC request returns the mapi data
+// EcDoRPCExt2 does our actual RPC request returns the mapi data
 func EcDoRPCExt2(MAPI []byte, auxLen uint32) ([]byte, error) {
 
 	RPCWriteN(MAPI, auxLen, 0x0b)
@@ -372,9 +372,9 @@ func EcDoRPCExt2(MAPI []byte, auxLen uint32) ([]byte, error) {
 	return resp.PDU[28:], err
 }
 
-//EcDoRPCAbk makes a request for NSPI addressbook
-//Not fully implemented
-//TODO: complete this
+// EcDoRPCAbk makes a request for NSPI addressbook
+// Not fully implemented
+// TODO: complete this
 func EcDoRPCAbk(MAPI []byte, l int) ([]byte, error) {
 	RPCWriteN(MAPI, uint32(l), 0x03)
 	//RPCWrite(req.Marshal())
@@ -388,8 +388,8 @@ func EcDoRPCAbk(MAPI []byte, l int) ([]byte, error) {
 	return resp.PDU, err
 }
 
-//DoConnectExRequest makes our connection request. After this we can use
-//EcDoRPCExt2 to make our MAPI requests
+// DoConnectExRequest makes our connection request. After this we can use
+// EcDoRPCExt2 to make our MAPI requests
 func DoConnectExRequest(MAPI []byte, auxLen uint32) ([]byte, error) {
 
 	callcounter += 2
@@ -420,7 +420,7 @@ func DoConnectExRequest(MAPI []byte, auxLen uint32) ([]byte, error) {
 	return resp.Body, err
 }
 
-//RPCDummy is used to check if we can communicate with the server
+// RPCDummy is used to check if we can communicate with the server
 func RPCDummy() {
 	header := RTSHeader{Version: 0x05, VersionMinor: 0, Type: DCERPC_PKT_REQUEST, PFCFlags: 0x03, AuthLen: 0, CallID: uint32(callcounter)}
 	header.PackedDrep = 16
@@ -437,7 +437,7 @@ func RPCDummy() {
 	RPCWrite(req.Marshal())
 }
 
-//RPCDisconnect fucntion
+// RPCDisconnect fucntion
 func RPCDisconnect() {
 	header := RTSHeader{Version: 0x05, VersionMinor: 0, Type: DCERPC_PKT_REQUEST, PFCFlags: 0x03, AuthLen: 0, CallID: uint32(callcounter)}
 	header.PackedDrep = 16
@@ -456,7 +456,7 @@ func RPCDisconnect() {
 	rpcOutConn.Close()
 }
 
-//RPCWriteN function writes to our RPC_IN_DATA channel
+// RPCWriteN function writes to our RPC_IN_DATA channel
 func RPCWriteN(MAPI []byte, auxlen uint32, opnum byte) {
 	header := RTSHeader{Version: 0x05, VersionMinor: 0, Type: DCERPC_PKT_REQUEST, PFCFlags: 0x03, AuthLen: 0, CallID: uint32(callcounter)}
 	header.PackedDrep = 16
@@ -524,7 +524,7 @@ func RPCWriteN(MAPI []byte, auxlen uint32, opnum byte) {
 	time.Sleep(time.Millisecond * 300)
 }
 
-//RPCWrite function writes to our RPC_IN_DATA channel
+// RPCWrite function writes to our RPC_IN_DATA channel
 func RPCWrite(data []byte) {
 	callcounter++
 	writemutex.Lock() //lets be safe, don't think this is strictly necessary
@@ -533,8 +533,8 @@ func RPCWrite(data []byte) {
 	time.Sleep(time.Millisecond * 300)
 }
 
-//RPCOutWrite function writes to the RPC_OUT_DATA channel,
-//this should only happen once, for ConnA1
+// RPCOutWrite function writes to the RPC_OUT_DATA channel,
+// this should only happen once, for ConnA1
 func RPCOutWrite(data []byte) {
 	if rpcOutConn != nil {
 		writemutex.Lock() //lets be safe, don't think this is strictly necessary
@@ -544,8 +544,8 @@ func RPCOutWrite(data []byte) {
 	}
 }
 
-//RPCRead function takes a call ID and searches for the response in
-//our list of received responses. Blocks until it finds a response
+// RPCRead function takes a call ID and searches for the response in
+// our list of received responses. Blocks until it finds a response
 func RPCRead(callID int) (RPCResponse, error) {
 	c := make(chan RPCResponse, 1)
 
@@ -586,7 +586,7 @@ func RPCRead(callID int) (RPCResponse, error) {
 
 }
 
-//SplitData is used to scan through the input stream and split data into individual responses
+// SplitData is used to scan through the input stream and split data into individual responses
 func SplitData(data []byte, atEOF bool) (advance int, token []byte, err error) {
 	//check if HTTP response
 	if string(data[0:4]) == "HTTP" {

@@ -3,10 +3,10 @@ package autodiscover
 import (
 	"crypto/tls"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
+	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -311,7 +311,7 @@ func UserPassBruteForce() {
 func readFile(filename string) []string {
 	var outputs []string
 
-	data, err := ioutil.ReadFile(filename)
+	data, err := os.ReadFile(filename)
 	if err != nil {
 		utils.Error.Println("Input file not found")
 		return nil

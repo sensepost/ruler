@@ -4,21 +4,21 @@ import "github.com/sensepost/ruler/utils"
 
 //Contains the datastructs used to form restrictions
 
-//match types for fuzzy low
+// match types for fuzzy low
 const (
 	FLFULLSTRING = 0x0000 //field and the value of the column property tag match one another in their entirety
 	FLSUBSTRING  = 0x0001 //field matches some portion of the value of the column tag
 	FLPREFIX     = 0x0002 //field matches a starting portion of the value of the column tag
 )
 
-//match types for fuzzy high
+// match types for fuzzy high
 const (
 	FLIGNORECASE    = 0x0001 //The comparison does not consider case
 	FLIGNOREONSPACE = 0x0002 //The comparison ignores Unicode-defined nonspacing characters such as diacritical marks
 	FLLOOSE         = 0x0004 //The comparison results in a match whenever possible, ignoring case and nonspacing characters
 )
 
-//search flags
+// search flags
 const (
 	STOPSEARCH              = 0x00000001
 	RESTARTSEARCH           = 0x00000002
@@ -29,7 +29,7 @@ const (
 	STATICSEARCH            = 0x00040000
 )
 
-//search return flags
+// search return flags
 const (
 	SEARCHRUNNING     = 0x00000001
 	SEARCHREBUILD     = 0x00000002
@@ -42,14 +42,14 @@ const (
 	TWIRTOTALLY       = 0x08000000
 )
 
-//Restriction interface to generalise restrictions
+// Restriction interface to generalise restrictions
 type Restriction interface {
 	Marshal() []byte
 }
 
-//ContentRestriction describes a content restriction,
-//which is used to limit a table view to only those rows that include a column
-//with contents matching a search string.
+// ContentRestriction describes a content restriction,
+// which is used to limit a table view to only those rows that include a column
+// with contents matching a search string.
 type ContentRestriction struct {
 	RestrictType   uint8  //0x03
 	FuzzyLevelLow  uint16 //type of match
@@ -58,29 +58,29 @@ type ContentRestriction struct {
 	PropertyValue  TaggedPropertyValue
 }
 
-//AndRestriction structure describes a combination of nested conditions that need to be
-//AND'ed with each other
+// AndRestriction structure describes a combination of nested conditions that need to be
+// AND'ed with each other
 type AndRestriction struct {
 	RestrictType  uint8 //0x00
 	RestrictCount uint16
 	Restricts     []Restriction
 }
 
-//OrRestriction structure describes a combination of nested conditions that need to be
-//OR'ed with each other
+// OrRestriction structure describes a combination of nested conditions that need to be
+// OR'ed with each other
 type OrRestriction struct {
 	RestrictType  uint8 //0x01
 	RestrictCount uint16
 	Restricts     []Restriction
 }
 
-//NotRestriction is used to apply a logical NOT operation to a single restriction
+// NotRestriction is used to apply a logical NOT operation to a single restriction
 type NotRestriction struct {
 	RestrictType uint8 //0x02
 	Restriction  Restriction
 }
 
-//PropertyRestriction is used to apply a logical NOT operation to a single restriction
+// PropertyRestriction is used to apply a logical NOT operation to a single restriction
 type PropertyRestriction struct {
 	RestrictType uint8 //0x04
 	RelOp        uint8
@@ -88,27 +88,27 @@ type PropertyRestriction struct {
 	TaggedValue  TaggedPropertyValue
 }
 
-//Marshal turn ContentRestriction into Bytes
+// Marshal turn ContentRestriction into Bytes
 func (restriction ContentRestriction) Marshal() []byte {
 	return utils.BodyToBytes(restriction)
 }
 
-//Marshal turn AndResetriction into Bytes
+// Marshal turn AndResetriction into Bytes
 func (restriction AndRestriction) Marshal() []byte {
 	return utils.BodyToBytes(restriction)
 }
 
-//Marshal turn OrResetriction into Bytes
+// Marshal turn OrResetriction into Bytes
 func (restriction OrRestriction) Marshal() []byte {
 	return utils.BodyToBytes(restriction)
 }
 
-//Marshal turn NotRestriction into Bytes
+// Marshal turn NotRestriction into Bytes
 func (restriction NotRestriction) Marshal() []byte {
 	return utils.BodyToBytes(restriction)
 }
 
-//Marshal turn PropertyRestriction into Bytes
+// Marshal turn PropertyRestriction into Bytes
 func (restriction PropertyRestriction) Marshal() []byte {
 	return utils.BodyToBytes(restriction)
 }
