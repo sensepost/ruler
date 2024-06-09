@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"encoding/hex"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
@@ -1244,13 +1244,13 @@ A tool by @_staaldraad and @sensepost to abuse Exchange Services.
 
 	app.Before = func(c *cli.Context) error {
 		if c.Bool("verbose") == true && c.Bool("debug") == false {
-			utils.Init(os.Stdout, os.Stdout, ioutil.Discard, os.Stderr)
+			utils.Init(os.Stdout, os.Stdout, io.Discard, os.Stderr)
 		} else if c.Bool("verbose") == false && c.Bool("debug") == true {
-			utils.Init(ioutil.Discard, os.Stdout, os.Stdout, os.Stderr)
+			utils.Init(io.Discard, os.Stdout, os.Stdout, os.Stderr)
 		} else if c.Bool("debug") == true {
 			utils.Init(os.Stdout, os.Stdout, os.Stdout, os.Stderr)
 		} else {
-			utils.Init(ioutil.Discard, os.Stdout, ioutil.Discard, os.Stderr)
+			utils.Init(io.Discard, os.Stdout, io.Discard, os.Stderr)
 		}
 		return nil
 	}

@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"hash/fnv"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"reflect"
@@ -31,7 +30,7 @@ func ReadFile(path string) ([]byte, error) {
 	if _, err := os.Stat(path); err != nil {
 		return nil, err
 	}
-	data, err := ioutil.ReadFile(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
@@ -318,7 +317,7 @@ func GenerateString(pcount int) string {
 // ReadYml reads the supplied config file, Unmarshals the data into the global config struct.
 func ReadYml(yml string) (YamlConfig, error) {
 	var config YamlConfig
-	data, err := ioutil.ReadFile(yml)
+	data, err := os.ReadFile(yml)
 	if err != nil {
 		return YamlConfig{}, err
 	}

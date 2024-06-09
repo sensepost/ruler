@@ -5,7 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/hex"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sensepost/ruler/http-ntlm"
-	"github.com/sensepost/ruler/rpc-http"
+	httpntlm "github.com/sensepost/ruler/http-ntlm"
+	rpchttp "github.com/sensepost/ruler/rpc-http"
 	"github.com/sensepost/ruler/utils"
 )
 
@@ -242,7 +242,7 @@ func mapiRequestHTTP(URL, mapiType string, body []byte) ([]byte, error) {
 		}
 	}
 
-	rbody, err := ioutil.ReadAll(resp.Body)
+	rbody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, &TransportError{err}
 	}

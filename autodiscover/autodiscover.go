@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"crypto/tls"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -13,7 +13,7 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/sensepost/ruler/http-ntlm"
+	httpntlm "github.com/sensepost/ruler/http-ntlm"
 	"github.com/sensepost/ruler/utils"
 )
 
@@ -205,7 +205,7 @@ func CheckCache(email string) *utils.AutodiscoverResp {
 		return nil
 	}
 	utils.Info.Println("Found cached Autodiscover record. Using this (use --nocache to force new lookup)")
-	data, err := ioutil.ReadFile(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		utils.Error.Println("Error reading stored record ", err)
 		return nil
@@ -374,7 +374,7 @@ func autodiscover(domain string, mapi bool) (*utils.AutodiscoverResp, string, er
 
 	defer resp.Body.Close()
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, "", err
 	}
