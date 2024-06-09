@@ -520,9 +520,7 @@ func (l InsecureRedirectsO365) RoundTrip(req *http.Request) (resp *http.Response
 		URL, _ := url.Parse(resp.Header.Get("Location"))
 		r, _ := parseTemplate(autodiscoverXML)
 		//if the domains are different, we need to force the auth cookie to be passed along.. this is for redirects to office365
-		client := http.Client{Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: l.Insecure},
-		}}
+		client := http.Client{Transport: t}
 
 		req, err = http.NewRequest("POST", URL.String(), strings.NewReader(r))
 		req.Header.Add("Content-Type", "text/xml")
