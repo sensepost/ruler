@@ -11,7 +11,7 @@ import (
 	"github.com/sensepost/ruler/utils"
 )
 
-//CreateFormAttachmentPointer creates the first attachment that holds info about the new form
+// CreateFormAttachmentPointer creates the first attachment that holds info about the new form
 func CreateFormAttachmentPointer(folderid, messageid []byte) error {
 	utils.Info.Println("Create Form Pointer Attachment")
 	data := []byte("FormStg=%d\\FS525C.tmp\nMsgCls=IPM.Note.grr\nBaseMsgCls=IPM.Note\n") //don't think this is strictly necessary
@@ -31,17 +31,17 @@ func CreateFormAttachmentPointer(folderid, messageid []byte) error {
 	return err
 }
 
-//CreateFormAttachmentTemplate creates the template attachment holding the actual command to execute
+// CreateFormAttachmentTemplate creates the template attachment holding the actual command to execute
 func CreateFormAttachmentTemplate(folderid, messageid []byte, pstr string) error {
 	return CreateFormAttachmentWithTemplate(folderid, messageid, pstr, "templates/formtemplate.bin")
 }
 
-//CreateFormAttachmentForDeleteTemplate creates the template attachment holding the actual command to execute
+// CreateFormAttachmentForDeleteTemplate creates the template attachment holding the actual command to execute
 func CreateFormAttachmentForDeleteTemplate(folderid, messageid []byte, pstr string) error {
 	return CreateFormAttachmentWithTemplate(folderid, messageid, pstr, "templates/formdeletetemplate.bin")
 }
 
-//CreateFormAttachmentWithTemplate creates a form with a specific template
+// CreateFormAttachmentWithTemplate creates a form with a specific template
 func CreateFormAttachmentWithTemplate(folderid, messageid []byte, pstr, templatepath string) error {
 	utils.Info.Println("Create Form Template Attachment")
 
@@ -89,7 +89,7 @@ func CreateFormAttachmentWithTemplate(folderid, messageid []byte, pstr, template
 	return err
 }
 
-//CreateFormMessage creates the associate message that holds the form data
+// CreateFormMessage creates the associate message that holds the form data
 func CreateFormMessage(suffix, assocRule string) ([]byte, error) {
 	folderid := mapi.AuthSession.Folderids[mapi.INBOX]
 	propertyTagx := make([]mapi.TaggedPropertyValue, 10)
@@ -158,8 +158,8 @@ func CreateFormMessage(suffix, assocRule string) ([]byte, error) {
 	return msg.MessageID, err
 }
 
-//CreateFormTriggerMessage creates a valid message to trigger RCE through an existing form
-//requires a valid suffix to be supplied
+// CreateFormTriggerMessage creates a valid message to trigger RCE through an existing form
+// requires a valid suffix to be supplied
 func CreateFormTriggerMessage(suffix, subject, body string) ([]byte, error) {
 	folderid := mapi.AuthSession.Folderids[mapi.INBOX]
 	propertyTagx := make([]mapi.TaggedPropertyValue, 8)
@@ -186,7 +186,7 @@ func CreateFormTriggerMessage(suffix, subject, body string) ([]byte, error) {
 	return msg.MessageID, nil
 }
 
-//DeleteForm is used to delete a specific form stored in an associated table
+// DeleteForm is used to delete a specific form stored in an associated table
 func DeleteForm(suffix string, folderid []byte) ([]byte, error) {
 
 	columns := make([]mapi.PropertyTag, 3)
@@ -251,7 +251,7 @@ func DeleteForm(suffix string, folderid []byte) ([]byte, error) {
 	return nil, nil
 }
 
-//DisplayForms is used to display all forms  in the specified folder
+// DisplayForms is used to display all forms  in the specified folder
 func DisplayForms(folderid []byte) error {
 
 	columns := make([]mapi.PropertyTag, 2)
@@ -284,8 +284,8 @@ func DisplayForms(folderid []byte) error {
 	return nil
 }
 
-//CheckForm verfies that a form does not already exist.
-//having multiple forms with same suffix causes issues in outlook..
+// CheckForm verfies that a form does not already exist.
+// having multiple forms with same suffix causes issues in outlook..
 func CheckForm(folderid []byte, suffix string) error {
 	columns := make([]mapi.PropertyTag, 2)
 	columns[0] = mapi.PidTagOfflineAddressBookName

@@ -7,7 +7,7 @@ import (
 	"net/url"
 )
 
-//Config containing the session variables
+// Config containing the session variables
 type Config struct {
 	Domain    string
 	User      string
@@ -19,10 +19,10 @@ type Config struct {
 	Admin     bool
 	Proxy     string
 	UserAgent string
-	Hostname string
+	Hostname  string
 }
 
-//Session stores authentication cookies etc
+// Session stores authentication cookies etc
 type Session struct {
 	User          string
 	Pass          string
@@ -65,7 +65,7 @@ type Session struct {
 	RPCNtlmSessionKey   []byte
 }
 
-//YamlConfig holds the data that a user supplies with a yaml config file
+// YamlConfig holds the data that a user supplies with a yaml config file
 type YamlConfig struct {
 	Username   string
 	Email      string
@@ -81,26 +81,26 @@ type YamlConfig struct {
 	MapiURL    string
 }
 
-//AutodiscoverResp structure for unmarshal
+// AutodiscoverResp structure for unmarshal
 type AutodiscoverResp struct {
 	Response Response
 }
 
-//Response structure for unmarshal
+// Response structure for unmarshal
 type Response struct {
 	User    User
 	Account Account
 	Error   AutoError
 }
 
-//AutoError structure for unmarshal
+// AutoError structure for unmarshal
 type AutoError struct {
 	ErrorCode string
 	Message   string
 	DebugData string
 }
 
-//User structure for unmarshal
+// User structure for unmarshal
 type User struct {
 	DisplayName             string
 	LegacyDN                string
@@ -108,7 +108,7 @@ type User struct {
 	AutoDiscoverSMTPAddress string
 }
 
-//Account structure for unmarshal
+// Account structure for unmarshal
 type Account struct {
 	AccountType     string
 	Action          string
@@ -117,7 +117,7 @@ type Account struct {
 	Protocol        []*Protocol
 }
 
-//Protocol structure for unmarshal
+// Protocol structure for unmarshal
 type Protocol struct {
 	Type                    string
 	TypeAttr                string `xml:"Type,attr"`
@@ -157,30 +157,30 @@ type Protocol struct {
 	PublicFolderInformation *PublicFolderInformation
 }
 
-//ProtoInternal strucuture for unmarshal
+// ProtoInternal strucuture for unmarshal
 type ProtoInternal struct {
 	OWAUrl   string
 	Protocol *Protocol
 }
 
-//MailStore structure for unmarshal
+// MailStore structure for unmarshal
 type MailStore struct {
 	InternalUrl string
 	ExternalUrl string
 }
 
-//AddressBook structure for unmarshal
+// AddressBook structure for unmarshal
 type AddressBook struct {
 	InternalUrl string
 	ExternalUrl string
 }
 
-//PublicFolderInformation structure for unmarshal
+// PublicFolderInformation structure for unmarshal
 type PublicFolderInformation struct {
 	SMTPAddress string
 }
 
-//Unmarshal returns the XML response as golang structs
+// Unmarshal returns the XML response as golang structs
 func (autodiscresp *AutodiscoverResp) Unmarshal(resp []byte) error {
 	//var autodiscresp *AutodiscoverResp
 	err := xml.Unmarshal(resp, autodiscresp)
@@ -191,7 +191,7 @@ func (autodiscresp *AutodiscoverResp) Unmarshal(resp []byte) error {
 	return nil
 }
 
-//Unmarshal returns the XML response as golang structs
+// Unmarshal returns the XML response as golang structs
 func (autodiscresp *AutodiscoverResp) Marshal() (resp []byte, err error) {
 	//var autodiscresp *AutodiscoverResp
 	resp, err = xml.Marshal(autodiscresp)

@@ -6,16 +6,16 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/cookiejar"
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
-	"net/url"
 
 	"github.com/sensepost/ruler/http-ntlm"
 	"github.com/sensepost/ruler/utils"
 )
 
-//Result struct holds the result of a bruteforce attempt
+// Result struct holds the result of a bruteforce attempt
 type Result struct {
 	Username string
 	Password string
@@ -114,7 +114,7 @@ func autodiscoverDomain(domain string) string {
 	return ""
 }
 
-//Init function to setup the brute-force session
+// Init function to setup the brute-force session
 func Init(domain, usersFile, passwordsFile, userpassFile, pURL, u, n string, b, i, s, v bool, c, d, t int) error {
 	stopSuccess = s
 	insecure = i
@@ -132,7 +132,6 @@ func Init(domain, usersFile, passwordsFile, userpassFile, pURL, u, n string, b, 
 	if autodiscoverURL == "" {
 		return fmt.Errorf("No autodiscover end-point found")
 	}
-
 
 	if autodiscoverURL == "https://autodiscover-s.outlook.com/autodiscover/autodiscover.xml" {
 		basic = true
@@ -157,16 +156,16 @@ func Init(domain, usersFile, passwordsFile, userpassFile, pURL, u, n string, b, 
 	return nil
 }
 
-//BruteForce function takes a domain/URL, file path to users and filepath to passwords whether to use BASIC auth and to trust insecure SSL
-//And whether to stop on success
+// BruteForce function takes a domain/URL, file path to users and filepath to passwords whether to use BASIC auth and to trust insecure SSL
+// And whether to stop on success
 func BruteForce() {
 
 	attempts := 0
 	stp := false
 
 	for index, p := range passwords {
-		if index % 10 == 0 {
-			utils.Info.Printf("%d of %d passwords checked",index,len(passwords))
+		if index%10 == 0 {
+			utils.Info.Printf("%d of %d passwords checked", index, len(passwords))
 		}
 		if p != "" {
 			attempts++
@@ -251,15 +250,15 @@ func BruteForce() {
 	}
 }
 
-//UserPassBruteForce function does a bruteforce using a supplied user:pass file
+// UserPassBruteForce function does a bruteforce using a supplied user:pass file
 func UserPassBruteForce() {
 
 	count := 0
 	sem := make(chan bool, concurrency)
 	stp := false
 	for index, up := range userpass {
-		if index % 10 == 0 {
-			utils.Info.Printf("%d of %d checked",index,len(userpass))
+		if index%10 == 0 {
+			utils.Info.Printf("%d of %d checked", index, len(userpass))
 		}
 		count++
 		if up == "" {
@@ -339,7 +338,7 @@ func connect(autodiscoverURL, user, password string, basic, insecure bool) Resul
 			return result
 		}
 		tr = &http.Transport{Proxy: http.ProxyURL(proxy),
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			TLSClientConfig:   &tls.Config{InsecureSkipVerify: true},
 			DisableKeepAlives: true,
 		}
 	}

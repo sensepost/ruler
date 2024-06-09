@@ -14,7 +14,7 @@ const (
 	PFC_OBJECT_UUID         = 0x80
 )
 
-//as defined in dcerpc.idl
+// as defined in dcerpc.idl
 const (
 	DCERPC_PKT_REQUEST    = 0x00
 	DCERPC_PKT_PING       = 0x01
@@ -39,7 +39,7 @@ const (
 	DCERPC_PKT_RTS        = 0x14
 )
 
-//RTS Flags
+// RTS Flags
 const (
 	RTS_FLAG_NONE            = 0x00
 	RTS_FLAG_PING            = 0x01
@@ -51,7 +51,7 @@ const (
 	RTS_FLAG_ECHO            = 0x40
 )
 
-//RTS CMD
+// RTS CMD
 const (
 	RTS_CMD_RECEIVE_WINDOW_SIZE      = 0
 	RTS_CMD_FLOW_CONTROL_ACK         = 1
