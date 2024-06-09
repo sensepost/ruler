@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"encoding/hex"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
@@ -20,7 +20,7 @@ import (
 	"github.com/urfave/cli"
 )
 
-//globals
+// globals
 var config utils.Session
 
 func exit(err error) {
@@ -37,7 +37,7 @@ func exit(err error) {
 	os.Exit(exitcode)
 }
 
-//function to perform an autodiscover
+// function to perform an autodiscover
 func discover(c *cli.Context) error {
 	if c.GlobalString("domain") == "" {
 		return fmt.Errorf("Required param --domain is missing")
@@ -151,7 +151,7 @@ func discover(c *cli.Context) error {
 	return nil
 }
 
-//function to perform a bruteforce
+// function to perform a bruteforce
 func brute(c *cli.Context) error {
 	if c.String("users") == "" && c.String("userpass") == "" {
 		return fmt.Errorf("Either --users or --userpass required")
@@ -185,7 +185,7 @@ func brute(c *cli.Context) error {
 	return nil
 }
 
-//Function to add new rule
+// Function to add new rule
 func addRule(c *cli.Context) error {
 	utils.Info.Println("Adding Rule")
 
@@ -215,7 +215,7 @@ func addRule(c *cli.Context) error {
 	return nil
 }
 
-//Function to delete a rule
+// Function to delete a rule
 func deleteRule(c *cli.Context) error {
 	var ruleid []byte
 	var err error
@@ -264,7 +264,7 @@ func deleteRule(c *cli.Context) error {
 	return err
 }
 
-//Function to display all rules
+// Function to display all rules
 func displayRules(c *cli.Context) error {
 	utils.Info.Println("Retrieving Rules")
 	er := printRules()
@@ -272,8 +272,8 @@ func displayRules(c *cli.Context) error {
 	return er
 }
 
-//sendMessage sends a message to the user, using their own Account
-//uses supplied subject and body
+// sendMessage sends a message to the user, using their own Account
+// uses supplied subject and body
 func sendMessage(subject, body string) error {
 	propertyTags := make([]mapi.PropertyTag, 1)
 	propertyTags[0] = mapi.PidTagDisplayName
@@ -291,7 +291,7 @@ func sendMessage(subject, body string) error {
 	return nil
 }
 
-//Function to connect to the Exchange server
+// Function to connect to the Exchange server
 func connect(c *cli.Context) error {
 	var err error
 
@@ -574,7 +574,7 @@ func printRules() error {
 	return nil
 }
 
-//Function to display all addressbook entries
+// Function to display all addressbook entries
 func abkList(c *cli.Context) error {
 	utils.Trace.Println("Let's play addressbook")
 	if config.Transport == mapi.RPC {
@@ -621,7 +621,7 @@ func abkList(c *cli.Context) error {
 	return nil
 }
 
-//Function to display all addressbook entries
+// Function to display all addressbook entries
 func abkDump(c *cli.Context) error {
 	if config.Transport == mapi.RPC {
 		return fmt.Errorf("Address book support is currently limited to MAPI/HTTP")
@@ -1244,13 +1244,13 @@ A tool by @_staaldraad and @sensepost to abuse Exchange Services.
 
 	app.Before = func(c *cli.Context) error {
 		if c.Bool("verbose") == true && c.Bool("debug") == false {
-			utils.Init(os.Stdout, os.Stdout, ioutil.Discard, os.Stderr)
+			utils.Init(os.Stdout, os.Stdout, io.Discard, os.Stderr)
 		} else if c.Bool("verbose") == false && c.Bool("debug") == true {
-			utils.Init(ioutil.Discard, os.Stdout, os.Stdout, os.Stderr)
+			utils.Init(io.Discard, os.Stdout, os.Stdout, os.Stderr)
 		} else if c.Bool("debug") == true {
 			utils.Init(os.Stdout, os.Stdout, os.Stdout, os.Stderr)
 		} else {
-			utils.Init(ioutil.Discard, os.Stdout, ioutil.Discard, os.Stderr)
+			utils.Init(io.Discard, os.Stdout, io.Discard, os.Stderr)
 		}
 		return nil
 	}

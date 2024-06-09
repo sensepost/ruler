@@ -6,7 +6,7 @@ import (
 	"github.com/sensepost/ruler/utils"
 )
 
-//BindRequest struct used in bind request to bind to addressbook
+// BindRequest struct used in bind request to bind to addressbook
 type BindRequest struct {
 	Flags               uint32
 	HasState            byte
@@ -15,14 +15,14 @@ type BindRequest struct {
 	AuxiliaryBuffer     []byte
 }
 
-//BindRequestRPC the bind request used for abk
+// BindRequestRPC the bind request used for abk
 type BindRequestRPC struct {
 	Flags      uint32
 	State      []byte //optional 36 bytes
 	ServerGUID []byte
 }
 
-//BindResponse struct
+// BindResponse struct
 type BindResponse struct {
 	StatusCode          uint32
 	ErrorCode           uint32
@@ -31,7 +31,7 @@ type BindResponse struct {
 	AuxiliaryBuffer     []byte
 }
 
-//GetSpecialTableRequest struct used to get list of addressbooks
+// GetSpecialTableRequest struct used to get list of addressbooks
 type GetSpecialTableRequest struct {
 	Flags               uint32
 	HasState            byte
@@ -42,7 +42,7 @@ type GetSpecialTableRequest struct {
 	AuxiliaryBuffer     []byte
 }
 
-//GetSpecialTableResponse struct
+// GetSpecialTableResponse struct
 type GetSpecialTableResponse struct {
 	StatusCode          uint32
 	ErrorCode           uint32
@@ -56,7 +56,7 @@ type GetSpecialTableResponse struct {
 	AuxiliaryBuffer     []byte
 }
 
-//DnToMinIDRequest struct used to get list of addressbooks
+// DnToMinIDRequest struct used to get list of addressbooks
 type DnToMinIDRequest struct {
 	Reserved            uint32
 	HasNames            byte
@@ -66,7 +66,7 @@ type DnToMinIDRequest struct {
 	AuxiliaryBuffer     []byte
 }
 
-//DnToMinIDResponse struct
+// DnToMinIDResponse struct
 type DnToMinIDResponse struct {
 	StatusCode          uint32
 	ErrorCode           uint32
@@ -77,7 +77,7 @@ type DnToMinIDResponse struct {
 	AuxiliaryBuffer     []byte
 }
 
-//QueryRowsRequest struct used to get list of addressbooks
+// QueryRowsRequest struct used to get list of addressbooks
 type QueryRowsRequest struct {
 	Flags               uint32
 	HasState            byte
@@ -91,7 +91,7 @@ type QueryRowsRequest struct {
 	AuxiliaryBuffer     []byte
 }
 
-//QueryRowsResponse struct
+// QueryRowsResponse struct
 type QueryRowsResponse struct {
 	StatusCode          uint32
 	ErrorCode           uint32
@@ -105,7 +105,7 @@ type QueryRowsResponse struct {
 	AuxiliaryBuffer     []byte
 }
 
-//SeekEntriesRequest struct used to get list of addressbooks
+// SeekEntriesRequest struct used to get list of addressbooks
 type SeekEntriesRequest struct {
 	Reserved            uint32 //0x000000000
 	HasState            byte
@@ -121,7 +121,7 @@ type SeekEntriesRequest struct {
 	AuxiliaryBuffer     []byte
 }
 
-//SeekEntriesResponse struct
+// SeekEntriesResponse struct
 type SeekEntriesResponse struct {
 	StatusCode          uint32
 	ErrorCode           uint32
@@ -135,20 +135,20 @@ type SeekEntriesResponse struct {
 	AuxiliaryBuffer     []byte
 }
 
-//AddressBookPropertyValueList used to list addressbook
+// AddressBookPropertyValueList used to list addressbook
 type AddressBookPropertyValueList struct {
 	PropertyValueCount uint32
 	PropertyValues     []AddressBookTaggedPropertyValue
 }
 
-//AddressBookTaggedPropertyValue used to hold a value for an Addressbook entry
+// AddressBookTaggedPropertyValue used to hold a value for an Addressbook entry
 type AddressBookTaggedPropertyValue struct {
 	PropertyType  uint16
 	PropertyID    uint16
 	PropertyValue []byte
 }
 
-//AddressBookPropertyRow struct to hold addressbook entries
+// AddressBookPropertyRow struct to hold addressbook entries
 type AddressBookPropertyRow struct {
 	Flags uint8 //if 0x0 -- ValueArray = type(AddressBookPropertyValue)
 	//if 0x1 ValueArray = type(AddressBookFlaggedPropertyValueWithType)
@@ -156,18 +156,18 @@ type AddressBookPropertyRow struct {
 	//AddressBookFlaggedPropertyValueWithType []AddressBookFlaggedPropertyValueWithType
 }
 
-//LargePropertyTagArray contains a list of propertytags
+// LargePropertyTagArray contains a list of propertytags
 type LargePropertyTagArray struct {
 	PropertyTagCount uint32
 	PropertyTags     []PropertyTag
 }
 
-//AddressBookPropertyValue holds an addressbook value
+// AddressBookPropertyValue holds an addressbook value
 type AddressBookPropertyValue struct {
 	Value []byte
 }
 
-//STAT holds the state of the NSPI table
+// STAT holds the state of the NSPI table
 type STAT struct {
 	SortType       uint32
 	ContainerID    uint32
@@ -180,47 +180,47 @@ type STAT struct {
 	SortLocale     uint32
 }
 
-//Marshal turn BindRequest into Bytes
+// Marshal turn BindRequest into Bytes
 func (bindRequest BindRequest) Marshal() []byte {
 	return utils.BodyToBytes(bindRequest)
 }
 
-//Marshal turn BindRequestRPC into Bytes
+// Marshal turn BindRequestRPC into Bytes
 func (bindRequest BindRequestRPC) Marshal() []byte {
 	return utils.BodyToBytes(bindRequest)
 }
 
-//Marshal turn GetSpecialTableRequest into Bytes
+// Marshal turn GetSpecialTableRequest into Bytes
 func (specialTableRequest GetSpecialTableRequest) Marshal() []byte {
 	return utils.BodyToBytes(specialTableRequest)
 }
 
-//Marshal turn DnToMinIDRequest into Bytes
+// Marshal turn DnToMinIDRequest into Bytes
 func (dntominid DnToMinIDRequest) Marshal() []byte {
 	return utils.BodyToBytes(dntominid)
 }
 
-//Marshal turn QueryRowsRequest into Bytes
+// Marshal turn QueryRowsRequest into Bytes
 func (qrows QueryRowsRequest) Marshal() []byte {
 	return utils.BodyToBytes(qrows)
 }
 
-//Marshal turn SeekEntriesRequest into Bytes
+// Marshal turn SeekEntriesRequest into Bytes
 func (qrows SeekEntriesRequest) Marshal() []byte {
 	return utils.BodyToBytes(qrows)
 }
 
-//Marshal turn AddressBookPropertyValue into Bytes
+// Marshal turn AddressBookPropertyValue into Bytes
 func (abpv AddressBookPropertyValue) Marshal() []byte {
 	return utils.BodyToBytes(abpv)
 }
 
-//Marshal turn STAT struct into Bytes
+// Marshal turn STAT struct into Bytes
 func (stat STAT) Marshal() []byte {
 	return utils.BodyToBytes(stat)
 }
 
-//Unmarshal func
+// Unmarshal func
 func (abt *AddressBookPropertyValueList) Unmarshal(resp []byte) (int, error) {
 	pos := 0
 	abt.PropertyValueCount, pos = utils.ReadUint32(pos, resp)
@@ -234,7 +234,7 @@ func (abt *AddressBookPropertyValueList) Unmarshal(resp []byte) (int, error) {
 	return pos, nil
 }
 
-//Unmarshal func
+// Unmarshal func
 func (lpta *LargePropertyTagArray) Unmarshal(resp []byte) (int, error) {
 	pos := 0
 	lpta.PropertyTagCount, pos = utils.ReadUint32(pos, resp)
@@ -248,7 +248,7 @@ func (lpta *LargePropertyTagArray) Unmarshal(resp []byte) (int, error) {
 	return pos, nil
 }
 
-//Unmarshal func
+// Unmarshal func
 func (abpr *AddressBookPropertyRow) Unmarshal(resp []byte, columns LargePropertyTagArray) (int, error) {
 	pos := 0
 	abpr.Flags, pos = utils.ReadByte(pos, resp)
@@ -272,7 +272,7 @@ func (abpr *AddressBookPropertyRow) Unmarshal(resp []byte, columns LargeProperty
 	return pos, nil
 }
 
-//ReadPropertyValue v
+// ReadPropertyValue v
 func ReadPropertyValue(resp []byte, propType uint16) ([]byte, int) {
 	pos := 0
 	var propertyValue []byte
@@ -302,7 +302,7 @@ func ReadPropertyValue(resp []byte, propType uint16) ([]byte, int) {
 	return propertyValue, pos
 }
 
-//Unmarshal func for the AddressBookTaggedPropertyValue structure
+// Unmarshal func for the AddressBookTaggedPropertyValue structure
 func (abt *AddressBookTaggedPropertyValue) Unmarshal(resp []byte) (int, error) {
 	pos, p := 0, 0
 	abt.PropertyType, pos = utils.ReadUint16(pos, resp)
@@ -312,7 +312,7 @@ func (abt *AddressBookTaggedPropertyValue) Unmarshal(resp []byte) (int, error) {
 	return pos, nil
 }
 
-//Unmarshal func
+// Unmarshal func
 func (bindResponse *BindResponse) Unmarshal(resp []byte) (int, error) {
 	pos := 0
 	bindResponse.StatusCode, pos = utils.ReadUint32(pos, resp)
@@ -328,7 +328,7 @@ func (bindResponse *BindResponse) Unmarshal(resp []byte) (int, error) {
 	return pos, nil
 }
 
-//Unmarshal func
+// Unmarshal func
 func (gstResponse *GetSpecialTableResponse) Unmarshal(resp []byte) (int, error) {
 	pos := 0
 	gstResponse.StatusCode, pos = utils.ReadUint32(pos, resp)
@@ -359,7 +359,7 @@ func (gstResponse *GetSpecialTableResponse) Unmarshal(resp []byte) (int, error) 
 	return pos, nil
 }
 
-//Unmarshal func
+// Unmarshal func
 func (dnResponse *DnToMinIDResponse) Unmarshal(resp []byte) (int, error) {
 	pos := 0
 	dnResponse.StatusCode, pos = utils.ReadUint32(pos, resp)
@@ -378,7 +378,7 @@ func (dnResponse *DnToMinIDResponse) Unmarshal(resp []byte) (int, error) {
 	return pos, nil
 }
 
-//Unmarshal func
+// Unmarshal func
 func (qrResponse *QueryRowsResponse) Unmarshal(resp []byte) (int, error) {
 	pos := 0
 	qrResponse.StatusCode, pos = utils.ReadUint32(pos, resp)
@@ -411,7 +411,7 @@ func (qrResponse *QueryRowsResponse) Unmarshal(resp []byte) (int, error) {
 	return pos, nil
 }
 
-//Unmarshal func
+// Unmarshal func
 func (stat *STAT) Unmarshal(resp []byte) (int, error) {
 	pos := 0
 	stat.SortType, pos = utils.ReadUint32(pos, resp)

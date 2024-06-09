@@ -17,7 +17,7 @@ func sendAddressBookRequest(mapiType string, mapi []byte) ([]byte, error) {
 	//return nil, nil
 }
 
-//ExtractMapiAddressBookURL extract the External mapi url from the autodiscover response
+// ExtractMapiAddressBookURL extract the External mapi url from the autodiscover response
 func ExtractMapiAddressBookURL(resp *utils.AutodiscoverResp) string {
 	for _, v := range resp.Response.Account.Protocol {
 		if v.TypeAttr == "mapiHttp" {
@@ -27,7 +27,7 @@ func ExtractMapiAddressBookURL(resp *utils.AutodiscoverResp) string {
 	return ""
 }
 
-//BindAddressBook function to bind to the AddressBook provider
+// BindAddressBook function to bind to the AddressBook provider
 func BindAddressBook() (*BindResponse, error) {
 
 	bindReq := BindRequest{}
@@ -52,7 +52,7 @@ func BindAddressBook() (*BindResponse, error) {
 	//return nil, fmt.Errorf("unexpected error occurred")
 }
 
-//BindAddressBookRPC function to bind to the AddressBook provider
+// BindAddressBookRPC function to bind to the AddressBook provider
 func BindAddressBookRPC() (*BindResponse, error) {
 
 	bindReq := BindRequestRPC{}
@@ -77,7 +77,7 @@ func BindAddressBookRPC() (*BindResponse, error) {
 	//return nil, fmt.Errorf("unexpected error occurred")
 }
 
-//GetSpecialTable function to get special table from addressbook provider
+// GetSpecialTable function to get special table from addressbook provider
 func GetSpecialTable() (*GetSpecialTableResponse, error) {
 
 	gstReq := GetSpecialTableRequest{}
@@ -102,7 +102,7 @@ func GetSpecialTable() (*GetSpecialTableResponse, error) {
 
 }
 
-//DnToMinID function to map DNs to a set of Minimal Entry IDs
+// DnToMinID function to map DNs to a set of Minimal Entry IDs
 func DnToMinID() (*DnToMinIDResponse, error) {
 	//byte[] arrOutput = { 0x2F, 0x4F, 0x3D, 0x45, 0x56, 0x49, 0x4C, 0x43, 0x4F, 0x52, 0x50, 0x00};
 	dntominid := DnToMinIDRequest{}
@@ -126,7 +126,7 @@ func DnToMinID() (*DnToMinIDResponse, error) {
 
 }
 
-//GetProps function to get specific properties on an object
+// GetProps function to get specific properties on an object
 func GetProps() {
 	isAuthenticated() //check if we actually have a session
 
@@ -137,7 +137,7 @@ func GetProps() {
 
 }
 
-//QueryRows function gets number of rows from the specified explicit table
+// QueryRows function gets number of rows from the specified explicit table
 func QueryRows(rowCount int, state []byte, columns []PropertyTag) (*QueryRowsResponse, error) {
 
 	qRows := QueryRowsRequest{}
@@ -171,7 +171,7 @@ func QueryRows(rowCount int, state []byte, columns []PropertyTag) (*QueryRowsRes
 
 }
 
-//SeekEntries function moves the pointer to a new position in the addressbook
+// SeekEntries function moves the pointer to a new position in the addressbook
 func SeekEntries(entryStart []byte, columns []PropertyTag) (*QueryRowsResponse, error) {
 
 	qRows := SeekEntriesRequest{}

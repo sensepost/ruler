@@ -17,7 +17,7 @@ var (
 	Clear    *log.Logger
 )
 
-//Init the logging function
+// Init the logging function
 func Init(
 	traceHandle io.Writer,
 	infoHandle io.Writer,
